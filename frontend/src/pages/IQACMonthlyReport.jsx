@@ -3,7 +3,8 @@ import {
   Download, Printer, FileText, FileSpreadsheet, RefreshCw, 
   PlusCircle, Trash2, CheckCircle2, Building, Calendar, 
   Layers, Award, BookOpen, Users, Briefcase, ChevronDown, 
-  ChevronRight, Edit3, Save, Database, History, AlertCircle, Plus, X
+  ChevronRight, Edit3, Save, Database, History, AlertCircle, Plus, X,
+  Share2, Copy, Check, FolderArchive, PlusSquare, ExternalLink, Search
 } from 'lucide-react';
 import { fetchAPI } from '../services/api';
 
@@ -16,12 +17,20 @@ const IQACMonthlyReport = () => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState('');
+  const [copyFeedback, setCopyFeedback] = useState('');
   const [reportData, setReportData] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [activeTab, setActiveTab] = useState('editor'); // 'editor' | 'vault'
+  const [vaultSearch, setVaultSearch] = useState('');
   
   // Stored archives in DB
   const [savedReportsList, setSavedReportsList] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
+
+  // Custom Table Modal State
+  const [customTableModal, setCustomTableModal] = useState(false);
+  const [customTitle, setCustomTitle] = useState('');
+  const [customColumns, setCustomColumns] = useState('S.No, Activity Name, Faculty In-charge, Date, Target Audience, Outcome');
 
   // Quick Add Row Modal State
   const [modalOpen, setModalOpen] = useState(false);
@@ -37,6 +46,26 @@ const IQACMonthlyReport = () => {
       setSavedReportsList(list || []);
     } catch (err) {
       console.warn("Failed to load saved IQAC reports list", err);
+    }
+  };
+
+  // Load report by specific report_id (for direct shared links)
+  const loadReportById = async (id) => {
+    setLoading(true);
+    setSaveSuccess('');
+    try {
+      const data = await fetchAPI(`/faculty/reports/iqac-monthly/?report_id=${id}`);
+      if (data) {
+        setReportData(data);
+        if (data.department) setDepartment(data.department);
+        if (data.month) setMonth(data.month);
+        if (data.year) setYear(data.year);
+        if (data.academic_year) setAcademicYear(data.academic_year);
+      }
+    } catch (err) {
+      console.warn("Failed to load report by ID", err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -56,7 +85,13 @@ const IQACMonthlyReport = () => {
   };
 
   useEffect(() => {
-    loadReportData();
+    const params = new URLSearchParams(window.location.search);
+    const reportIdParam = params.get('report_id');
+    if (reportIdParam) {
+      loadReportById(reportIdParam);
+    } else {
+      loadReportData();
+    }
     loadSavedReportsList();
   }, [department, month, year, academicYear]);
 
@@ -84,10 +119,10 @@ const IQACMonthlyReport = () => {
       });
       const result = await res.json();
       if (res.ok) {
-        setSaveSuccess('Report saved persistently in database! You can retrieve and download it anytime.');
+        setSaveSuccess('Report saved persistently in database! You can retrieve, share and download it anytime.');
         loadSavedReportsList();
         // Mark as saved in local state
-        setReportData(prev => ({ ...prev, is_saved_in_db: true, updated_at: result.updated_at }));
+        setReportData(prev => ({ ...prev, id: result.report_id, is_saved_in_db: true, updated_at: result.updated_at }));
         setTimeout(() => setSaveSuccess(''), 5000);
       }
     } catch (err) {
@@ -95,6 +130,68 @@ const IQACMonthlyReport = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Copy Shareable Link to Clipboard
+  const handleShareLink = (reportId) => {
+    const targetId = reportId || reportData?.id;
+    const url = targetId 
+      ? `${window.location.origin}/iqac-report?report_id=${targetId}`
+      : `${window.location.origin}/iqac-report?department=${encodeURIComponent(department)}&month=${month}&year=${year}`;
+    
+    navigator.clipboard.writeText(url);
+    setCopyFeedback('Shareable link copied to clipboard! Anyone in the institution can access this exact report.');
+    setTimeout(() => setCopyFeedback(''), 4000);
+  };
+
+  // Delete an archived report from DB
+  const handleDeleteReport = async (reportId) => {
+    if (!window.confirm("Are you sure you want to delete this archived report from the database?")) return;
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/faculty/reports/iqac-monthly/${reportId}/delete/`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+        }
+      });
+      if (res.ok) {
+        loadSavedReportsList();
+        setSaveSuccess('Report removed from database.');
+        setTimeout(() => setSaveSuccess(''), 3000);
+      }
+    } catch (err) {
+      console.error("Failed to delete report", err);
+    }
+  };
+
+  // Create a New Custom Table / Section
+  const handleCreateCustomTable = (e) => {
+    e.preventDefault();
+    if (!customTitle.trim()) return;
+    
+    const columnsArray = customColumns.split(',').map(c => c.trim()).filter(Boolean);
+    if (columnsArray.length === 0) return;
+
+    setReportData(prev => {
+      const clone = JSON.parse(JSON.stringify(prev));
+      if (!clone.sections) clone.sections = {};
+      if (!Array.isArray(clone.sections.custom_tables)) {
+        clone.sections.custom_tables = [];
+      }
+      
+      const newTable = {
+        title: customTitle,
+        columns: columnsArray,
+        rows: []
+      };
+      clone.sections.custom_tables.push(newTable);
+      return clone;
+    });
+
+    setCustomTitle('');
+    setCustomTableModal(false);
+    setSaveSuccess(`Custom section "${customTitle}" added! Click 'Save Data to DB' to persist.`);
+    setTimeout(() => setSaveSuccess(''), 4000);
   };
 
   // Helper to update fields
@@ -201,6 +298,14 @@ const IQACMonthlyReport = () => {
 
   const s = reportData?.sections || {};
 
+  // Filter vault reports by search term
+  const filteredVaultList = savedReportsList.filter(r => 
+    r.department?.toLowerCase().includes(vaultSearch.toLowerCase()) ||
+    r.month?.toLowerCase().includes(vaultSearch.toLowerCase()) ||
+    r.year?.toString().includes(vaultSearch) ||
+    r.academic_year?.toLowerCase().includes(vaultSearch.toLowerCase())
+  );
+
   return (
     <div className="max-w-7xl mx-auto space-y-6 p-4 md:p-6 print:p-0 print:m-0 print:max-w-full">
       {/* 🌟 Top Action & Filter Bar (Hidden on Print) */}
@@ -219,15 +324,41 @@ const IQACMonthlyReport = () => {
               )}
             </div>
             <h1 className="text-2xl font-black text-gray-900 dark:text-white mt-1">
-              Monthly IQAC Departmental Report
+              Monthly IQAC Departmental Report & Document Vault
             </h1>
             <p className="text-xs text-gray-500 dark:text-slate-400">
-              Manual entries are stored persistently in the database so you can pull, update, and download official NAAC/NBA documents anytime.
+              Create, edit, save custom tables and share official NAAC/NBA documents across all departments in one central repository.
             </p>
           </div>
 
-          {/* Quick Action Export Buttons */}
-          <div className="flex flex-wrap items-center gap-2.5">
+          {/* Tab Switcher: Editor vs Central Vault */}
+          <div className="flex items-center bg-gray-100 dark:bg-slate-800 p-1 rounded-2xl border border-gray-200 dark:border-slate-700">
+            <button
+              onClick={() => setActiveTab('editor')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
+                activeTab === 'editor' 
+                  ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm' 
+                  : 'text-gray-600 dark:text-slate-300 hover:text-black dark:hover:text-white'
+              }`}
+            >
+              <FileText size={14} /> Document Editor & Preview
+            </button>
+            <button
+              onClick={() => setActiveTab('vault')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
+                activeTab === 'vault' 
+                  ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm' 
+                  : 'text-gray-600 dark:text-slate-300 hover:text-black dark:hover:text-white'
+              }`}
+            >
+              <FolderArchive size={14} /> Shared Document Vault ({savedReportsList.length})
+            </button>
+          </div>
+        </div>
+
+        {/* Quick Action Export & Save Buttons */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-gray-100 dark:border-slate-800">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={handleSaveToDatabase}
               disabled={saving}
@@ -238,24 +369,17 @@ const IQACMonthlyReport = () => {
             </button>
 
             <button
-              onClick={handlePrintPDF}
-              className="inline-flex items-center px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-500/20 transition-all cursor-pointer"
+              onClick={() => handleShareLink()}
+              className="inline-flex items-center px-4 py-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 text-xs font-bold transition-all cursor-pointer"
             >
-              <Printer size={16} className="mr-1.5" /> Download / Print PDF
+              <Share2 size={16} className="mr-1.5" /> Share Document Link
             </button>
 
             <button
-              onClick={handleExportWord}
-              className="inline-flex items-center px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm transition-all cursor-pointer"
+              onClick={() => setCustomTableModal(true)}
+              className="inline-flex items-center px-4 py-2.5 rounded-xl bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 text-purple-700 dark:text-purple-300 text-xs font-bold transition-all cursor-pointer"
             >
-              <FileText size={16} className="mr-1.5" /> Export Word (.doc)
-            </button>
-
-            <button
-              onClick={handleExportExcel}
-              className="inline-flex items-center px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-sm transition-all cursor-pointer"
-            >
-              <FileSpreadsheet size={16} className="mr-1.5" /> Export Excel
+              <PlusSquare size={16} className="mr-1.5" /> + Add Custom Table
             </button>
 
             <button
@@ -268,9 +392,32 @@ const IQACMonthlyReport = () => {
               {isEditing ? 'Exit Edit Mode' : 'Live Table Editor'}
             </button>
           </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handlePrintPDF}
+              className="inline-flex items-center px-3.5 py-2 rounded-xl bg-gray-900 hover:bg-black text-white text-xs font-bold shadow-sm transition-all cursor-pointer"
+            >
+              <Printer size={15} className="mr-1.5" /> PDF / Print
+            </button>
+
+            <button
+              onClick={handleExportWord}
+              className="inline-flex items-center px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm transition-all cursor-pointer"
+            >
+              <FileText size={15} className="mr-1.5" /> Word (.doc)
+            </button>
+
+            <button
+              onClick={handleExportExcel}
+              className="inline-flex items-center px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-sm transition-all cursor-pointer"
+            >
+              <FileSpreadsheet size={15} className="mr-1.5" /> Excel (.xlsx)
+            </button>
+          </div>
         </div>
 
-        {/* Save success banner */}
+        {/* Notifications & Feedback */}
         {saveSuccess && (
           <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs text-emerald-800 dark:text-emerald-300 flex items-center justify-between animate-in fade-in">
             <div className="flex items-center space-x-2">
@@ -280,8 +427,17 @@ const IQACMonthlyReport = () => {
           </div>
         )}
 
+        {copyFeedback && (
+          <div className="p-3 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 rounded-xl text-xs text-indigo-800 dark:text-indigo-300 flex items-center justify-between animate-in fade-in">
+            <div className="flex items-center space-x-2">
+              <Check size={16} className="text-indigo-600" />
+              <span className="font-semibold">{copyFeedback}</span>
+            </div>
+          </div>
+        )}
+
         {/* Filters and Saved Archives History */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 pt-3 border-t border-gray-100 dark:border-slate-800 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-3 border-t border-gray-100 dark:border-slate-800 text-xs">
           <div>
             <label className="block text-gray-500 dark:text-slate-400 font-semibold mb-1">Department</label>
             <select
@@ -354,58 +510,173 @@ const IQACMonthlyReport = () => {
               className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-3 py-2 font-bold text-gray-800 dark:text-white"
             />
           </div>
+        </div>
+      </div>
 
-          <div>
-            <label className="block text-gray-500 dark:text-slate-400 font-semibold mb-1">Saved Reports in DB</label>
-            <button
-              onClick={() => setShowHistory(!showHistory)}
-              className="w-full bg-indigo-50 dark:bg-slate-800 border border-indigo-200 dark:border-slate-700 rounded-xl px-3 py-2 font-bold text-indigo-700 dark:text-indigo-300 flex items-center justify-between"
-            >
-              <span className="flex items-center gap-1.5 truncate">
-                <History size={14} />
-                <span>{savedReportsList.length} Stored in DB</span>
-              </span>
-              <ChevronDown size={14} />
-            </button>
+      {/* 📁 TAB 2: CENTRAL DOCUMENT VAULT & SHARED DOCUMENTS VIEW */}
+      {activeTab === 'vault' && (
+        <div className="print:hidden bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4 animate-in fade-in">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <FolderArchive size={20} className="text-indigo-600" />
+                <span>Central Document Vault & Institutional Archives</span>
+              </h2>
+              <p className="text-xs text-gray-500 dark:text-slate-400">
+                All saved monthly IQAC reports, custom departmental sheets, and accreditation records stored persistently.
+              </p>
+            </div>
+
+            <div className="relative w-full sm:w-64">
+              <Search size={14} className="absolute left-3 top-2.5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search documents by dept / month..."
+                value={vaultSearch}
+                onChange={(e) => setVaultSearch(e.target.value)}
+                className="w-full pl-8 pr-3 py-1.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs text-gray-900 dark:text-white"
+              />
+            </div>
+          </div>
+
+          {filteredVaultList.length === 0 ? (
+            <div className="p-12 text-center border-2 border-dashed border-gray-200 dark:border-slate-800 rounded-2xl space-y-2">
+              <Database size={32} className="mx-auto text-gray-400" />
+              <h3 className="font-bold text-sm text-gray-700 dark:text-slate-300">No saved reports found in vault</h3>
+              <p className="text-xs text-gray-500 max-w-md mx-auto">
+                Save reports from the Document Editor to archive them here permanently. You will be able to retrieve, download, and share them anytime.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+              {filteredVaultList.map((doc) => (
+                <div 
+                  key={doc.id}
+                  className="p-4 bg-gray-50 dark:bg-slate-800/80 border border-gray-200 dark:border-slate-700 rounded-2xl hover:border-indigo-400 hover:shadow-md transition space-y-3"
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 uppercase">
+                        {doc.month} {doc.year}
+                      </span>
+                      <h4 className="font-bold text-xs text-gray-900 dark:text-white mt-1 line-clamp-2">
+                        {doc.department}
+                      </h4>
+                      <p className="text-[10px] text-gray-400 mt-0.5">AY: {doc.academic_year || '2025-26'} • By {doc.created_by}</p>
+                    </div>
+                  </div>
+
+                  <div className="text-[10px] text-gray-500 dark:text-slate-400 border-t border-gray-200 dark:border-slate-700 pt-2 flex items-center justify-between">
+                    <span>Updated: {doc.updated_at}</span>
+                  </div>
+
+                  {/* Actions for this document */}
+                  <div className="grid grid-cols-2 gap-1.5 pt-1 text-xs">
+                    <button
+                      onClick={() => {
+                        loadReportById(doc.id);
+                        setActiveTab('editor');
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <ExternalLink size={12} /> Open & Edit
+                    </button>
+                    <button
+                      onClick={() => handleShareLink(doc.id)}
+                      className="px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 hover:bg-gray-100 text-gray-800 dark:text-slate-200 font-bold flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <Share2 size={12} /> Share Link
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1 border-t border-gray-200 dark:border-slate-700 text-[11px]">
+                    <a
+                      href={`http://127.0.0.1:8000/api/faculty/reports/iqac-monthly/export-excel/?department=${encodeURIComponent(doc.department)}&month=${doc.month}&year=${doc.year}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-emerald-600 hover:underline flex items-center gap-1 font-medium"
+                    >
+                      <FileSpreadsheet size={12} /> Excel
+                    </a>
+                    <button
+                      onClick={() => handleDeleteReport(doc.id)}
+                      className="text-rose-500 hover:text-rose-700 text-[10px] font-semibold flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <Trash2 size={11} /> Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ➕ MODAL: ADD CUSTOM TABLE / CUSTOM SECTION */}
+      {customTableModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-6 max-w-lg w-full space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
+                <PlusSquare size={16} className="text-purple-600" />
+                <span>Add Custom Table / Section</span>
+              </h3>
+              <button onClick={() => setCustomTableModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateCustomTable} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-gray-600 dark:text-slate-300 font-semibold mb-1">
+                  Section / Table Title
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g., 13. Industrial Visits & MoU Collaborative Initiatives"
+                  value={customTitle}
+                  onChange={(e) => setCustomTitle(e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-gray-900 dark:text-white font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-600 dark:text-slate-300 font-semibold mb-1">
+                  Table Column Headers (Comma separated)
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  placeholder="S.No, Programme Name, Coordinator, Duration, Target Audience, Outcome"
+                  value={customColumns}
+                  onChange={(e) => setCustomColumns(e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-gray-900 dark:text-white font-mono"
+                />
+                <p className="text-[10px] text-gray-400 mt-1">
+                  Tip: Write comma-separated names for all column headers. S.No will be auto-numbered.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setCustomTableModal(false)}
+                  className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 dark:text-slate-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold"
+                >
+                  Create Custom Table
+                </button>
+              </div>
+            </form>
           </div>
         </div>
-
-        {/* Saved Reports Drawer / Dropdown */}
-        {showHistory && (
-          <div className="mt-3 p-4 bg-gray-50 dark:bg-slate-800/80 rounded-2xl border border-gray-200 dark:border-slate-700 space-y-2">
-            <h4 className="font-bold text-xs text-gray-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-              <Database size={14} className="text-indigo-600" />
-              <span>Saved IQAC Reports Archive (Click to Load & Download)</span>
-            </h4>
-            {savedReportsList.length === 0 ? (
-              <p className="text-xs text-gray-400 italic">No custom reports saved yet. Click "Save Data to DB" to archive the current month's report.</p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-1">
-                {savedReportsList.map((r) => (
-                  <div 
-                    key={r.id}
-                    onClick={() => {
-                      setDepartment(r.department);
-                      setMonth(r.month);
-                      setYear(r.year);
-                      setAcademicYear(r.academic_year || '2025-26');
-                      setShowHistory(false);
-                    }}
-                    className="p-3 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl cursor-pointer hover:border-indigo-500 hover:shadow-sm transition text-xs space-y-1"
-                  >
-                    <div className="flex items-center justify-between font-bold text-gray-900 dark:text-white">
-                      <span>{r.month} {r.year}</span>
-                      <span className="px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950 text-[10px] text-indigo-700 dark:text-indigo-300">Open</span>
-                    </div>
-                    <p className="text-[11px] text-gray-500 dark:text-slate-400 truncate">{r.department}</p>
-                    <p className="text-[10px] text-gray-400">Updated: {r.updated_at}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      )}
 
       {/* 📄 THE OFFICIAL PRINTABLE REPORT CONTAINER */}
       <div 
@@ -1176,6 +1447,106 @@ const IQACMonthlyReport = () => {
             </tbody>
           </table>
         </div>
+
+        {/* 🌟 CUSTOM SECTIONS / TABLES DYNAMICALLY ADDED BY USER */}
+        {s["custom_tables"]?.map((customTable, tableIdx) => (
+          <div key={tableIdx} className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-bold text-sm text-black">
+                {customTable.title || `Custom Section ${tableIdx + 1}`}
+              </h4>
+              {isEditing && (
+                <div className="flex items-center gap-2 print:hidden">
+                  <button
+                    onClick={() => {
+                      const updated = [...(s["custom_tables"] || [])];
+                      const newRow = {};
+                      customTable.columns?.forEach((col, cIdx) => {
+                        newRow[col] = cIdx === 0 ? (customTable.rows?.length || 0) + 1 : "";
+                      });
+                      updated[tableIdx].rows = [...(updated[tableIdx].rows || []), newRow];
+                      updateSectionField("custom_tables", updated);
+                    }}
+                    className="px-2 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
+                  >
+                    <Plus size={12} /> Add Row
+                  </button>
+                  <button
+                    onClick={() => {
+                      const updated = s["custom_tables"].filter((_, i) => i !== tableIdx);
+                      updateSectionField("custom_tables", updated);
+                    }}
+                    className="px-2 py-1 rounded bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold flex items-center gap-1 hover:bg-rose-100 cursor-pointer"
+                  >
+                    <Trash2 size={12} /> Delete Table
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[11px] border-collapse border border-black text-left">
+                <thead>
+                  <tr className="bg-gray-100 font-bold border-b border-black">
+                    {customTable.columns?.map((col, cIdx) => (
+                      <th key={cIdx} className={`border border-black p-1.5 ${cIdx === 0 ? 'w-10 text-center' : ''}`}>
+                        {col}
+                      </th>
+                    ))}
+                    {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {customTable.rows?.length > 0 ? (
+                    customTable.rows.map((row, rIdx) => (
+                      <tr key={rIdx} className="border-b border-black">
+                        {customTable.columns?.map((col, cIdx) => (
+                          <td key={cIdx} className={`border border-black p-1.5 ${cIdx === 0 ? 'text-center font-medium' : ''}`}>
+                            {isEditing && cIdx !== 0 ? (
+                              <input 
+                                className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" 
+                                value={row[col] || ''} 
+                                onChange={(e) => {
+                                  const updated = [...(s["custom_tables"] || [])];
+                                  updated[tableIdx].rows[rIdx][col] = e.target.value;
+                                  updateSectionField("custom_tables", updated);
+                                }} 
+                              />
+                            ) : (
+                              row[col] || (cIdx === 0 ? rIdx + 1 : '-')
+                            )}
+                          </td>
+                        ))}
+                        {isEditing && (
+                          <td className="border border-black p-1.5 print:hidden text-center">
+                            <button 
+                              onClick={() => {
+                                const updated = [...(s["custom_tables"] || [])];
+                                updated[tableIdx].rows.splice(rIdx, 1);
+                                updateSectionField("custom_tables", updated);
+                              }}
+                              className="text-rose-600 hover:text-rose-800 cursor-pointer"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))
+                  ) : (
+                    [1, 2].map(n => (
+                      <tr key={n} className="border-b border-black h-7">
+                        {customTable.columns?.map((_, cIdx) => (
+                          <td key={cIdx} className="border border-black p-1.5 text-center">{cIdx === 0 ? n : ''}</td>
+                        ))}
+                        {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
 
         {/* SECTION 10, 11, 12 */}
         <div className="space-y-3 mb-10 text-xs">

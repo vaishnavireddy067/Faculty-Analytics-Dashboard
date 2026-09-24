@@ -1815,8 +1815,12 @@ def iqac_monthly_report_data(request):
     year = str(request.query_params.get('year', '2025'))
     academic_year = request.query_params.get('academic_year', '2025-26')
 
-    # Check if a custom saved report exists in DB
-    existing = IQACReport.objects.filter(department=dept, month=month, year=year).first()
+    # Check if a custom saved report exists in DB (by report_id or dept/month/year)
+    report_id = request.query_params.get('report_id')
+    if report_id:
+        existing = IQACReport.objects.filter(id=report_id).first()
+    else:
+        existing = IQACReport.objects.filter(department=dept, month=month, year=year).first()
     if existing and existing.sections_data:
         return Response({
             "id": existing.id,
