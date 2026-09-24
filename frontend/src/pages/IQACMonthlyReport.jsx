@@ -225,6 +225,48 @@ const IQACMonthlyReport = () => {
     });
   };
 
+  // Helper to delete an entire table / section
+  const isSectionHidden = (sectionKey) => {
+    return (reportData?.sections?.hidden_sections || []).includes(sectionKey);
+  };
+
+  const handleDeleteTable = (sectionKey, sectionTitle) => {
+    if (!window.confirm(`Are you sure you want to delete "${sectionTitle}" from this report?`)) return;
+    setReportData(prev => {
+      const clone = JSON.parse(JSON.stringify(prev));
+      if (!clone.sections) clone.sections = {};
+      if (!Array.isArray(clone.sections.hidden_sections)) {
+        clone.sections.hidden_sections = [];
+      }
+      if (!clone.sections.hidden_sections.includes(sectionKey)) {
+        clone.sections.hidden_sections.push(sectionKey);
+      }
+      return clone;
+    });
+    setSaveSuccess(`"${sectionTitle}" deleted from report. Click 'Save Data to DB' to persist changes.`);
+    setTimeout(() => setSaveSuccess(''), 4000);
+  };
+
+  const handleRestoreSection = (sectionKey) => {
+    setReportData(prev => {
+      const clone = JSON.parse(JSON.stringify(prev));
+      if (clone.sections?.hidden_sections) {
+        clone.sections.hidden_sections = clone.sections.hidden_sections.filter(k => k !== sectionKey);
+      }
+      return clone;
+    });
+  };
+
+  const handleRestoreAllSections = () => {
+    setReportData(prev => {
+      const clone = JSON.parse(JSON.stringify(prev));
+      if (clone.sections) {
+        clone.sections.hidden_sections = [];
+      }
+      return clone;
+    });
+  };
+
   // Helper to delete row from array sections
   const handleDeleteRow = (sectionKey, index) => {
     setReportData(prev => {
@@ -731,317 +773,389 @@ const IQACMonthlyReport = () => {
           </div>
         </div>
 
+        {/* 🔄 RESTORE BAR FOR DELETED/HIDDEN TABLES (Visible in Edit Mode) */}
+        {isEditing && (reportData?.sections?.hidden_sections?.length > 0) && (
+          <div className="mb-6 p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-xl print:hidden flex flex-wrap items-center justify-between gap-2 shadow-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-amber-900 dark:text-amber-300">
+                Deleted / Hidden Tables ({reportData.sections.hidden_sections.length}):
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {reportData.sections.hidden_sections.map((key) => (
+                  <button
+                    key={key}
+                    onClick={() => handleRestoreSection(key)}
+                    className="px-2.5 py-1 bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 rounded-lg text-[10px] font-bold text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-slate-700 flex items-center gap-1 cursor-pointer transition"
+                  >
+                    <Plus size={10} /> Restore {key.split('.').pop().replace(/_/g, ' ')}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={handleRestoreAllSections}
+              className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+            >
+              Restore All Tables
+            </button>
+          </div>
+        )}
+
         {/* SECTION 1: Programmes / Events organized for the students */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="font-bold text-sm text-black">
-              1. Programmes / Events organized for the students:
-            </h4>
-            {isEditing && (
-              <button
-                onClick={() => handleAddRow('1_student_events', { name: "New Event", association: "-", level: "Department level", duration: "1 day", chief_guest: "Resource Person", honorarium: "-", misc_expenses: "-", target_students: "All Students" })}
-                className="print:hidden px-2 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100"
-              >
-                <Plus size={12} /> Add Event
-              </button>
-            )}
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-[11px] border-collapse border border-black text-left">
-              <thead>
-                <tr className="bg-gray-100 font-bold border-b border-black">
-                  <th className="border border-black p-1.5 w-10 text-center">S.No</th>
-                  <th className="border border-black p-1.5">Name of the Programme</th>
-                  <th className="border border-black p-1.5 text-center">In Association with</th>
-                  <th className="border border-black p-1.5">College/ Department level</th>
-                  <th className="border border-black p-1.5">Duration</th>
-                  <th className="border border-black p-1.5">Name and Details of Chief Guest / Resource person</th>
-                  <th className="border border-black p-1.5 text-center">Honorarium paid Rs.</th>
-                  <th className="border border-black p-1.5 text-center">Miscellaneous Expenses incurred Rs.</th>
-                  <th className="border border-black p-1.5">Target students</th>
-                  {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {s["1_student_events"]?.length > 0 ? (
-                  s["1_student_events"].map((item, i) => (
-                    <tr key={i} className="border-b border-black">
-                      <td className="border border-black p-1.5 text-center font-medium">{item.s_no || i + 1}</td>
-                      <td className="border border-black p-1.5 font-medium">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.name} onChange={(e) => {
-                            const updated = [...s["1_student_events"]];
-                            updated[i].name = e.target.value;
-                            updateSectionField('1_student_events', updated);
-                          }} />
-                        ) : item.name}
-                      </td>
-                      <td className="border border-black p-1.5 text-center">{item.association || '-'}</td>
-                      <td className="border border-black p-1.5">{item.level}</td>
-                      <td className="border border-black p-1.5">{item.duration}</td>
-                      <td className="border border-black p-1.5">{item.chief_guest}</td>
-                      <td className="border border-black p-1.5 text-center">{item.honorarium || '-'}</td>
-                      <td className="border border-black p-1.5 text-center">{item.misc_expenses || '-'}</td>
-                      <td className="border border-black p-1.5">{item.target_students}</td>
-                      {isEditing && (
-                        <td className="border border-black p-1.5 print:hidden text-center">
-                          <button onClick={() => handleDeleteRow('1_student_events', i)} className="text-rose-600 hover:text-rose-800">
-                            <Trash2 size={12} />
-                          </button>
+        {!isSectionHidden('1_student_events') && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-bold text-sm text-black">
+                1. Programmes / Events organized for the students:
+              </h4>
+              {isEditing && (
+                <div className="flex items-center gap-1.5 print:hidden">
+                  <button
+                    onClick={() => handleAddRow('1_student_events', { name: "New Event", association: "-", level: "Department level", duration: "1 day", chief_guest: "Resource Person", honorarium: "-", misc_expenses: "-", target_students: "All Students" })}
+                    className="px-2 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
+                  >
+                    <Plus size={12} /> + Add Event
+                  </button>
+                  <button
+                    onClick={() => handleDeleteTable('1_student_events', '1. Programmes / Events organized for the students')}
+                    className="px-2 py-1 rounded bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold flex items-center gap-1 hover:bg-rose-100 cursor-pointer"
+                    title="Delete/Hide this table from the report"
+                  >
+                    <Trash2 size={11} /> Delete Table
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[11px] border-collapse border border-black text-left">
+                <thead>
+                  <tr className="bg-gray-100 font-bold border-b border-black">
+                    <th className="border border-black p-1.5 w-10 text-center">S.No</th>
+                    <th className="border border-black p-1.5">Name of the Programme</th>
+                    <th className="border border-black p-1.5 text-center">In Association with</th>
+                    <th className="border border-black p-1.5">College/ Department level</th>
+                    <th className="border border-black p-1.5">Duration</th>
+                    <th className="border border-black p-1.5">Name and Details of Chief Guest / Resource person</th>
+                    <th className="border border-black p-1.5 text-center">Honorarium paid Rs.</th>
+                    <th className="border border-black p-1.5 text-center">Miscellaneous Expenses incurred Rs.</th>
+                    <th className="border border-black p-1.5">Target students</th>
+                    {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {s["1_student_events"]?.length > 0 ? (
+                    s["1_student_events"].map((item, i) => (
+                      <tr key={i} className="border-b border-black">
+                        <td className="border border-black p-1.5 text-center font-medium">{item.s_no || i + 1}</td>
+                        <td className="border border-black p-1.5 font-medium">
+                          {isEditing ? (
+                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.name} onChange={(e) => {
+                              const updated = [...s["1_student_events"]];
+                              updated[i].name = e.target.value;
+                              updateSectionField('1_student_events', updated);
+                            }} />
+                          ) : item.name}
                         </td>
-                      )}
-                    </tr>
-                  ))
-                ) : (
-                  [1, 2].map(n => (
-                    <tr key={n} className="border-b border-black h-7">
-                      <td className="border border-black p-1.5 text-center">{n}</td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                        <td className="border border-black p-1.5 text-center">{item.association || '-'}</td>
+                        <td className="border border-black p-1.5">{item.level}</td>
+                        <td className="border border-black p-1.5">{item.duration}</td>
+                        <td className="border border-black p-1.5">{item.chief_guest}</td>
+                        <td className="border border-black p-1.5 text-center">{item.honorarium || '-'}</td>
+                        <td className="border border-black p-1.5 text-center">{item.misc_expenses || '-'}</td>
+                        <td className="border border-black p-1.5">{item.target_students}</td>
+                        {isEditing && (
+                          <td className="border border-black p-1.5 print:hidden text-center">
+                            <button onClick={() => handleDeleteRow('1_student_events', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
+                              <Trash2 size={12} />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))
+                  ) : (
+                    [1, 2].map(n => (
+                      <tr key={n} className="border-b border-black h-7">
+                        <td className="border border-black p-1.5 text-center">{n}</td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* SECTION 2: Programmes / Events organized for the faculties */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="font-bold text-sm text-black">
-              2. Programmes / Events organized for the faculties:
-            </h4>
-            {isEditing && (
-              <button
-                onClick={() => handleAddRow('2_faculty_events', { name: "Faculty FDP/Workshop", association: "CSI", level: "Department level", duration: "2 days", chief_guest: "Speaker", faculty_count: "20", honorarium: "-", misc_expenses: "-" })}
-                className="print:hidden px-2 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100"
-              >
-                <Plus size={12} /> Add Row
-              </button>
-            )}
+        {!isSectionHidden('2_faculty_events') && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-bold text-sm text-black">
+                2. Programmes / Events organized for the faculties:
+              </h4>
+              {isEditing && (
+                <div className="flex items-center gap-1.5 print:hidden">
+                  <button
+                    onClick={() => handleAddRow('2_faculty_events', { name: "Faculty FDP/Workshop", association: "CSI", level: "Department level", duration: "2 days", chief_guest: "Speaker", faculty_count: "20", honorarium: "-", misc_expenses: "-" })}
+                    className="px-2 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
+                  >
+                    <Plus size={12} /> + Add Row
+                  </button>
+                  <button
+                    onClick={() => handleDeleteTable('2_faculty_events', '2. Programmes / Events organized for the faculties')}
+                    className="px-2 py-1 rounded bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold flex items-center gap-1 hover:bg-rose-100 cursor-pointer"
+                    title="Delete/Hide this table from the report"
+                  >
+                    <Trash2 size={11} /> Delete Table
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[11px] border-collapse border border-black text-left">
+                <thead>
+                  <tr className="bg-gray-100 font-bold border-b border-black">
+                    <th className="border border-black p-1.5 w-10 text-center">S.No</th>
+                    <th className="border border-black p-1.5">Name of the Programme</th>
+                    <th className="border border-black p-1.5 text-center">In Association with</th>
+                    <th className="border border-black p-1.5">College/ department level</th>
+                    <th className="border border-black p-1.5">Duration</th>
+                    <th className="border border-black p-1.5">Name and Details of Chief Guest / Resource person</th>
+                    <th className="border border-black p-1.5 text-center">No. Of faculty registered</th>
+                    <th className="border border-black p-1.5 text-center">Honorarium paid Rs.</th>
+                    <th className="border border-black p-1.5 text-center">Miscellaneous Expenses incurred Rs.</th>
+                    {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {s["2_faculty_events"]?.length > 0 ? (
+                    s["2_faculty_events"].map((item, i) => (
+                      <tr key={i} className="border-b border-black">
+                        <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
+                        <td className="border border-black p-1.5 font-medium">{item.name}</td>
+                        <td className="border border-black p-1.5 text-center">{item.association || '-'}</td>
+                        <td className="border border-black p-1.5">{item.level}</td>
+                        <td className="border border-black p-1.5">{item.duration}</td>
+                        <td className="border border-black p-1.5">{item.chief_guest}</td>
+                        <td className="border border-black p-1.5 text-center">{item.faculty_count || '-'}</td>
+                        <td className="border border-black p-1.5 text-center">{item.honorarium || '-'}</td>
+                        <td className="border border-black p-1.5 text-center">{item.misc_expenses || '-'}</td>
+                        {isEditing && (
+                          <td className="border border-black p-1.5 print:hidden text-center">
+                            <button onClick={() => handleDeleteRow('2_faculty_events', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
+                              <Trash2 size={12} />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))
+                  ) : (
+                    [1, 2].map(n => (
+                      <tr key={n} className="border-b border-black h-7">
+                        <td className="border border-black p-1.5 text-center">{n}</td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-[11px] border-collapse border border-black text-left">
-              <thead>
-                <tr className="bg-gray-100 font-bold border-b border-black">
-                  <th className="border border-black p-1.5 w-10 text-center">S.No</th>
-                  <th className="border border-black p-1.5">Name of the Programme</th>
-                  <th className="border border-black p-1.5 text-center">In Association with</th>
-                  <th className="border border-black p-1.5">College/ department level</th>
-                  <th className="border border-black p-1.5">Duration</th>
-                  <th className="border border-black p-1.5">Name and Details of Chief Guest / Resource person</th>
-                  <th className="border border-black p-1.5 text-center">No. Of faculty registered</th>
-                  <th className="border border-black p-1.5 text-center">Honorarium paid Rs.</th>
-                  <th className="border border-black p-1.5 text-center">Miscellaneous Expenses incurred Rs.</th>
-                  {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {s["2_faculty_events"]?.length > 0 ? (
-                  s["2_faculty_events"].map((item, i) => (
-                    <tr key={i} className="border-b border-black">
-                      <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
-                      <td className="border border-black p-1.5 font-medium">{item.name}</td>
-                      <td className="border border-black p-1.5 text-center">{item.association || '-'}</td>
-                      <td className="border border-black p-1.5">{item.level}</td>
-                      <td className="border border-black p-1.5">{item.duration}</td>
-                      <td className="border border-black p-1.5">{item.chief_guest}</td>
-                      <td className="border border-black p-1.5 text-center">{item.faculty_count || '-'}</td>
-                      <td className="border border-black p-1.5 text-center">{item.honorarium || '-'}</td>
-                      <td className="border border-black p-1.5 text-center">{item.misc_expenses || '-'}</td>
-                      {isEditing && (
-                        <td className="border border-black p-1.5 print:hidden text-center">
-                          <button onClick={() => handleDeleteRow('2_faculty_events', i)} className="text-rose-600">
-                            <Trash2 size={12} />
-                          </button>
-                        </td>
-                      )}
-                    </tr>
-                  ))
-                ) : (
-                  [1, 2].map(n => (
-                    <tr key={n} className="border-b border-black h-7">
-                      <td className="border border-black p-1.5 text-center">{n}</td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        )}
 
         {/* SECTION 3: Value Added / Certification Courses */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="font-bold text-sm text-black">
-              3. Value Added / Certification Courses conducted:
-            </h4>
-            {isEditing && (
-              <button
-                onClick={() => handleAddRow('3_value_added_courses', { name: "Course Name", resource_person: "Trainer", level: "Dept level", duration: "30h", contact_periods: "30", students_registered: "50", remuneration: "-", target_students: "UG" })}
-                className="print:hidden px-2 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100"
-              >
-                <Plus size={12} /> Add Course
-              </button>
-            )}
+        {!isSectionHidden('3_value_added_courses') && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-bold text-sm text-black">
+                3. Value Added / Certification Courses conducted:
+              </h4>
+              {isEditing && (
+                <div className="flex items-center gap-1.5 print:hidden">
+                  <button
+                    onClick={() => handleAddRow('3_value_added_courses', { name: "Course Name", resource_person: "Trainer", level: "Dept level", duration: "30h", contact_periods: "30", students_registered: "50", remuneration: "-", target_students: "UG" })}
+                    className="px-2 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
+                  >
+                    <Plus size={12} /> + Add Course
+                  </button>
+                  <button
+                    onClick={() => handleDeleteTable('3_value_added_courses', '3. Value Added / Certification Courses conducted')}
+                    className="px-2 py-1 rounded bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold flex items-center gap-1 hover:bg-rose-100 cursor-pointer"
+                    title="Delete/Hide this table from the report"
+                  >
+                    <Trash2 size={11} /> Delete Table
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[11px] border-collapse border border-black text-left">
+                <thead>
+                  <tr className="bg-gray-100 font-bold border-b border-black">
+                    <th className="border border-black p-1.5 w-10 text-center">S.No</th>
+                    <th className="border border-black p-1.5">Name of the Course</th>
+                    <th className="border border-black p-1.5">Particulars of the Resource persons (Internal / External)</th>
+                    <th className="border border-black p-1.5">College/ department level</th>
+                    <th className="border border-black p-1.5">Duration</th>
+                    <th className="border border-black p-1.5 text-center">No. of Contact Periods</th>
+                    <th className="border border-black p-1.5 text-center">No. Of Students registered</th>
+                    <th className="border border-black p-1.5 text-center">Remuneration/ honorarium paid, if any.</th>
+                    <th className="border border-black p-1.5">Target students</th>
+                    {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {s["3_value_added_courses"]?.length > 0 ? (
+                    s["3_value_added_courses"].map((item, i) => (
+                      <tr key={i} className="border-b border-black">
+                        <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
+                        <td className="border border-black p-1.5 font-medium">{item.name}</td>
+                        <td className="border border-black p-1.5">{item.resource_person}</td>
+                        <td className="border border-black p-1.5">{item.level}</td>
+                        <td className="border border-black p-1.5">{item.duration}</td>
+                        <td className="border border-black p-1.5 text-center">{item.contact_periods}</td>
+                        <td className="border border-black p-1.5 text-center">{item.students_registered}</td>
+                        <td className="border border-black p-1.5 text-center">{item.remuneration || '-'}</td>
+                        <td className="border border-black p-1.5">{item.target_students}</td>
+                        {isEditing && (
+                          <td className="border border-black p-1.5 print:hidden text-center">
+                            <button onClick={() => handleDeleteRow('3_value_added_courses', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
+                              <Trash2 size={12} />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))
+                  ) : (
+                    [1, 2].map(n => (
+                      <tr key={n} className="border-b border-black h-7">
+                        <td className="border border-black p-1.5 text-center">{n}</td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-[11px] border-collapse border border-black text-left">
-              <thead>
-                <tr className="bg-gray-100 font-bold border-b border-black">
-                  <th className="border border-black p-1.5 w-10 text-center">S.No</th>
-                  <th className="border border-black p-1.5">Name of the Course</th>
-                  <th className="border border-black p-1.5">Particulars of the Resource persons (Internal / External)</th>
-                  <th className="border border-black p-1.5">College/ department level</th>
-                  <th className="border border-black p-1.5">Duration</th>
-                  <th className="border border-black p-1.5 text-center">No. of Contact Periods</th>
-                  <th className="border border-black p-1.5 text-center">No. Of Students registered</th>
-                  <th className="border border-black p-1.5 text-center">Remuneration/ honorarium paid, if any.</th>
-                  <th className="border border-black p-1.5">Target students</th>
-                  {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {s["3_value_added_courses"]?.length > 0 ? (
-                  s["3_value_added_courses"].map((item, i) => (
-                    <tr key={i} className="border-b border-black">
-                      <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
-                      <td className="border border-black p-1.5 font-medium">{item.name}</td>
-                      <td className="border border-black p-1.5">{item.resource_person}</td>
-                      <td className="border border-black p-1.5">{item.level}</td>
-                      <td className="border border-black p-1.5">{item.duration}</td>
-                      <td className="border border-black p-1.5 text-center">{item.contact_periods}</td>
-                      <td className="border border-black p-1.5 text-center">{item.students_registered}</td>
-                      <td className="border border-black p-1.5 text-center">{item.remuneration || '-'}</td>
-                      <td className="border border-black p-1.5">{item.target_students}</td>
-                      {isEditing && (
-                        <td className="border border-black p-1.5 print:hidden text-center">
-                          <button onClick={() => handleDeleteRow('3_value_added_courses', i)} className="text-rose-600">
-                            <Trash2 size={12} />
-                          </button>
-                        </td>
-                      )}
-                    </tr>
-                  ))
-                ) : (
-                  [1, 2].map(n => (
-                    <tr key={n} className="border-b border-black h-7">
-                      <td className="border border-black p-1.5 text-center">{n}</td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        )}
 
         {/* SECTION 4: Activities for Advanced learners */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="font-bold text-sm text-black">
-              4. Activities Arranged/conducted for Advanced learners:
-            </h4>
-            {isEditing && (
-              <button
-                onClick={() => handleAddRow('4_advanced_learners', { name: "Advanced Learner Workshop", level: "Department level", duration: "1 Day", contact_periods: "6 Hours", chief_guest: "Domain Expert", honorarium: "-", misc_expenses: "-", target_students: "Top Merit Students" })}
-                className="print:hidden px-2 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
-              >
-                <Plus size={12} /> + Add Activity
-              </button>
-            )}
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-[11px] border-collapse border border-black text-left">
-              <thead>
-                <tr className="bg-gray-100 font-bold border-b border-black">
-                  <th className="border border-black p-1.5 w-10 text-center">S.No</th>
-                  <th className="border border-black p-1.5">Name of the Activity</th>
-                  <th className="border border-black p-1.5">College/ department level</th>
-                  <th className="border border-black p-1.5">Duration</th>
-                  <th className="border border-black p-1.5 text-center">No. of Contact Periods</th>
-                  <th className="border border-black p-1.5">Name and Details of Chief Guest / Resource person</th>
-                  <th className="border border-black p-1.5 text-center">Honorarium paid Rs.</th>
-                  <th className="border border-black p-1.5 text-center">Miscellaneous Expenses incurred Rs.</th>
-                  <th className="border border-black p-1.5">Target students</th>
-                  {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {s["4_advanced_learners"]?.length > 0 ? (
-                  s["4_advanced_learners"].map((item, i) => (
-                    <tr key={i} className="border-b border-black">
-                      <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
-                      <td className="border border-black p-1.5 font-medium">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.name} onChange={(e) => {
-                            const updated = [...s["4_advanced_learners"]];
-                            updated[i].name = e.target.value;
-                            updateSectionField('4_advanced_learners', updated);
-                          }} />
-                        ) : item.name}
-                      </td>
-                      <td className="border border-black p-1.5">{item.level}</td>
-                      <td className="border border-black p-1.5">{item.duration}</td>
-                      <td className="border border-black p-1.5 text-center">{item.contact_periods}</td>
-                      <td className="border border-black p-1.5">{item.chief_guest}</td>
-                      <td className="border border-black p-1.5 text-center">{item.honorarium || '-'}</td>
-                      <td className="border border-black p-1.5 text-center">{item.misc_expenses || '-'}</td>
-                      <td className="border border-black p-1.5">{item.target_students}</td>
-                      {isEditing && (
-                        <td className="border border-black p-1.5 print:hidden text-center">
-                          <button onClick={() => handleDeleteRow('4_advanced_learners', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
-                            <Trash2 size={12} />
-                          </button>
+        {!isSectionHidden('4_advanced_learners') && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-bold text-sm text-black">
+                4. Activities Arranged/conducted for Advanced learners:
+              </h4>
+              {isEditing && (
+                <div className="flex items-center gap-1.5 print:hidden">
+                  <button
+                    onClick={() => handleAddRow('4_advanced_learners', { name: "Advanced Learner Workshop", level: "Department level", duration: "1 Day", contact_periods: "6 Hours", chief_guest: "Domain Expert", honorarium: "-", misc_expenses: "-", target_students: "Top Merit Students" })}
+                    className="px-2 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
+                  >
+                    <Plus size={12} /> + Add Activity
+                  </button>
+                  <button
+                    onClick={() => handleDeleteTable('4_advanced_learners', '4. Activities for Advanced learners')}
+                    className="px-2 py-1 rounded bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold flex items-center gap-1 hover:bg-rose-100 cursor-pointer"
+                    title="Delete/Hide this table from the report"
+                  >
+                    <Trash2 size={11} /> Delete Table
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[11px] border-collapse border border-black text-left">
+                <thead>
+                  <tr className="bg-gray-100 font-bold border-b border-black">
+                    <th className="border border-black p-1.5 w-10 text-center">S.No</th>
+                    <th className="border border-black p-1.5">Name of the Activity</th>
+                    <th className="border border-black p-1.5">College/ department level</th>
+                    <th className="border border-black p-1.5">Duration</th>
+                    <th className="border border-black p-1.5 text-center">No. of Contact Periods</th>
+                    <th className="border border-black p-1.5">Name and Details of Chief Guest / Resource person</th>
+                    <th className="border border-black p-1.5 text-center">Honorarium paid Rs.</th>
+                    <th className="border border-black p-1.5 text-center">Miscellaneous Expenses incurred Rs.</th>
+                    <th className="border border-black p-1.5">Target students</th>
+                    {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {s["4_advanced_learners"]?.length > 0 ? (
+                    s["4_advanced_learners"].map((item, i) => (
+                      <tr key={i} className="border-b border-black">
+                        <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
+                        <td className="border border-black p-1.5 font-medium">
+                          {isEditing ? (
+                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.name} onChange={(e) => {
+                              const updated = [...s["4_advanced_learners"]];
+                              updated[i].name = e.target.value;
+                              updateSectionField('4_advanced_learners', updated);
+                            }} />
+                          ) : item.name}
                         </td>
-                      )}
-                    </tr>
-                  ))
-                ) : (
-                  [1, 2].map(n => (
-                    <tr key={n} className="border-b border-black h-7">
-                      <td className="border border-black p-1.5 text-center">{n}</td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                        <td className="border border-black p-1.5">{item.level}</td>
+                        <td className="border border-black p-1.5">{item.duration}</td>
+                        <td className="border border-black p-1.5 text-center">{item.contact_periods}</td>
+                        <td className="border border-black p-1.5">{item.chief_guest}</td>
+                        <td className="border border-black p-1.5 text-center">{item.honorarium || '-'}</td>
+                        <td className="border border-black p-1.5 text-center">{item.misc_expenses || '-'}</td>
+                        <td className="border border-black p-1.5">{item.target_students}</td>
+                        {isEditing && (
+                          <td className="border border-black p-1.5 print:hidden text-center">
+                            <button onClick={() => handleDeleteRow('4_advanced_learners', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
+                              <Trash2 size={12} />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))
+                  ) : (
+                    [1, 2].map(n => (
+                      <tr key={n} className="border-b border-black h-7">
+                        <td className="border border-black p-1.5 text-center">{n}</td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* SECTION 5: Student Achievements */}
         <div className="mb-6">
@@ -1050,90 +1164,45 @@ const IQACMonthlyReport = () => {
           </h4>
 
           {/* 5.a */}
-          <div className="mb-4 pl-2">
-            <div className="flex items-center justify-between mb-1.5">
-              <h5 className="font-semibold text-xs text-black">
-                a. Curricular & Co Curricular Activities (Seminars/ Symposiums /Hackathons/Conference etc.)
-              </h5>
-              {isEditing && (
-                <button
-                  onClick={() => handleAddRow('5_student_achievements.a_curricular', { roll_no: "245U1A6700", name: "Student Name", year_sem: "III/I", event_name: "National Hackathon", organized_by: "University", duration: "2 days", prizes: "First Prize" })}
-                  className="print:hidden px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100"
-                >
-                  <Plus size={11} /> Add Achievement
-                </button>
-              )}
-            </div>
-            <table className="w-full text-[11px] border-collapse border border-black text-left">
-              <thead>
-                <tr className="bg-gray-100 font-bold border-b border-black">
-                  <th className="border border-black p-1.5 w-10 text-center">S.No</th>
-                  <th className="border border-black p-1.5">Roll. No</th>
-                  <th className="border border-black p-1.5">Name of the Students</th>
-                  <th className="border border-black p-1.5 text-center">Year & Sem</th>
-                  <th className="border border-black p-1.5">Name of the event</th>
-                  <th className="border border-black p-1.5">Organised by</th>
-                  <th className="border border-black p-1.5">Duration</th>
-                  <th className="border border-black p-1.5">Prizes won, if any.</th>
-                  {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {s["5_student_achievements"]?.a_curricular?.map((item, i) => (
-                  <tr key={i} className="border-b border-black">
-                    <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
-                    <td className="border border-black p-1.5 font-mono">{item.roll_no}</td>
-                    <td className="border border-black p-1.5 font-medium">{item.name}</td>
-                    <td className="border border-black p-1.5 text-center">{item.year_sem}</td>
-                    <td className="border border-black p-1.5">{item.event_name}</td>
-                    <td className="border border-black p-1.5">{item.organized_by}</td>
-                    <td className="border border-black p-1.5">{item.duration}</td>
-                    <td className="border border-black p-1.5">{item.prizes || '-'}</td>
-                    {isEditing && (
-                      <td className="border border-black p-1.5 print:hidden text-center">
-                        <button onClick={() => handleDeleteRow('5_student_achievements.a_curricular', i)} className="text-rose-600">
-                          <Trash2 size={12} />
-                        </button>
-                      </td>
-                    )}
+          {!isSectionHidden('5_student_achievements.a_curricular') && (
+            <div className="mb-4 pl-2">
+              <div className="flex items-center justify-between mb-1.5">
+                <h5 className="font-semibold text-xs text-black">
+                  a. Curricular & Co Curricular Activities (Seminars/ Symposiums /Hackathons/Conference etc.)
+                </h5>
+                {isEditing && (
+                  <div className="flex items-center gap-1.5 print:hidden">
+                    <button
+                      onClick={() => handleAddRow('5_student_achievements.a_curricular', { roll_no: "245U1A6700", name: "Student Name", year_sem: "III/I", event_name: "National Hackathon", organized_by: "University", duration: "2 days", prizes: "First Prize" })}
+                      className="px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
+                    >
+                      <Plus size={11} /> + Add
+                    </button>
+                    <button
+                      onClick={() => handleDeleteTable('5_student_achievements.a_curricular', '5.a Curricular Activities')}
+                      className="px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold flex items-center gap-1 hover:bg-rose-100 cursor-pointer"
+                    >
+                      <Trash2 size={11} /> Delete Table
+                    </button>
+                  </div>
+                )}
+              </div>
+              <table className="w-full text-[11px] border-collapse border border-black text-left">
+                <thead>
+                  <tr className="bg-gray-100 font-bold border-b border-black">
+                    <th className="border border-black p-1.5 w-10 text-center">S.No</th>
+                    <th className="border border-black p-1.5">Roll. No</th>
+                    <th className="border border-black p-1.5">Name of the Students</th>
+                    <th className="border border-black p-1.5 text-center">Year & Sem</th>
+                    <th className="border border-black p-1.5">Name of the event</th>
+                    <th className="border border-black p-1.5">Organised by</th>
+                    <th className="border border-black p-1.5">Duration</th>
+                    <th className="border border-black p-1.5">Prizes won, if any.</th>
+                    {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* 5.b */}
-          <div className="mb-4 pl-2">
-            <div className="flex items-center justify-between mb-1.5">
-              <h5 className="font-semibold text-xs text-black">
-                b. Extracurricular Activities (Cultural / Games & Sports)
-              </h5>
-              {isEditing && (
-                <button
-                  onClick={() => handleAddRow('5_student_achievements.b_extracurricular', { roll_no: "245U1A6712", name: "Student Name", year_sem: "III/I", event_name: "Sports Event", organized_by: "Sports Board", duration: "1 day", prizes: "Gold Medal" })}
-                  className="print:hidden px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100"
-                >
-                  <Plus size={11} /> Add Sport/Cultural
-                </button>
-              )}
-            </div>
-            <table className="w-full text-[11px] border-collapse border border-black text-left">
-              <thead>
-                <tr className="bg-gray-100 font-bold border-b border-black">
-                  <th className="border border-black p-1.5 w-10 text-center">S.No</th>
-                  <th className="border border-black p-1.5">Roll. No</th>
-                  <th className="border border-black p-1.5">Name of the Students</th>
-                  <th className="border border-black p-1.5 text-center">Year & Sem</th>
-                  <th className="border border-black p-1.5">Name of the event</th>
-                  <th className="border border-black p-1.5">Organised by</th>
-                  <th className="border border-black p-1.5">Duration</th>
-                  <th className="border border-black p-1.5">Prizes won, if any.</th>
-                  {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {s["5_student_achievements"]?.b_extracurricular?.length > 0 ? (
-                  s["5_student_achievements"].b_extracurricular.map((item, i) => (
+                </thead>
+                <tbody>
+                  {s["5_student_achievements"]?.a_curricular?.map((item, i) => (
                     <tr key={i} className="border-b border-black">
                       <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
                       <td className="border border-black p-1.5 font-mono">{item.roll_no}</td>
@@ -1145,84 +1214,159 @@ const IQACMonthlyReport = () => {
                       <td className="border border-black p-1.5">{item.prizes || '-'}</td>
                       {isEditing && (
                         <td className="border border-black p-1.5 print:hidden text-center">
-                          <button onClick={() => handleDeleteRow('5_student_achievements.b_extracurricular', i)} className="text-rose-600">
+                          <button onClick={() => handleDeleteRow('5_student_achievements.a_curricular', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
                             <Trash2 size={12} />
                           </button>
                         </td>
                       )}
                     </tr>
-                  ))
-                ) : (
-                  [1, 2].map(n => (
-                    <tr key={n} className="border-b border-black h-7">
-                      <td className="border border-black p-1.5 text-center">{n}</td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
-                    </tr>
-                  ))
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* 5.b */}
+          {!isSectionHidden('5_student_achievements.b_extracurricular') && (
+            <div className="mb-4 pl-2">
+              <div className="flex items-center justify-between mb-1.5">
+                <h5 className="font-semibold text-xs text-black">
+                  b. Extracurricular Activities (Cultural / Games & Sports)
+                </h5>
+                {isEditing && (
+                  <div className="flex items-center gap-1.5 print:hidden">
+                    <button
+                      onClick={() => handleAddRow('5_student_achievements.b_extracurricular', { roll_no: "245U1A6712", name: "Student Name", year_sem: "III/I", event_name: "Sports Event", organized_by: "Sports Board", duration: "1 day", prizes: "Gold Medal" })}
+                      className="px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
+                    >
+                      <Plus size={11} /> + Add
+                    </button>
+                    <button
+                      onClick={() => handleDeleteTable('5_student_achievements.b_extracurricular', '5.b Extracurricular Activities')}
+                      className="px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold flex items-center gap-1 hover:bg-rose-100 cursor-pointer"
+                    >
+                      <Trash2 size={11} /> Delete Table
+                    </button>
+                  </div>
                 )}
-              </tbody>
-            </table>
-          </div>
+              </div>
+              <table className="w-full text-[11px] border-collapse border border-black text-left">
+                <thead>
+                  <tr className="bg-gray-100 font-bold border-b border-black">
+                    <th className="border border-black p-1.5 w-10 text-center">S.No</th>
+                    <th className="border border-black p-1.5">Roll. No</th>
+                    <th className="border border-black p-1.5">Name of the Students</th>
+                    <th className="border border-black p-1.5 text-center">Year & Sem</th>
+                    <th className="border border-black p-1.5">Name of the event</th>
+                    <th className="border border-black p-1.5">Organised by</th>
+                    <th className="border border-black p-1.5">Duration</th>
+                    <th className="border border-black p-1.5">Prizes won, if any.</th>
+                    {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {s["5_student_achievements"]?.b_extracurricular?.length > 0 ? (
+                    s["5_student_achievements"].b_extracurricular.map((item, i) => (
+                      <tr key={i} className="border-b border-black">
+                        <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
+                        <td className="border border-black p-1.5 font-mono">{item.roll_no}</td>
+                        <td className="border border-black p-1.5 font-medium">{item.name}</td>
+                        <td className="border border-black p-1.5 text-center">{item.year_sem}</td>
+                        <td className="border border-black p-1.5">{item.event_name}</td>
+                        <td className="border border-black p-1.5">{item.organized_by}</td>
+                        <td className="border border-black p-1.5">{item.duration}</td>
+                        <td className="border border-black p-1.5">{item.prizes || '-'}</td>
+                        {isEditing && (
+                          <td className="border border-black p-1.5 print:hidden text-center">
+                            <button onClick={() => handleDeleteRow('5_student_achievements.b_extracurricular', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
+                              <Trash2 size={12} />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))
+                  ) : (
+                    [1, 2].map(n => (
+                      <tr key={n} className="border-b border-black h-7">
+                        <td className="border border-black p-1.5 text-center">{n}</td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* 5.c */}
-          <div className="mb-4 pl-2">
-            <div className="flex items-center justify-between mb-1.5">
-              <h5 className="font-semibold text-xs text-black">
-                c. Online Certification Courses (NPTEL, COURSERA & OTHERS) pursued / Internships undergone:
-              </h5>
-              {isEditing && (
-                <button
-                  onClick={() => handleAddRow('5_student_achievements.c_online_certifications', { roll_no: "All Students", name: "-", year_sem: "III/I", course_name: "Machine Learning", organized_by: "NPTEL", duration: "12 Weeks", grade: "Elite" })}
-                  className="print:hidden px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100"
-                >
-                  <Plus size={11} /> Add Certification
-                </button>
-              )}
-            </div>
-            <table className="w-full text-[11px] border-collapse border border-black text-left">
-              <thead>
-                <tr className="bg-gray-100 font-bold border-b border-black">
-                  <th className="border border-black p-1.5 w-10 text-center">S.No</th>
-                  <th className="border border-black p-1.5">Roll. No</th>
-                  <th className="border border-black p-1.5">Name of the Students</th>
-                  <th className="border border-black p-1.5 text-center">Year & Sem</th>
-                  <th className="border border-black p-1.5">Name of the Certification course/Internship</th>
-                  <th className="border border-black p-1.5">Organised by</th>
-                  <th className="border border-black p-1.5">Duration</th>
-                  <th className="border border-black p-1.5">Grade secured / Paid or Unpaid Internship</th>
-                  {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {s["5_student_achievements"]?.c_online_certifications?.map((item, i) => (
-                  <tr key={i} className="border-b border-black">
-                    <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
-                    <td className="border border-black p-1.5 font-medium">{item.roll_no}</td>
-                    <td className="border border-black p-1.5">{item.name || '-'}</td>
-                    <td className="border border-black p-1.5 text-center">{item.year_sem}</td>
-                    <td className="border border-black p-1.5 font-medium">{item.course_name}</td>
-                    <td className="border border-black p-1.5">{item.organized_by}</td>
-                    <td className="border border-black p-1.5">{item.duration}</td>
-                    <td className="border border-black p-1.5">{item.grade}</td>
-                    {isEditing && (
-                      <td className="border border-black p-1.5 print:hidden text-center">
-                        <button onClick={() => handleDeleteRow('5_student_achievements.c_online_certifications', i)} className="text-rose-600">
-                          <Trash2 size={12} />
-                        </button>
-                      </td>
-                    )}
+          {!isSectionHidden('5_student_achievements.c_online_certifications') && (
+            <div className="mb-4 pl-2">
+              <div className="flex items-center justify-between mb-1.5">
+                <h5 className="font-semibold text-xs text-black">
+                  c. Online Certification Courses (NPTEL, COURSERA & OTHERS) pursued / Internships undergone:
+                </h5>
+                {isEditing && (
+                  <div className="flex items-center gap-1.5 print:hidden">
+                    <button
+                      onClick={() => handleAddRow('5_student_achievements.c_online_certifications', { roll_no: "All Students", name: "-", year_sem: "III/I", course_name: "Machine Learning", organized_by: "NPTEL", duration: "12 Weeks", grade: "Elite" })}
+                      className="px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
+                    >
+                      <Plus size={11} /> + Add Certification
+                    </button>
+                    <button
+                      onClick={() => handleDeleteTable('5_student_achievements.c_online_certifications', '5.c Online Certifications')}
+                      className="px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold flex items-center gap-1 hover:bg-rose-100 cursor-pointer"
+                    >
+                      <Trash2 size={11} /> Delete Table
+                    </button>
+                  </div>
+                )}
+              </div>
+              <table className="w-full text-[11px] border-collapse border border-black text-left">
+                <thead>
+                  <tr className="bg-gray-100 font-bold border-b border-black">
+                    <th className="border border-black p-1.5 w-10 text-center">S.No</th>
+                    <th className="border border-black p-1.5">Roll. No</th>
+                    <th className="border border-black p-1.5">Name of the Students</th>
+                    <th className="border border-black p-1.5 text-center">Year & Sem</th>
+                    <th className="border border-black p-1.5">Name of the Certification course/Internship</th>
+                    <th className="border border-black p-1.5">Organised by</th>
+                    <th className="border border-black p-1.5">Duration</th>
+                    <th className="border border-black p-1.5">Grade secured / Paid or Unpaid Internship</th>
+                    {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {s["5_student_achievements"]?.c_online_certifications?.map((item, i) => (
+                    <tr key={i} className="border-b border-black">
+                      <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
+                      <td className="border border-black p-1.5 font-medium">{item.roll_no}</td>
+                      <td className="border border-black p-1.5">{item.name || '-'}</td>
+                      <td className="border border-black p-1.5 text-center">{item.year_sem}</td>
+                      <td className="border border-black p-1.5 font-medium">{item.course_name}</td>
+                      <td className="border border-black p-1.5">{item.organized_by}</td>
+                      <td className="border border-black p-1.5">{item.duration}</td>
+                      <td className="border border-black p-1.5">{item.grade}</td>
+                      {isEditing && (
+                        <td className="border border-black p-1.5 print:hidden text-center">
+                          <button onClick={() => handleDeleteRow('5_student_achievements.c_online_certifications', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
+                            <Trash2 size={12} />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* 5.d Placements */}
           <div className="mb-4 pl-2">
@@ -1231,90 +1375,110 @@ const IQACMonthlyReport = () => {
             </h5>
             
             {/* DS - BYD Table */}
-            <div className="mb-4">
-              <div className="flex items-center justify-between font-bold text-[11px] bg-gray-100 border border-black px-2 py-1 uppercase">
-                <span>DS - BYD</span>
-                {isEditing && (
-                  <button
-                    onClick={() => handleAddRow('5_student_achievements.d_placements.ds_byd', { name: "NEW PLACEMENT", roll_no: "235U1A6700", date: "17-08-2026", company: "BYD", package: "6.5 LPA" })}
-                    className="print:hidden text-indigo-700 hover:text-indigo-900 text-[10px] font-bold"
-                  >
-                    + Add Placed Student
-                  </button>
-                )}
-              </div>
-              <table className="w-full text-[11px] border-collapse border border-black text-left">
-                <thead>
-                  <tr className="bg-gray-50 font-bold border-b border-black">
-                    <th className="border border-black p-1.5 w-10 text-center">S.No</th>
-                    <th className="border border-black p-1.5">Name</th>
-                    <th className="border border-black p-1.5">Roll No</th>
-                    <th className="border border-black p-1.5">Date of Appointment</th>
-                    {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {s["5_student_achievements"]?.d_placements?.ds_byd?.map((item, i) => (
-                    <tr key={i} className="border-b border-black">
-                      <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
-                      <td className="border border-black p-1.5 font-medium">{item.name}</td>
-                      <td className="border border-black p-1.5 font-mono">{item.roll_no}</td>
-                      <td className="border border-black p-1.5">{item.date}</td>
-                      {isEditing && (
-                        <td className="border border-black p-1.5 print:hidden text-center">
-                          <button onClick={() => handleDeleteRow('5_student_achievements.d_placements.ds_byd', i)} className="text-rose-600">
-                            <Trash2 size={12} />
-                          </button>
-                        </td>
-                      )}
+            {!isSectionHidden('5_student_achievements.d_placements.ds_byd') && (
+              <div className="mb-4">
+                <div className="flex items-center justify-between font-bold text-[11px] bg-gray-100 border border-black px-2 py-1 uppercase">
+                  <span>DS - BYD</span>
+                  {isEditing && (
+                    <div className="flex items-center gap-2 print:hidden">
+                      <button
+                        onClick={() => handleAddRow('5_student_achievements.d_placements.ds_byd', { name: "NEW PLACEMENT", roll_no: "235U1A6700", date: "17-08-2026", company: "BYD", package: "6.5 LPA" })}
+                        className="text-indigo-700 hover:text-indigo-900 text-[10px] font-bold cursor-pointer"
+                      >
+                        + Add Placed Student
+                      </button>
+                      <button
+                        onClick={() => handleDeleteTable('5_student_achievements.d_placements.ds_byd', 'Placements DS - BYD')}
+                        className="text-rose-600 hover:text-rose-800 text-[10px] font-bold flex items-center gap-0.5 cursor-pointer"
+                      >
+                        <Trash2 size={10} /> Delete Table
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <table className="w-full text-[11px] border-collapse border border-black text-left">
+                  <thead>
+                    <tr className="bg-gray-50 font-bold border-b border-black">
+                      <th className="border border-black p-1.5 w-10 text-center">S.No</th>
+                      <th className="border border-black p-1.5">Name</th>
+                      <th className="border border-black p-1.5">Roll No</th>
+                      <th className="border border-black p-1.5">Date of Appointment</th>
+                      {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {s["5_student_achievements"]?.d_placements?.ds_byd?.map((item, i) => (
+                      <tr key={i} className="border-b border-black">
+                        <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
+                        <td className="border border-black p-1.5 font-medium">{item.name}</td>
+                        <td className="border border-black p-1.5 font-mono">{item.roll_no}</td>
+                        <td className="border border-black p-1.5">{item.date}</td>
+                        {isEditing && (
+                          <td className="border border-black p-1.5 print:hidden text-center">
+                            <button onClick={() => handleDeleteRow('5_student_achievements.d_placements.ds_byd', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
+                              <Trash2 size={12} />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             {/* AI & DS - BYD Table */}
-            <div>
-              <div className="flex items-center justify-between font-bold text-[11px] bg-gray-100 border border-black px-2 py-1 uppercase">
-                <span>AI & DS - BYD</span>
-                {isEditing && (
-                  <button
-                    onClick={() => handleAddRow('5_student_achievements.d_placements.aids_byd', { name: "NEW PLACEMENT", roll_no: "235U1A7200", date: "17-08-2026", company: "BYD", package: "6.5 LPA" })}
-                    className="print:hidden text-indigo-700 hover:text-indigo-900 text-[10px] font-bold"
-                  >
-                    + Add Placed Student
-                  </button>
-                )}
-              </div>
-              <table className="w-full text-[11px] border-collapse border border-black text-left">
-                <thead>
-                  <tr className="bg-gray-50 font-bold border-b border-black">
-                    <th className="border border-black p-1.5 w-10 text-center">S.No</th>
-                    <th className="border border-black p-1.5">Name</th>
-                    <th className="border border-black p-1.5">Roll No</th>
-                    <th className="border border-black p-1.5">Date of Appointment</th>
-                    {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {s["5_student_achievements"]?.d_placements?.aids_byd?.map((item, i) => (
-                    <tr key={i} className="border-b border-black">
-                      <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
-                      <td className="border border-black p-1.5 font-medium">{item.name}</td>
-                      <td className="border border-black p-1.5 font-mono">{item.roll_no}</td>
-                      <td className="border border-black p-1.5">{item.date}</td>
-                      {isEditing && (
-                        <td className="border border-black p-1.5 print:hidden text-center">
-                          <button onClick={() => handleDeleteRow('5_student_achievements.d_placements.aids_byd', i)} className="text-rose-600">
-                            <Trash2 size={12} />
-                          </button>
-                        </td>
-                      )}
+            {!isSectionHidden('5_student_achievements.d_placements.aids_byd') && (
+              <div>
+                <div className="flex items-center justify-between font-bold text-[11px] bg-gray-100 border border-black px-2 py-1 uppercase">
+                  <span>AI & DS - BYD</span>
+                  {isEditing && (
+                    <div className="flex items-center gap-2 print:hidden">
+                      <button
+                        onClick={() => handleAddRow('5_student_achievements.d_placements.aids_byd', { name: "NEW PLACEMENT", roll_no: "235U1A7200", date: "17-08-2026", company: "BYD", package: "6.5 LPA" })}
+                        className="text-indigo-700 hover:text-indigo-900 text-[10px] font-bold cursor-pointer"
+                      >
+                        + Add Placed Student
+                      </button>
+                      <button
+                        onClick={() => handleDeleteTable('5_student_achievements.d_placements.aids_byd', 'Placements AI & DS - BYD')}
+                        className="text-rose-600 hover:text-rose-800 text-[10px] font-bold flex items-center gap-0.5 cursor-pointer"
+                      >
+                        <Trash2 size={10} /> Delete Table
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <table className="w-full text-[11px] border-collapse border border-black text-left">
+                  <thead>
+                    <tr className="bg-gray-50 font-bold border-b border-black">
+                      <th className="border border-black p-1.5 w-10 text-center">S.No</th>
+                      <th className="border border-black p-1.5">Name</th>
+                      <th className="border border-black p-1.5">Roll No</th>
+                      <th className="border border-black p-1.5">Date of Appointment</th>
+                      {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {s["5_student_achievements"]?.d_placements?.aids_byd?.map((item, i) => (
+                      <tr key={i} className="border-b border-black">
+                        <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
+                        <td className="border border-black p-1.5 font-medium">{item.name}</td>
+                        <td className="border border-black p-1.5 font-mono">{item.roll_no}</td>
+                        <td className="border border-black p-1.5">{item.date}</td>
+                        {isEditing && (
+                          <td className="border border-black p-1.5 print:hidden text-center">
+                            <button onClick={() => handleDeleteRow('5_student_achievements.d_placements.aids_byd', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
+                              <Trash2 size={12} />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1325,285 +1489,427 @@ const IQACMonthlyReport = () => {
           </h4>
 
           {/* 6.a */}
-          <div className="mb-4 pl-2">
-            <div className="flex items-center justify-between mb-1.5">
-              <h5 className="font-semibold text-xs text-black">
-                a. Journal Publications:
-              </h5>
-              {isEditing && (
-                <button
-                  onClick={() => handleAddRow('6_faculty_achievements.a_journal_publications', { authors: "Dr. Faculty Name", title: "Research Paper Title", journal: "International Journal of Engineering", volume_issue: "Vol. 12, Issue 4, 2026", indexing: "Scopus / SCI" })}
-                  className="print:hidden px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
-                >
-                  <Plus size={11} /> + Add Publication
-                </button>
-              )}
-            </div>
-            <table className="w-full text-[11px] border-collapse border border-black text-left">
-              <thead>
-                <tr className="bg-gray-100 font-bold border-b border-black">
-                  <th className="border border-black p-1.5 w-10 text-center">S.No</th>
-                  <th className="border border-black p-1.5">Name(s) of the Author(s)</th>
-                  <th className="border border-black p-1.5">Title of the paper</th>
-                  <th className="border border-black p-1.5">Name of the Journal</th>
-                  <th className="border border-black p-1.5">Volume, Issue no., PP & Year</th>
-                  <th className="border border-black p-1.5">Indexing (SCI / Scopus/ WOS / UGC care)</th>
-                  {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {s["6_faculty_achievements"]?.a_journal_publications?.length > 0 ? (
-                  s["6_faculty_achievements"].a_journal_publications.map((item, i) => (
-                    <tr key={i} className="border-b border-black">
-                      <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
-                      <td className="border border-black p-1.5 font-medium">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.authors || ''} onChange={(e) => {
-                            const updated = [...s["6_faculty_achievements"].a_journal_publications];
-                            updated[i].authors = e.target.value;
-                            updateSectionField('6_faculty_achievements.a_journal_publications', updated);
-                          }} />
-                        ) : item.authors}
-                      </td>
-                      <td className="border border-black p-1.5">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.title || ''} onChange={(e) => {
-                            const updated = [...s["6_faculty_achievements"].a_journal_publications];
-                            updated[i].title = e.target.value;
-                            updateSectionField('6_faculty_achievements.a_journal_publications', updated);
-                          }} />
-                        ) : item.title}
-                      </td>
-                      <td className="border border-black p-1.5">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.journal || ''} onChange={(e) => {
-                            const updated = [...s["6_faculty_achievements"].a_journal_publications];
-                            updated[i].journal = e.target.value;
-                            updateSectionField('6_faculty_achievements.a_journal_publications', updated);
-                          }} />
-                        ) : item.journal}
-                      </td>
-                      <td className="border border-black p-1.5">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.volume_issue || ''} onChange={(e) => {
-                            const updated = [...s["6_faculty_achievements"].a_journal_publications];
-                            updated[i].volume_issue = e.target.value;
-                            updateSectionField('6_faculty_achievements.a_journal_publications', updated);
-                          }} />
-                        ) : item.volume_issue}
-                      </td>
-                      <td className="border border-black p-1.5">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.indexing || ''} onChange={(e) => {
-                            const updated = [...s["6_faculty_achievements"].a_journal_publications];
-                            updated[i].indexing = e.target.value;
-                            updateSectionField('6_faculty_achievements.a_journal_publications', updated);
-                          }} />
-                        ) : item.indexing}
-                      </td>
-                      {isEditing && (
-                        <td className="border border-black p-1.5 print:hidden text-center">
-                          <button onClick={() => handleDeleteRow('6_faculty_achievements.a_journal_publications', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
-                            <Trash2 size={12} />
-                          </button>
-                        </td>
-                      )}
-                    </tr>
-                  ))
-                ) : (
-                  [1, 2].map(n => (
-                    <tr key={n} className="border-b border-black h-7">
-                      <td className="border border-black p-1.5 text-center">{n}</td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
-                    </tr>
-                  ))
+          {!isSectionHidden('6_faculty_achievements.a_journal_publications') && (
+            <div className="mb-4 pl-2">
+              <div className="flex items-center justify-between mb-1.5">
+                <h5 className="font-semibold text-xs text-black">
+                  a. Journal Publications:
+                </h5>
+                {isEditing && (
+                  <div className="flex items-center gap-1.5 print:hidden">
+                    <button
+                      onClick={() => handleAddRow('6_faculty_achievements.a_journal_publications', { authors: "Dr. Faculty Name", title: "Research Paper Title", journal: "International Journal of Engineering", volume_issue: "Vol. 12, Issue 4, 2026", indexing: "Scopus / SCI" })}
+                      className="px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
+                    >
+                      <Plus size={11} /> + Add Publication
+                    </button>
+                    <button
+                      onClick={() => handleDeleteTable('6_faculty_achievements.a_journal_publications', '6.a Journal Publications')}
+                      className="px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold flex items-center gap-1 hover:bg-rose-100 cursor-pointer"
+                    >
+                      <Trash2 size={11} /> Delete Table
+                    </button>
+                  </div>
                 )}
-              </tbody>
-            </table>
-          </div>
+              </div>
+              <table className="w-full text-[11px] border-collapse border border-black text-left">
+                <thead>
+                  <tr className="bg-gray-100 font-bold border-b border-black">
+                    <th className="border border-black p-1.5 w-10 text-center">S.No</th>
+                    <th className="border border-black p-1.5">Name(s) of the Author(s)</th>
+                    <th className="border border-black p-1.5">Title of the paper</th>
+                    <th className="border border-black p-1.5">Name of the Journal</th>
+                    <th className="border border-black p-1.5">Volume, Issue no., PP & Year</th>
+                    <th className="border border-black p-1.5">Indexing (SCI / Scopus/ WOS / UGC care)</th>
+                    {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {s["6_faculty_achievements"]?.a_journal_publications?.length > 0 ? (
+                    s["6_faculty_achievements"].a_journal_publications.map((item, i) => (
+                      <tr key={i} className="border-b border-black">
+                        <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
+                        <td className="border border-black p-1.5 font-medium">
+                          {isEditing ? (
+                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.authors || ''} onChange={(e) => {
+                              const updated = [...s["6_faculty_achievements"].a_journal_publications];
+                              updated[i].authors = e.target.value;
+                              updateSectionField('6_faculty_achievements.a_journal_publications', updated);
+                            }} />
+                          ) : item.authors}
+                        </td>
+                        <td className="border border-black p-1.5">
+                          {isEditing ? (
+                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.title || ''} onChange={(e) => {
+                              const updated = [...s["6_faculty_achievements"].a_journal_publications];
+                              updated[i].title = e.target.value;
+                              updateSectionField('6_faculty_achievements.a_journal_publications', updated);
+                            }} />
+                          ) : item.title}
+                        </td>
+                        <td className="border border-black p-1.5">
+                          {isEditing ? (
+                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.journal || ''} onChange={(e) => {
+                              const updated = [...s["6_faculty_achievements"].a_journal_publications];
+                              updated[i].journal = e.target.value;
+                              updateSectionField('6_faculty_achievements.a_journal_publications', updated);
+                            }} />
+                          ) : item.journal}
+                        </td>
+                        <td className="border border-black p-1.5">
+                          {isEditing ? (
+                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.volume_issue || ''} onChange={(e) => {
+                              const updated = [...s["6_faculty_achievements"].a_journal_publications];
+                              updated[i].volume_issue = e.target.value;
+                              updateSectionField('6_faculty_achievements.a_journal_publications', updated);
+                            }} />
+                          ) : item.volume_issue}
+                        </td>
+                        <td className="border border-black p-1.5">
+                          {isEditing ? (
+                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.indexing || ''} onChange={(e) => {
+                              const updated = [...s["6_faculty_achievements"].a_journal_publications];
+                              updated[i].indexing = e.target.value;
+                              updateSectionField('6_faculty_achievements.a_journal_publications', updated);
+                            }} />
+                          ) : item.indexing}
+                        </td>
+                        {isEditing && (
+                          <td className="border border-black p-1.5 print:hidden text-center">
+                            <button onClick={() => handleDeleteRow('6_faculty_achievements.a_journal_publications', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
+                              <Trash2 size={12} />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))
+                  ) : (
+                    [1, 2].map(n => (
+                      <tr key={n} className="border-b border-black h-7">
+                        <td className="border border-black p-1.5 text-center">{n}</td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* 6.c */}
-          <div className="mb-4 pl-2">
-            <div className="flex items-center justify-between mb-1.5">
-              <h5 className="font-semibold text-xs text-black">
-                c. Patents Published/ Granted:
-              </h5>
-              {isEditing && (
-                <button
-                  onClick={() => handleAddRow('6_faculty_achievements.c_patents', { authors: "Faculty Name", title: "Patent Invention Title", agency: "Indian Patent Office", filing_no_year: "202641012345, 2026", status: "Published" })}
-                  className="print:hidden px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
-                >
-                  <Plus size={11} /> + Add Patent
-                </button>
-              )}
-            </div>
-            <table className="w-full text-[11px] border-collapse border border-black text-left">
-              <thead>
-                <tr className="bg-gray-100 font-bold border-b border-black">
-                  <th className="border border-black p-1.5 w-10 text-center">S.No</th>
-                  <th className="border border-black p-1.5">Name(s) of the Author(s)</th>
-                  <th className="border border-black p-1.5">Title of the patent</th>
-                  <th className="border border-black p-1.5">Name of the agency</th>
-                  <th className="border border-black p-1.5">Filing No. & Year</th>
-                  <th className="border border-black p-1.5 text-center">Published / Granted</th>
-                  {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {s["6_faculty_achievements"]?.c_patents?.length > 0 ? (
-                  s["6_faculty_achievements"].c_patents.map((item, i) => (
-                    <tr key={i} className="border-b border-black">
-                      <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
-                      <td className="border border-black p-1.5 font-medium">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.authors || ''} onChange={(e) => {
-                            const updated = [...s["6_faculty_achievements"].c_patents];
-                            updated[i].authors = e.target.value;
-                            updateSectionField('6_faculty_achievements.c_patents', updated);
-                          }} />
-                        ) : item.authors}
-                      </td>
-                      <td className="border border-black p-1.5">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.title || ''} onChange={(e) => {
-                            const updated = [...s["6_faculty_achievements"].c_patents];
-                            updated[i].title = e.target.value;
-                            updateSectionField('6_faculty_achievements.c_patents', updated);
-                          }} />
-                        ) : item.title}
-                      </td>
-                      <td className="border border-black p-1.5">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.agency || ''} onChange={(e) => {
-                            const updated = [...s["6_faculty_achievements"].c_patents];
-                            updated[i].agency = e.target.value;
-                            updateSectionField('6_faculty_achievements.c_patents', updated);
-                          }} />
-                        ) : item.agency}
-                      </td>
-                      <td className="border border-black p-1.5">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.filing_no_year || ''} onChange={(e) => {
-                            const updated = [...s["6_faculty_achievements"].c_patents];
-                            updated[i].filing_no_year = e.target.value;
-                            updateSectionField('6_faculty_achievements.c_patents', updated);
-                          }} />
-                        ) : item.filing_no_year}
-                      </td>
-                      <td className="border border-black p-1.5 text-center font-bold">
-                        {isEditing ? (
-                          <select className="bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.status || 'Published'} onChange={(e) => {
-                            const updated = [...s["6_faculty_achievements"].c_patents];
-                            updated[i].status = e.target.value;
-                            updateSectionField('6_faculty_achievements.c_patents', updated);
-                          }}>
-                            <option value="Published">Published</option>
-                            <option value="Granted">Granted</option>
-                            <option value="Filed">Filed</option>
-                          </select>
-                        ) : item.status}
-                      </td>
-                      {isEditing && (
-                        <td className="border border-black p-1.5 print:hidden text-center">
-                          <button onClick={() => handleDeleteRow('6_faculty_achievements.c_patents', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
-                            <Trash2 size={12} />
-                          </button>
-                        </td>
-                      )}
-                    </tr>
-                  ))
-                ) : (
-                  [1, 2].map(n => (
-                    <tr key={n} className="border-b border-black h-7">
-                      <td className="border border-black p-1.5 text-center">{n}</td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      <td className="border border-black p-1.5"></td>
-                      {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
-                    </tr>
-                  ))
+          {!isSectionHidden('6_faculty_achievements.c_patents') && (
+            <div className="mb-4 pl-2">
+              <div className="flex items-center justify-between mb-1.5">
+                <h5 className="font-semibold text-xs text-black">
+                  c. Patents Published/ Granted:
+                </h5>
+                {isEditing && (
+                  <div className="flex items-center gap-1.5 print:hidden">
+                    <button
+                      onClick={() => handleAddRow('6_faculty_achievements.c_patents', { authors: "Faculty Name", title: "Patent Invention Title", agency: "Indian Patent Office", filing_no_year: "202641012345, 2026", status: "Published" })}
+                      className="px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
+                    >
+                      <Plus size={11} /> + Add Patent
+                    </button>
+                    <button
+                      onClick={() => handleDeleteTable('6_faculty_achievements.c_patents', '6.c Patents')}
+                      className="px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold flex items-center gap-1 hover:bg-rose-100 cursor-pointer"
+                    >
+                      <Trash2 size={11} /> Delete Table
+                    </button>
+                  </div>
                 )}
-              </tbody>
-            </table>
-          </div>
+              </div>
+              <table className="w-full text-[11px] border-collapse border border-black text-left">
+                <thead>
+                  <tr className="bg-gray-100 font-bold border-b border-black">
+                    <th className="border border-black p-1.5 w-10 text-center">S.No</th>
+                    <th className="border border-black p-1.5">Name(s) of the Author(s)</th>
+                    <th className="border border-black p-1.5">Title of the patent</th>
+                    <th className="border border-black p-1.5">Name of the agency</th>
+                    <th className="border border-black p-1.5">Filing No. & Year</th>
+                    <th className="border border-black p-1.5 text-center">Published / Granted</th>
+                    {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {s["6_faculty_achievements"]?.c_patents?.length > 0 ? (
+                    s["6_faculty_achievements"].c_patents.map((item, i) => (
+                      <tr key={i} className="border-b border-black">
+                        <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
+                        <td className="border border-black p-1.5 font-medium">
+                          {isEditing ? (
+                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.authors || ''} onChange={(e) => {
+                              const updated = [...s["6_faculty_achievements"].c_patents];
+                              updated[i].authors = e.target.value;
+                              updateSectionField('6_faculty_achievements.c_patents', updated);
+                            }} />
+                          ) : item.authors}
+                        </td>
+                        <td className="border border-black p-1.5">
+                          {isEditing ? (
+                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.title || ''} onChange={(e) => {
+                              const updated = [...s["6_faculty_achievements"].c_patents];
+                              updated[i].title = e.target.value;
+                              updateSectionField('6_faculty_achievements.c_patents', updated);
+                            }} />
+                          ) : item.title}
+                        </td>
+                        <td className="border border-black p-1.5">
+                          {isEditing ? (
+                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.agency || ''} onChange={(e) => {
+                              const updated = [...s["6_faculty_achievements"].c_patents];
+                              updated[i].agency = e.target.value;
+                              updateSectionField('6_faculty_achievements.c_patents', updated);
+                            }} />
+                          ) : item.agency}
+                        </td>
+                        <td className="border border-black p-1.5">
+                          {isEditing ? (
+                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.filing_no_year || ''} onChange={(e) => {
+                              const updated = [...s["6_faculty_achievements"].c_patents];
+                              updated[i].filing_no_year = e.target.value;
+                              updateSectionField('6_faculty_achievements.c_patents', updated);
+                            }} />
+                          ) : item.filing_no_year}
+                        </td>
+                        <td className="border border-black p-1.5 text-center font-bold">
+                          {isEditing ? (
+                            <select className="bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.status || 'Published'} onChange={(e) => {
+                              const updated = [...s["6_faculty_achievements"].c_patents];
+                              updated[i].status = e.target.value;
+                              updateSectionField('6_faculty_achievements.c_patents', updated);
+                            }}>
+                              <option value="Published">Published</option>
+                              <option value="Granted">Granted</option>
+                              <option value="Filed">Filed</option>
+                            </select>
+                          ) : item.status}
+                        </td>
+                        {isEditing && (
+                          <td className="border border-black p-1.5 print:hidden text-center">
+                            <button onClick={() => handleDeleteRow('6_faculty_achievements.c_patents', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
+                              <Trash2 size={12} />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))
+                  ) : (
+                    [1, 2].map(n => (
+                      <tr key={n} className="border-b border-black h-7">
+                        <td className="border border-black p-1.5 text-center">{n}</td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* 6.g */}
-          <div className="mb-4 pl-2">
-            <div className="flex items-center justify-between mb-1.5">
-              <h5 className="font-semibold text-xs text-black">
-                g. Workshops/FDPs/STTPs attended:
-              </h5>
+          {!isSectionHidden('6_faculty_achievements.g_workshops_attended') && (
+            <div className="mb-4 pl-2">
+              <div className="flex items-center justify-between mb-1.5">
+                <h5 className="font-semibold text-xs text-black">
+                  g. Workshops/FDPs/STTPs attended:
+                </h5>
+                {isEditing && (
+                  <div className="flex items-center gap-1.5 print:hidden">
+                    <button
+                      onClick={() => handleAddRow('6_faculty_achievements.g_workshops_attended', { faculty_name: "Faculty Name", program_name: "AI & Machine Learning FDP", organized_by: "IIT Hyderabad / JNTUH", duration: "5 Days" })}
+                      className="px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
+                    >
+                      <Plus size={11} /> + Add Workshop/FDP
+                    </button>
+                    <button
+                      onClick={() => handleDeleteTable('6_faculty_achievements.g_workshops_attended', '6.g Workshops/FDPs attended')}
+                      className="px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold flex items-center gap-1 hover:bg-rose-100 cursor-pointer"
+                    >
+                      <Trash2 size={11} /> Delete Table
+                    </button>
+                  </div>
+                )}
+              </div>
+              <table className="w-full text-[11px] border-collapse border border-black text-left">
+                <thead>
+                  <tr className="bg-gray-100 font-bold border-b border-black">
+                    <th className="border border-black p-1.5 w-10 text-center">S.No</th>
+                    <th className="border border-black p-1.5">Name of the Faculty</th>
+                    <th className="border border-black p-1.5">Name of the Workshop/FDP/ STTP Program</th>
+                    <th className="border border-black p-1.5">Organized by</th>
+                    <th className="border border-black p-1.5">Duration</th>
+                    {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {s["6_faculty_achievements"]?.g_workshops_attended?.length > 0 ? (
+                    s["6_faculty_achievements"].g_workshops_attended.map((item, i) => (
+                      <tr key={i} className="border-b border-black">
+                        <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
+                        <td className="border border-black p-1.5 font-medium">
+                          {isEditing ? (
+                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.faculty_name || ''} onChange={(e) => {
+                              const updated = [...s["6_faculty_achievements"].g_workshops_attended];
+                              updated[i].faculty_name = e.target.value;
+                              updateSectionField('6_faculty_achievements.g_workshops_attended', updated);
+                            }} />
+                          ) : item.faculty_name}
+                        </td>
+                        <td className="border border-black p-1.5">
+                          {isEditing ? (
+                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.program_name || ''} onChange={(e) => {
+                              const updated = [...s["6_faculty_achievements"].g_workshops_attended];
+                              updated[i].program_name = e.target.value;
+                              updateSectionField('6_faculty_achievements.g_workshops_attended', updated);
+                            }} />
+                          ) : item.program_name}
+                        </td>
+                        <td className="border border-black p-1.5">
+                          {isEditing ? (
+                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.organized_by || ''} onChange={(e) => {
+                              const updated = [...s["6_faculty_achievements"].g_workshops_attended];
+                              updated[i].organized_by = e.target.value;
+                              updateSectionField('6_faculty_achievements.g_workshops_attended', updated);
+                            }} />
+                          ) : item.organized_by}
+                        </td>
+                        <td className="border border-black p-1.5">
+                          {isEditing ? (
+                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.duration || ''} onChange={(e) => {
+                              const updated = [...s["6_faculty_achievements"].g_workshops_attended];
+                              updated[i].duration = e.target.value;
+                              updateSectionField('6_faculty_achievements.g_workshops_attended', updated);
+                            }} />
+                          ) : item.duration}
+                        </td>
+                        {isEditing && (
+                          <td className="border border-black p-1.5 print:hidden text-center">
+                            <button onClick={() => handleDeleteRow('6_faculty_achievements.g_workshops_attended', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
+                              <Trash2 size={12} />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))
+                  ) : (
+                    [1, 2].map(n => (
+                      <tr key={n} className="border-b border-black h-7">
+                        <td className="border border-black p-1.5 text-center">{n}</td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* SECTION 7: Training programs conducted for Non-Teaching Staff */}
+        {!isSectionHidden('7_non_teaching_training') && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-bold text-sm text-black">
+                7. Training programs conducted for Non-Teaching Staff:
+              </h4>
               {isEditing && (
-                <button
-                  onClick={() => handleAddRow('6_faculty_achievements.g_workshops_attended', { faculty_name: "Faculty Name", program_name: "AI & Machine Learning FDP", organized_by: "IIT Hyderabad / JNTUH", duration: "5 Days" })}
-                  className="print:hidden px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
-                >
-                  <Plus size={11} /> + Add Workshop/FDP
-                </button>
+                <div className="flex items-center gap-1.5 print:hidden">
+                  <button
+                    onClick={() => handleAddRow('7_non_teaching_training', { program_name: "Lab Equipment Handling & Safety", target_staff: "Technical & Lab Staff", resource_person: "Senior Instructor", duration: "1 Day", participants: "12" })}
+                    className="px-2 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
+                  >
+                    <Plus size={12} /> + Add Training Program
+                  </button>
+                  <button
+                    onClick={() => handleDeleteTable('7_non_teaching_training', '7. Non-Teaching Training')}
+                    className="px-2 py-1 rounded bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold flex items-center gap-1 hover:bg-rose-100 cursor-pointer"
+                  >
+                    <Trash2 size={11} /> Delete Table
+                  </button>
+                </div>
               )}
             </div>
             <table className="w-full text-[11px] border-collapse border border-black text-left">
               <thead>
                 <tr className="bg-gray-100 font-bold border-b border-black">
                   <th className="border border-black p-1.5 w-10 text-center">S.No</th>
-                  <th className="border border-black p-1.5">Name of the Faculty</th>
-                  <th className="border border-black p-1.5">Name of the Workshop/FDP/ STTP Program</th>
-                  <th className="border border-black p-1.5">Organized by</th>
+                  <th className="border border-black p-1.5">Name of the Training Program</th>
+                  <th className="border border-black p-1.5">Target Staff</th>
+                  <th className="border border-black p-1.5">Resource Person</th>
                   <th className="border border-black p-1.5">Duration</th>
+                  <th className="border border-black p-1.5 text-center">No. of Participants</th>
                   {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
                 </tr>
               </thead>
               <tbody>
-                {s["6_faculty_achievements"]?.g_workshops_attended?.length > 0 ? (
-                  s["6_faculty_achievements"].g_workshops_attended.map((item, i) => (
+                {s["7_non_teaching_training"]?.length > 0 ? (
+                  s["7_non_teaching_training"].map((item, i) => (
                     <tr key={i} className="border-b border-black">
                       <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
                       <td className="border border-black p-1.5 font-medium">
                         {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.faculty_name || ''} onChange={(e) => {
-                            const updated = [...s["6_faculty_achievements"].g_workshops_attended];
-                            updated[i].faculty_name = e.target.value;
-                            updateSectionField('6_faculty_achievements.g_workshops_attended', updated);
-                          }} />
-                        ) : item.faculty_name}
-                      </td>
-                      <td className="border border-black p-1.5">
-                        {isEditing ? (
                           <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.program_name || ''} onChange={(e) => {
-                            const updated = [...s["6_faculty_achievements"].g_workshops_attended];
+                            const updated = [...(s["7_non_teaching_training"] || [])];
                             updated[i].program_name = e.target.value;
-                            updateSectionField('6_faculty_achievements.g_workshops_attended', updated);
+                            updateSectionField('7_non_teaching_training', updated);
                           }} />
                         ) : item.program_name}
                       </td>
                       <td className="border border-black p-1.5">
                         {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.organized_by || ''} onChange={(e) => {
-                            const updated = [...s["6_faculty_achievements"].g_workshops_attended];
-                            updated[i].organized_by = e.target.value;
-                            updateSectionField('6_faculty_achievements.g_workshops_attended', updated);
+                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.target_staff || ''} onChange={(e) => {
+                            const updated = [...(s["7_non_teaching_training"] || [])];
+                            updated[i].target_staff = e.target.value;
+                            updateSectionField('7_non_teaching_training', updated);
                           }} />
-                        ) : item.organized_by}
+                        ) : item.target_staff}
+                      </td>
+                      <td className="border border-black p-1.5">
+                        {isEditing ? (
+                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.resource_person || ''} onChange={(e) => {
+                            const updated = [...(s["7_non_teaching_training"] || [])];
+                            updated[i].resource_person = e.target.value;
+                            updateSectionField('7_non_teaching_training', updated);
+                          }} />
+                        ) : item.resource_person}
                       </td>
                       <td className="border border-black p-1.5">
                         {isEditing ? (
                           <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.duration || ''} onChange={(e) => {
-                            const updated = [...s["6_faculty_achievements"].g_workshops_attended];
+                            const updated = [...(s["7_non_teaching_training"] || [])];
                             updated[i].duration = e.target.value;
-                            updateSectionField('6_faculty_achievements.g_workshops_attended', updated);
+                            updateSectionField('7_non_teaching_training', updated);
                           }} />
                         ) : item.duration}
                       </td>
+                      <td className="border border-black p-1.5 text-center font-bold">
+                        {isEditing ? (
+                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs text-center" value={item.participants || ''} onChange={(e) => {
+                            const updated = [...(s["7_non_teaching_training"] || [])];
+                            updated[i].participants = e.target.value;
+                            updateSectionField('7_non_teaching_training', updated);
+                          }} />
+                        ) : item.participants}
+                      </td>
                       {isEditing && (
                         <td className="border border-black p-1.5 print:hidden text-center">
-                          <button onClick={() => handleDeleteRow('6_faculty_achievements.g_workshops_attended', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
+                          <button onClick={() => handleDeleteRow('7_non_teaching_training', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
                             <Trash2 size={12} />
                           </button>
                         </td>
@@ -1618,6 +1924,7 @@ const IQACMonthlyReport = () => {
                       <td className="border border-black p-1.5"></td>
                       <td className="border border-black p-1.5"></td>
                       <td className="border border-black p-1.5"></td>
+                      <td className="border border-black p-1.5"></td>
                       {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
                     </tr>
                   ))
@@ -1625,327 +1932,244 @@ const IQACMonthlyReport = () => {
               </tbody>
             </table>
           </div>
-        </div>
-
-        {/* SECTION 7: Training programs conducted for Non-Teaching Staff */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="font-bold text-sm text-black">
-              7. Training programs conducted for Non-Teaching Staff:
-            </h4>
-            {isEditing && (
-              <button
-                onClick={() => handleAddRow('7_non_teaching_training', { program_name: "Lab Equipment Handling & Safety", target_staff: "Technical & Lab Staff", resource_person: "Senior Instructor", duration: "1 Day", participants: "12" })}
-                className="print:hidden px-2 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
-              >
-                <Plus size={12} /> + Add Training Program
-              </button>
-            )}
-          </div>
-          <table className="w-full text-[11px] border-collapse border border-black text-left">
-            <thead>
-              <tr className="bg-gray-100 font-bold border-b border-black">
-                <th className="border border-black p-1.5 w-10 text-center">S.No</th>
-                <th className="border border-black p-1.5">Name of the Training Program</th>
-                <th className="border border-black p-1.5">Target Staff</th>
-                <th className="border border-black p-1.5">Resource Person</th>
-                <th className="border border-black p-1.5">Duration</th>
-                <th className="border border-black p-1.5 text-center">No. of Participants</th>
-                {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {s["7_non_teaching_training"]?.length > 0 ? (
-                s["7_non_teaching_training"].map((item, i) => (
-                  <tr key={i} className="border-b border-black">
-                    <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
-                    <td className="border border-black p-1.5 font-medium">
-                      {isEditing ? (
-                        <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.program_name || ''} onChange={(e) => {
-                          const updated = [...(s["7_non_teaching_training"] || [])];
-                          updated[i].program_name = e.target.value;
-                          updateSectionField('7_non_teaching_training', updated);
-                        }} />
-                      ) : item.program_name}
-                    </td>
-                    <td className="border border-black p-1.5">
-                      {isEditing ? (
-                        <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.target_staff || ''} onChange={(e) => {
-                          const updated = [...(s["7_non_teaching_training"] || [])];
-                          updated[i].target_staff = e.target.value;
-                          updateSectionField('7_non_teaching_training', updated);
-                        }} />
-                      ) : item.target_staff}
-                    </td>
-                    <td className="border border-black p-1.5">
-                      {isEditing ? (
-                        <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.resource_person || ''} onChange={(e) => {
-                          const updated = [...(s["7_non_teaching_training"] || [])];
-                          updated[i].resource_person = e.target.value;
-                          updateSectionField('7_non_teaching_training', updated);
-                        }} />
-                      ) : item.resource_person}
-                    </td>
-                    <td className="border border-black p-1.5">
-                      {isEditing ? (
-                        <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.duration || ''} onChange={(e) => {
-                          const updated = [...(s["7_non_teaching_training"] || [])];
-                          updated[i].duration = e.target.value;
-                          updateSectionField('7_non_teaching_training', updated);
-                        }} />
-                      ) : item.duration}
-                    </td>
-                    <td className="border border-black p-1.5 text-center font-bold">
-                      {isEditing ? (
-                        <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs text-center" value={item.participants || ''} onChange={(e) => {
-                          const updated = [...(s["7_non_teaching_training"] || [])];
-                          updated[i].participants = e.target.value;
-                          updateSectionField('7_non_teaching_training', updated);
-                        }} />
-                      ) : item.participants}
-                    </td>
-                    {isEditing && (
-                      <td className="border border-black p-1.5 print:hidden text-center">
-                        <button onClick={() => handleDeleteRow('7_non_teaching_training', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
-                          <Trash2 size={12} />
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                ))
-              ) : (
-                [1, 2].map(n => (
-                  <tr key={n} className="border-b border-black h-7">
-                    <td className="border border-black p-1.5 text-center">{n}</td>
-                    <td className="border border-black p-1.5"></td>
-                    <td className="border border-black p-1.5"></td>
-                    <td className="border border-black p-1.5"></td>
-                    <td className="border border-black p-1.5"></td>
-                    <td className="border border-black p-1.5"></td>
-                    {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        )}
 
         {/* SECTION 8: Investment on Infrastructure */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="font-bold text-sm text-black">
-              8. Investment on Infrastructure:
-            </h4>
-            {isEditing && (
-              <button
-                onClick={() => handleAddRow('8_infrastructure_investment', { name: "Laboratory Computers / Equipment", specs: "Core i7, 16GB RAM", quantity: "20", date: "15-08-2026", supplier: "Tech Systems", amount: "10,00,000" })}
-                className="print:hidden px-2 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
-              >
-                <Plus size={12} /> + Add Infrastructure Item
-              </button>
-            )}
-          </div>
-          <table className="w-full text-[11px] border-collapse border border-black text-left">
-            <thead>
-              <tr className="bg-gray-100 font-bold border-b border-black">
-                <th className="border border-black p-1.5 w-10 text-center">S.No</th>
-                <th className="border border-black p-1.5">Name of the Infrastructure</th>
-                <th className="border border-black p-1.5">Specifications</th>
-                <th className="border border-black p-1.5 text-center">Quantity</th>
-                <th className="border border-black p-1.5">Date of Purchase</th>
-                <th className="border border-black p-1.5">Particulars of the supplier</th>
-                <th className="border border-black p-1.5 text-center">Amount Paid (Rs.)</th>
-                {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {s["8_infrastructure_investment"]?.length > 0 ? (
-                s["8_infrastructure_investment"].map((item, i) => (
-                  <tr key={i} className="border-b border-black">
-                    <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
-                    <td className="border border-black p-1.5 font-medium">
-                      {isEditing ? (
-                        <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.name || ''} onChange={(e) => {
-                          const updated = [...s["8_infrastructure_investment"]];
-                          updated[i].name = e.target.value;
-                          updateSectionField('8_infrastructure_investment', updated);
-                        }} />
-                      ) : item.name}
-                    </td>
-                    <td className="border border-black p-1.5">
-                      {isEditing ? (
-                        <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.specs || ''} onChange={(e) => {
-                          const updated = [...s["8_infrastructure_investment"]];
-                          updated[i].specs = e.target.value;
-                          updateSectionField('8_infrastructure_investment', updated);
-                        }} />
-                      ) : item.specs}
-                    </td>
-                    <td className="border border-black p-1.5 text-center">
-                      {isEditing ? (
-                        <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs text-center" value={item.quantity || ''} onChange={(e) => {
-                          const updated = [...s["8_infrastructure_investment"]];
-                          updated[i].quantity = e.target.value;
-                          updateSectionField('8_infrastructure_investment', updated);
-                        }} />
-                      ) : item.quantity}
-                    </td>
-                    <td className="border border-black p-1.5">
-                      {isEditing ? (
-                        <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.date || ''} onChange={(e) => {
-                          const updated = [...s["8_infrastructure_investment"]];
-                          updated[i].date = e.target.value;
-                          updateSectionField('8_infrastructure_investment', updated);
-                        }} />
-                      ) : item.date}
-                    </td>
-                    <td className="border border-black p-1.5">
-                      {isEditing ? (
-                        <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.supplier || ''} onChange={(e) => {
-                          const updated = [...s["8_infrastructure_investment"]];
-                          updated[i].supplier = e.target.value;
-                          updateSectionField('8_infrastructure_investment', updated);
-                        }} />
-                      ) : item.supplier}
-                    </td>
-                    <td className="border border-black p-1.5 text-center font-bold">
-                      {isEditing ? (
-                        <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs text-center font-bold" value={item.amount || ''} onChange={(e) => {
-                          const updated = [...s["8_infrastructure_investment"]];
-                          updated[i].amount = e.target.value;
-                          updateSectionField('8_infrastructure_investment', updated);
-                        }} />
-                      ) : item.amount}
-                    </td>
-                    {isEditing && (
-                      <td className="border border-black p-1.5 print:hidden text-center">
-                        <button onClick={() => handleDeleteRow('8_infrastructure_investment', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
-                          <Trash2 size={12} />
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                ))
-              ) : (
-                [1, 2].map(n => (
-                  <tr key={n} className="border-b border-black h-7">
-                    <td className="border border-black p-1.5 text-center">{n}</td>
-                    <td className="border border-black p-1.5"></td>
-                    <td className="border border-black p-1.5"></td>
-                    <td className="border border-black p-1.5"></td>
-                    <td className="border border-black p-1.5"></td>
-                    <td className="border border-black p-1.5"></td>
-                    <td className="border border-black p-1.5"></td>
-                    {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
-                  </tr>
-                ))
+        {!isSectionHidden('8_infrastructure_investment') && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-bold text-sm text-black">
+                8. Investment on Infrastructure:
+              </h4>
+              {isEditing && (
+                <div className="flex items-center gap-1.5 print:hidden">
+                  <button
+                    onClick={() => handleAddRow('8_infrastructure_investment', { name: "Laboratory Computers / Equipment", specs: "Core i7, 16GB RAM", quantity: "20", date: "15-08-2026", supplier: "Tech Systems", amount: "10,00,000" })}
+                    className="px-2 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
+                  >
+                    <Plus size={12} /> + Add Infrastructure Item
+                  </button>
+                  <button
+                    onClick={() => handleDeleteTable('8_infrastructure_investment', '8. Infrastructure Investment')}
+                    className="px-2 py-1 rounded bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold flex items-center gap-1 hover:bg-rose-100 cursor-pointer"
+                  >
+                    <Trash2 size={11} /> Delete Table
+                  </button>
+                </div>
               )}
-            </tbody>
-          </table>
-        </div>
+            </div>
+            <table className="w-full text-[11px] border-collapse border border-black text-left">
+              <thead>
+                <tr className="bg-gray-100 font-bold border-b border-black">
+                  <th className="border border-black p-1.5 w-10 text-center">S.No</th>
+                  <th className="border border-black p-1.5">Name of the Infrastructure</th>
+                  <th className="border border-black p-1.5">Specifications</th>
+                  <th className="border border-black p-1.5 text-center">Quantity</th>
+                  <th className="border border-black p-1.5">Date of Purchase</th>
+                  <th className="border border-black p-1.5">Particulars of the supplier</th>
+                  <th className="border border-black p-1.5 text-center">Amount Paid (Rs.)</th>
+                  {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {s["8_infrastructure_investment"]?.length > 0 ? (
+                  s["8_infrastructure_investment"].map((item, i) => (
+                    <tr key={i} className="border-b border-black">
+                      <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
+                      <td className="border border-black p-1.5 font-medium">
+                        {isEditing ? (
+                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.name || ''} onChange={(e) => {
+                            const updated = [...s["8_infrastructure_investment"]];
+                            updated[i].name = e.target.value;
+                            updateSectionField('8_infrastructure_investment', updated);
+                          }} />
+                        ) : item.name}
+                      </td>
+                      <td className="border border-black p-1.5">
+                        {isEditing ? (
+                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.specs || ''} onChange={(e) => {
+                            const updated = [...s["8_infrastructure_investment"]];
+                            updated[i].specs = e.target.value;
+                            updateSectionField('8_infrastructure_investment', updated);
+                          }} />
+                        ) : item.specs}
+                      </td>
+                      <td className="border border-black p-1.5 text-center">
+                        {isEditing ? (
+                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs text-center" value={item.quantity || ''} onChange={(e) => {
+                            const updated = [...s["8_infrastructure_investment"]];
+                            updated[i].quantity = e.target.value;
+                            updateSectionField('8_infrastructure_investment', updated);
+                          }} />
+                        ) : item.quantity}
+                      </td>
+                      <td className="border border-black p-1.5">
+                        {isEditing ? (
+                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.date || ''} onChange={(e) => {
+                            const updated = [...s["8_infrastructure_investment"]];
+                            updated[i].date = e.target.value;
+                            updateSectionField('8_infrastructure_investment', updated);
+                          }} />
+                        ) : item.date}
+                      </td>
+                      <td className="border border-black p-1.5">
+                        {isEditing ? (
+                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.supplier || ''} onChange={(e) => {
+                            const updated = [...s["8_infrastructure_investment"]];
+                            updated[i].supplier = e.target.value;
+                            updateSectionField('8_infrastructure_investment', updated);
+                          }} />
+                        ) : item.supplier}
+                      </td>
+                      <td className="border border-black p-1.5 text-center font-bold">
+                        {isEditing ? (
+                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs text-center font-bold" value={item.amount || ''} onChange={(e) => {
+                            const updated = [...s["8_infrastructure_investment"]];
+                            updated[i].amount = e.target.value;
+                            updateSectionField('8_infrastructure_investment', updated);
+                          }} />
+                        ) : item.amount}
+                      </td>
+                      {isEditing && (
+                        <td className="border border-black p-1.5 print:hidden text-center">
+                          <button onClick={() => handleDeleteRow('8_infrastructure_investment', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
+                            <Trash2 size={12} />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))
+                ) : (
+                  [1, 2].map(n => (
+                    <tr key={n} className="border-b border-black h-7">
+                      <td className="border border-black p-1.5 text-center">{n}</td>
+                      <td className="border border-black p-1.5"></td>
+                      <td className="border border-black p-1.5"></td>
+                      <td className="border border-black p-1.5"></td>
+                      <td className="border border-black p-1.5"></td>
+                      <td className="border border-black p-1.5"></td>
+                      <td className="border border-black p-1.5"></td>
+                      {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* SECTION 9: MoUs signed */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="font-bold text-sm text-black">
-              9. MoUs signed (if any):
-            </h4>
-            {isEditing && (
-              <button
-                onClick={() => handleAddRow('9_mous_signed', { company: "Industry / Organization Name", purpose: "Collaborative Training & Placements", date: "20-08-2026", validity: "3 Years", activities: "Workshops & Internships" })}
-                className="print:hidden px-2 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
-              >
-                <Plus size={12} /> + Add MoU
-              </button>
-            )}
-          </div>
-          <table className="w-full text-[11px] border-collapse border border-black text-left">
-            <thead>
-              <tr className="bg-gray-100 font-bold border-b border-black">
-                <th className="border border-black p-1.5 w-10 text-center">S.No</th>
-                <th className="border border-black p-1.5">Name of the Institution / Industry</th>
-                <th className="border border-black p-1.5">Purpose of MoU</th>
-                <th className="border border-black p-1.5">Date of Signing</th>
-                <th className="border border-black p-1.5">Validity Period</th>
-                <th className="border border-black p-1.5">Activities Planned / Completed</th>
-                {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {s["9_mous_signed"]?.length > 0 ? (
-                s["9_mous_signed"].map((item, i) => (
-                  <tr key={i} className="border-b border-black">
-                    <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
-                    <td className="border border-black p-1.5 font-medium">
-                      {isEditing ? (
-                        <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.company || ''} onChange={(e) => {
-                          const updated = [...(s["9_mous_signed"] || [])];
-                          updated[i].company = e.target.value;
-                          updateSectionField('9_mous_signed', updated);
-                        }} />
-                      ) : item.company}
-                    </td>
-                    <td className="border border-black p-1.5">
-                      {isEditing ? (
-                        <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.purpose || ''} onChange={(e) => {
-                          const updated = [...(s["9_mous_signed"] || [])];
-                          updated[i].purpose = e.target.value;
-                          updateSectionField('9_mous_signed', updated);
-                        }} />
-                      ) : item.purpose}
-                    </td>
-                    <td className="border border-black p-1.5">
-                      {isEditing ? (
-                        <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.date || ''} onChange={(e) => {
-                          const updated = [...(s["9_mous_signed"] || [])];
-                          updated[i].date = e.target.value;
-                          updateSectionField('9_mous_signed', updated);
-                        }} />
-                      ) : item.date}
-                    </td>
-                    <td className="border border-black p-1.5">
-                      {isEditing ? (
-                        <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.validity || ''} onChange={(e) => {
-                          const updated = [...(s["9_mous_signed"] || [])];
-                          updated[i].validity = e.target.value;
-                          updateSectionField('9_mous_signed', updated);
-                        }} />
-                      ) : item.validity}
-                    </td>
-                    <td className="border border-black p-1.5">
-                      {isEditing ? (
-                        <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.activities || ''} onChange={(e) => {
-                          const updated = [...(s["9_mous_signed"] || [])];
-                          updated[i].activities = e.target.value;
-                          updateSectionField('9_mous_signed', updated);
-                        }} />
-                      ) : item.activities}
-                    </td>
-                    {isEditing && (
-                      <td className="border border-black p-1.5 print:hidden text-center">
-                        <button onClick={() => handleDeleteRow('9_mous_signed', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
-                          <Trash2 size={12} />
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                ))
-              ) : (
-                [1, 2].map(n => (
-                  <tr key={n} className="border-b border-black h-7">
-                    <td className="border border-black p-1.5 text-center">{n}</td>
-                    <td className="border border-black p-1.5"></td>
-                    <td className="border border-black p-1.5"></td>
-                    <td className="border border-black p-1.5"></td>
-                    <td className="border border-black p-1.5"></td>
-                    <td className="border border-black p-1.5"></td>
-                    {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
-                  </tr>
-                ))
+        {!isSectionHidden('9_mous_signed') && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-bold text-sm text-black">
+                9. MoUs signed (if any):
+              </h4>
+              {isEditing && (
+                <div className="flex items-center gap-1.5 print:hidden">
+                  <button
+                    onClick={() => handleAddRow('9_mous_signed', { company: "Industry / Organization Name", purpose: "Collaborative Training & Placements", date: "20-08-2026", validity: "3 Years", activities: "Workshops & Internships" })}
+                    className="px-2 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
+                  >
+                    <Plus size={12} /> + Add MoU
+                  </button>
+                  <button
+                    onClick={() => handleDeleteTable('9_mous_signed', '9. MoUs signed')}
+                    className="px-2 py-1 rounded bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold flex items-center gap-1 hover:bg-rose-100 cursor-pointer"
+                  >
+                    <Trash2 size={11} /> Delete Table
+                  </button>
+                </div>
               )}
-            </tbody>
-          </table>
-        </div>
+            </div>
+            <table className="w-full text-[11px] border-collapse border border-black text-left">
+              <thead>
+                <tr className="bg-gray-100 font-bold border-b border-black">
+                  <th className="border border-black p-1.5 w-10 text-center">S.No</th>
+                  <th className="border border-black p-1.5">Name of the Institution / Industry</th>
+                  <th className="border border-black p-1.5">Purpose of MoU</th>
+                  <th className="border border-black p-1.5">Date of Signing</th>
+                  <th className="border border-black p-1.5">Validity Period</th>
+                  <th className="border border-black p-1.5">Activities Planned / Completed</th>
+                  {isEditing && <th className="border border-black p-1.5 print:hidden w-8">Action</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {s["9_mous_signed"]?.length > 0 ? (
+                  s["9_mous_signed"].map((item, i) => (
+                    <tr key={i} className="border-b border-black">
+                      <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
+                      <td className="border border-black p-1.5 font-medium">
+                        {isEditing ? (
+                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.company || ''} onChange={(e) => {
+                            const updated = [...(s["9_mous_signed"] || [])];
+                            updated[i].company = e.target.value;
+                            updateSectionField('9_mous_signed', updated);
+                          }} />
+                        ) : item.company}
+                      </td>
+                      <td className="border border-black p-1.5">
+                        {isEditing ? (
+                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.purpose || ''} onChange={(e) => {
+                            const updated = [...(s["9_mous_signed"] || [])];
+                            updated[i].purpose = e.target.value;
+                            updateSectionField('9_mous_signed', updated);
+                          }} />
+                        ) : item.purpose}
+                      </td>
+                      <td className="border border-black p-1.5">
+                        {isEditing ? (
+                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.date || ''} onChange={(e) => {
+                            const updated = [...(s["9_mous_signed"] || [])];
+                            updated[i].date = e.target.value;
+                            updateSectionField('9_mous_signed', updated);
+                          }} />
+                        ) : item.date}
+                      </td>
+                      <td className="border border-black p-1.5">
+                        {isEditing ? (
+                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.validity || ''} onChange={(e) => {
+                            const updated = [...(s["9_mous_signed"] || [])];
+                            updated[i].validity = e.target.value;
+                            updateSectionField('9_mous_signed', updated);
+                          }} />
+                        ) : item.validity}
+                      </td>
+                      <td className="border border-black p-1.5">
+                        {isEditing ? (
+                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.activities || ''} onChange={(e) => {
+                            const updated = [...(s["9_mous_signed"] || [])];
+                            updated[i].activities = e.target.value;
+                            updateSectionField('9_mous_signed', updated);
+                          }} />
+                        ) : item.activities}
+                      </td>
+                      {isEditing && (
+                        <td className="border border-black p-1.5 print:hidden text-center">
+                          <button onClick={() => handleDeleteRow('9_mous_signed', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
+                            <Trash2 size={12} />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))
+                ) : (
+                  [1, 2].map(n => (
+                    <tr key={n} className="border-b border-black h-7">
+                      <td className="border border-black p-1.5 text-center">{n}</td>
+                      <td className="border border-black p-1.5"></td>
+                      <td className="border border-black p-1.5"></td>
+                      <td className="border border-black p-1.5"></td>
+                      <td className="border border-black p-1.5"></td>
+                      <td className="border border-black p-1.5"></td>
+                      {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* 🌟 CUSTOM SECTIONS / TABLES DYNAMICALLY ADDED BY USER */}
         {s["custom_tables"]?.map((customTable, tableIdx) => (
@@ -2050,79 +2274,109 @@ const IQACMonthlyReport = () => {
         {/* SECTION 10, 11, 12: DYNAMIC EXPANDABLE CONTENT AREAS */}
         <div className="space-y-4 mb-10 text-xs">
           {/* Section 10 */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="font-bold text-black text-xs">10. Alumni Activities (if any):</span>
-              {isEditing && (
-                <span className="text-[10px] text-amber-700 font-medium print:hidden">
-                  (Unlimited lines/bullet points supported)
-                </span>
+          {!isSectionHidden('10_alumni_activities') && (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-bold text-black text-xs">10. Alumni Activities (if any):</span>
+                {isEditing && (
+                  <div className="flex items-center gap-2 print:hidden">
+                    <span className="text-[10px] text-amber-700 font-medium">
+                      (Unlimited lines/bullet points supported)
+                    </span>
+                    <button
+                      onClick={() => handleDeleteTable('10_alumni_activities', '10. Alumni Activities')}
+                      className="text-rose-600 hover:text-rose-800 text-[10px] font-bold flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <Trash2 size={10} /> Delete Section
+                    </button>
+                  </div>
+                )}
+              </div>
+              {isEditing ? (
+                <textarea 
+                  rows={5}
+                  placeholder="Enter details of Alumni interactions, guest lectures, mentorship sessions, dates, batch, number of beneficiaries, key outcomes..."
+                  className="w-full p-3 border-2 border-amber-400 bg-amber-50/50 text-xs text-black font-sans leading-relaxed rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner resize-y"
+                  value={s["10_alumni_activities"] || ""}
+                  onChange={(e) => updateSectionField("10_alumni_activities", e.target.value)}
+                />
+              ) : (
+                <div className="border border-black p-3 min-h-[60px] bg-white text-gray-900 whitespace-pre-wrap leading-relaxed text-xs">
+                  {s["10_alumni_activities"]?.trim() ? s["10_alumni_activities"] : <span className="italic text-gray-400">Nil</span>}
+                </div>
               )}
             </div>
-            {isEditing ? (
-              <textarea 
-                rows={5}
-                placeholder="Enter details of Alumni interactions, guest lectures, mentorship sessions, dates, batch, number of beneficiaries, key outcomes..."
-                className="w-full p-3 border-2 border-amber-400 bg-amber-50/50 text-xs text-black font-sans leading-relaxed rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner resize-y"
-                value={s["10_alumni_activities"] || ""}
-                onChange={(e) => updateSectionField("10_alumni_activities", e.target.value)}
-              />
-            ) : (
-              <div className="border border-black p-3 min-h-[60px] bg-white text-gray-900 whitespace-pre-wrap leading-relaxed text-xs">
-                {s["10_alumni_activities"]?.trim() ? s["10_alumni_activities"] : <span className="italic text-gray-400">Nil</span>}
-              </div>
-            )}
-          </div>
+          )}
 
           {/* Section 11 */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="font-bold text-black text-xs">11. Parent Teacher meetings (if any):</span>
-              {isEditing && (
-                <span className="text-[10px] text-amber-700 font-medium print:hidden">
-                  (Unlimited lines/bullet points supported)
-                </span>
+          {!isSectionHidden('11_parent_teacher_meetings') && (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-bold text-black text-xs">11. Parent Teacher meetings (if any):</span>
+                {isEditing && (
+                  <div className="flex items-center gap-2 print:hidden">
+                    <span className="text-[10px] text-amber-700 font-medium">
+                      (Unlimited lines/bullet points supported)
+                    </span>
+                    <button
+                      onClick={() => handleDeleteTable('11_parent_teacher_meetings', '11. Parent Teacher meetings')}
+                      className="text-rose-600 hover:text-rose-800 text-[10px] font-bold flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <Trash2 size={10} /> Delete Section
+                    </button>
+                  </div>
+                )}
+              </div>
+              {isEditing ? (
+                <textarea 
+                  rows={5}
+                  placeholder="Enter details of Parent-Teacher meetings conducted, dates, agendas discussed, number of parents attended, feedback received, action taken..."
+                  className="w-full p-3 border-2 border-amber-400 bg-amber-50/50 text-xs text-black font-sans leading-relaxed rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner resize-y"
+                  value={s["11_parent_teacher_meetings"] || ""}
+                  onChange={(e) => updateSectionField("11_parent_teacher_meetings", e.target.value)}
+                />
+              ) : (
+                <div className="border border-black p-3 min-h-[60px] bg-white text-gray-900 whitespace-pre-wrap leading-relaxed text-xs">
+                  {s["11_parent_teacher_meetings"]?.trim() ? s["11_parent_teacher_meetings"] : <span className="italic text-gray-400">Nil</span>}
+                </div>
               )}
             </div>
-            {isEditing ? (
-              <textarea 
-                rows={5}
-                placeholder="Enter details of Parent-Teacher meetings conducted, dates, agendas discussed, number of parents attended, feedback received, action taken..."
-                className="w-full p-3 border-2 border-amber-400 bg-amber-50/50 text-xs text-black font-sans leading-relaxed rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner resize-y"
-                value={s["11_parent_teacher_meetings"] || ""}
-                onChange={(e) => updateSectionField("11_parent_teacher_meetings", e.target.value)}
-              />
-            ) : (
-              <div className="border border-black p-3 min-h-[60px] bg-white text-gray-900 whitespace-pre-wrap leading-relaxed text-xs">
-                {s["11_parent_teacher_meetings"]?.trim() ? s["11_parent_teacher_meetings"] : <span className="italic text-gray-400">Nil</span>}
-              </div>
-            )}
-          </div>
+          )}
 
           {/* Section 12 */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="font-bold text-black text-xs">12. Other Information (if any):</span>
-              {isEditing && (
-                <span className="text-[10px] text-amber-700 font-medium print:hidden">
-                  (Unlimited lines/bullet points supported)
-                </span>
+          {!isSectionHidden('12_other_information') && (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-bold text-black text-xs">12. Other Information (if any):</span>
+                {isEditing && (
+                  <div className="flex items-center gap-2 print:hidden">
+                    <span className="text-[10px] text-amber-700 font-medium">
+                      (Unlimited lines/bullet points supported)
+                    </span>
+                    <button
+                      onClick={() => handleDeleteTable('12_other_information', '12. Other Information')}
+                      className="text-rose-600 hover:text-rose-800 text-[10px] font-bold flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <Trash2 size={10} /> Delete Section
+                    </button>
+                  </div>
+                )}
+              </div>
+              {isEditing ? (
+                <textarea 
+                  rows={5}
+                  placeholder="Enter any other departmental highlights, club activities, NSS/NCC initiatives, institutional recognitions, future targets..."
+                  className="w-full p-3 border-2 border-amber-400 bg-amber-50/50 text-xs text-black font-sans leading-relaxed rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner resize-y"
+                  value={s["12_other_information"] || ""}
+                  onChange={(e) => updateSectionField("12_other_information", e.target.value)}
+                />
+              ) : (
+                <div className="border border-black p-3 min-h-[60px] bg-white text-gray-900 whitespace-pre-wrap leading-relaxed text-xs">
+                  {s["12_other_information"]?.trim() ? s["12_other_information"] : <span className="italic text-gray-400">Nil</span>}
+                </div>
               )}
             </div>
-            {isEditing ? (
-              <textarea 
-                rows={5}
-                placeholder="Enter any other departmental highlights, club activities, NSS/NCC initiatives, institutional recognitions, future targets..."
-                className="w-full p-3 border-2 border-amber-400 bg-amber-50/50 text-xs text-black font-sans leading-relaxed rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner resize-y"
-                value={s["12_other_information"] || ""}
-                onChange={(e) => updateSectionField("12_other_information", e.target.value)}
-              />
-            ) : (
-              <div className="border border-black p-3 min-h-[60px] bg-white text-gray-900 whitespace-pre-wrap leading-relaxed text-xs">
-                {s["12_other_information"]?.trim() ? s["12_other_information"] : <span className="italic text-gray-400">Nil</span>}
-              </div>
-            )}
-          </div>
+          )}
         </div>
 
         {/* FOOTER SIGNATURES */}
