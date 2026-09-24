@@ -79,7 +79,7 @@ const Leaderboard = () => {
               </div>
 
               <div className="flex items-center gap-2 mr-6 hidden md:flex">
-                {member.badges.map((badge, bIdx) => (
+                {(member.badges || (member.badge ? [member.badge] : [])).map((badge, bIdx) => (
                   <div key={bIdx} className="flex items-center gap-1.5 px-3 py-1 bg-gray-100 rounded-full text-xs font-medium text-gray-700 border border-gray-200 group-hover:bg-white transition-colors">
                     {getBadgeIcon(badge)}
                     {badge}

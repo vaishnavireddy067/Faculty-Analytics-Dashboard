@@ -249,6 +249,67 @@ const handleMockFallback = (endpoint, options = {}) => {
     };
   }
 
+  // 5.1 IQAC Monthly Report & Document Vault
+  if (cleanEndpoint.includes('/iqac-monthly/list')) {
+    return [
+      { id: 1, department: 'Computer Science & Engineering (Data Science) and AI&DS', month: 'AUGUST', year: '2025', academic_year: '2025-26', updated_at: '2025-08-31' }
+    ];
+  }
+  if (cleanEndpoint.includes('/iqac-monthly')) {
+    if (method === 'POST') {
+      return {
+        success: true,
+        report_id: 1,
+        message: 'IQAC Report saved successfully!',
+        updated_at: new Date().toISOString()
+      };
+    }
+    return {
+      id: 1,
+      institution_name: 'AVN INSTITUTE OF ENGINEERING & TECHNOLOGY',
+      accreditation_details: 'Accredited by NAAC & NBA | An Autonomous Institute Affiliated to JNTU Hyderabad',
+      report_title: 'IQAC REPORT OF DEPARTMENT OF COMPUTER SCIENCE & ENGINEERING FOR AUGUST, 2025',
+      department: 'Computer Science & Engineering (Data Science) and AI&DS',
+      month: 'AUGUST',
+      year: '2025',
+      academic_year: '2025-26',
+      is_saved_in_db: true,
+      sections: {
+        '1_student_events': [
+          { s_no: 1, name: 'Hands-on Workshop on Machine Learning & Edge Devices', association: 'CSI Student Chapter', level: 'Department Level', duration: '2 Days', chief_guest: 'Dr. K. Srinivas (IIT H)', honorarium: '5,000', misc_expenses: '2,500', target_students: 'III & IV Year CSE/AI&DS' }
+        ],
+        '2_advanced_learners': [
+          { s_no: 1, roll_no: '22AVN0501', student_name: 'A. Rahul', year_sec: 'IV-A', activity: 'Selected for Smart India Hackathon Finalist', mentor: 'Dr. Vaishnavi Anugu' }
+        ],
+        '3_curricular_events': [
+          { s_no: 1, event_name: 'Technical Symposium: CodeQuest 2025', date: '2025-08-20', faculty_incharge: 'Prof. Ramesh', participants_count: 140 }
+        ],
+        '4_placements': [
+          { s_no: 1, roll_no: '21AVN0512', name: 'M. Sneha', company: 'TCS Digital', package_lpa: '7.5 LPA', role: 'Software Engineer' }
+        ],
+        '5_journal_publications': [
+          { s_no: 1, authors: 'Dr. Vaishnavi Anugu, et al.', title: 'Graph Neural Networks in Healthcare Analytics', journal: 'IEEE Transactions on Knowledge & Data Engineering', issn_isbn: '1041-4347', indexing: 'Scopus / SCI (Q1)', impact_factor: '8.9' }
+        ],
+        '6_conference_publications': [],
+        '7_patents': [
+          { s_no: 1, inventors: 'Dr. Vaishnavi Anugu', title: 'Automated Academic Appraisal and Accreditation Engine', app_no: '202541098421 A', status: 'Published', date: '2025-06-20' }
+        ],
+        '8_books': [],
+        '9_fdp_attended': [
+          { s_no: 1, faculty_name: 'Dr. Vaishnavi Anugu', fdp_name: 'AICTE ATAL FDP on Generative AI', organization: 'IIT Madras', duration: '5 Days', dates: '2025-07-15 to 2025-07-19' }
+        ],
+        '10_fdp_organized': [],
+        '11_mous': [
+          { s_no: 1, company_name: 'EdTech Solutions Pvt Ltd', date_signed: '2025-08-01', purpose: 'Student Internships & Faculty Research' }
+        ],
+        '12_meetings': [
+          { s_no: 1, meeting_type: 'Departmental Academic Advisory Board (DAB)', date: '2025-08-05', key_decisions: 'Curriculum revision for AICTE Model Syllabus 2025' }
+        ],
+        'custom_sections': []
+      }
+    };
+  }
+
   // 6. PBAS / CAS Appraisal Score
   if (cleanEndpoint.includes('/pbas-score')) {
     return {
