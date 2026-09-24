@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchAPI } from '../services/api';
+import { fetchAPI, API_BASE_URL } from '../services/api';
 import { 
   Mail, Building, Award, BookOpen, Link as LinkIcon, FileText, 
   Users, RefreshCw, QrCode, Download, Target, TrendingUp, 
@@ -36,7 +36,7 @@ const FacultyProfile = () => {
   const [fdpsList, setFdpsList] = useState([]);
 
   const handleDownloadCV = (format) => {
-    window.open(`http://localhost:8000/api/faculty/profile/export_cv/?format=${format}`, '_blank');
+    window.open(`${API_BASE_URL}/faculty/profile/export_cv/?format=${format}`, '_blank');
     setShowCvDropdown(false);
   };
 
