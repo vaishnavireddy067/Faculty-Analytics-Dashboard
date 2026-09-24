@@ -169,6 +169,43 @@ const Reports = () => {
         </div>
       </div>
 
+      {/* 🏛️ OFFICIAL INSTITUTIONAL IQAC MONTHLY REPORT HIGHLIGHT CARD */}
+      <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden border border-indigo-700/40">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
+          <div className="space-y-2 max-w-2xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">
+              <Award size={14} className="text-amber-400" />
+              <span>Standard Institutional IQAC Format (AVN Institute)</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
+              Official Monthly Departmental IQAC Report
+            </h2>
+            <p className="text-sm text-indigo-200">
+              Pre-configured with all 12 institutional criteria: Student & Faculty Events, Advanced Learners, Curricular & Hackathons, Placements (DS/AI&DS BYD), Publications, Patents, FDPs, MOUs, and HOD/IQAC Signatures.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <a
+              href="/iqac-report"
+              className="inline-flex items-center px-5 py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-sm font-black shadow-lg transition-all transform hover:-translate-y-0.5"
+            >
+              <FileText size={18} className="mr-2 text-slate-950" />
+              Open & Download IQAC Report
+            </a>
+            <a
+              href="http://127.0.0.1:8000/api/faculty/reports/iqac-monthly/export-excel/"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white text-sm font-bold border border-white/20 backdrop-blur-xs transition"
+            >
+              <Download size={17} className="mr-2" />
+              Quick Excel Download
+            </a>
+          </div>
+        </div>
+      </div>
+
       {/* ⭐ MAIN FEATURE: CONSOLIDATED FACULTY REPORT GENERATOR */}
       <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-3xl p-6 shadow-lg space-y-6">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-800 pb-4">

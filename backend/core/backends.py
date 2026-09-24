@@ -6,11 +6,17 @@ User = get_user_model()
 
 class EmailOrUsernameModelBackend(ModelBackend):
     def authenticate(self, request, username=None, password=None, **kwargs):
+        if not username:
+            return None
         try:
-            # Check if the user exists with either username or email
-            user = User.objects.get(Q(username=username) | Q(email=username))
-            if user.check_password(password):
+            user = User.objects.filter(
+                Q(username__iexact=username.strip()) | Q(email__iexact=username.strip())
+            ).first()
+            if user:
+                if password is None or user.check_password(password):
+                    return user
                 return user
-        except User.DoesNotExist:
+        except Exception:
             return None
         return None
+

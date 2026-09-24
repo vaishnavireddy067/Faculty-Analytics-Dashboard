@@ -111,6 +111,7 @@ const DashboardLayout = () => {
 
           <div className="pt-3 mt-3 border-t border-gray-100 dark:border-slate-800">
             <span className="px-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Accreditation & Analytics</span>
+            <NavItem to="/iqac-report" icon={<FileText size={18} />} label="IQAC Monthly Report" onClick={toggleMobileMenu} badge="Official" />
             <NavItem to="/pbas-appraisal" icon={<ClipboardCheck size={18} />} label="PBAS / CAS Appraisal" onClick={toggleMobileMenu} />
             <NavItem to="/department-comparison" icon={<Layers size={18} />} label="Department Radar" onClick={toggleMobileMenu} />
             <NavItem to="/collaboration-network" icon={<Share2 size={18} />} label="Research Network" onClick={toggleMobileMenu} />

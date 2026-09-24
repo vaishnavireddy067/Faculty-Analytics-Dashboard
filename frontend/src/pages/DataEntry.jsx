@@ -148,7 +148,7 @@ const DataEntry = () => {
   // Dynamically initialize form state based on active tab schema
   const initializeForm = (tab) => {
     const schema = formSchemas[tab];
-    const initialData = {};
+    const initialData = { department: 'CSE' };
     schema.fields.forEach(f => {
       if (f.type === 'number') initialData[f.name] = new Date().getFullYear();
       else if (f.type === 'checkbox') initialData[f.name] = false;
@@ -167,6 +167,54 @@ const DataEntry = () => {
     setFile(null);
     setMessage({ text: '', type: '' });
   }, [activeTab]);
+
+  const handleVoiceEntry = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setMessage({ text: 'Speech recognition is not supported in this browser. Please type manually.', type: 'error' });
+      return;
+    }
+
+    if (isRecording) {
+      setIsRecording(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        setIsRecording(true);
+        setMessage({ text: '🎙️ Listening... Speak your title or description clearly.', type: 'success' });
+      };
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        if (transcript) {
+          const primaryKey = Object.keys(formData).find(k => k === 'title' || k === 'name' || k === 'topic' || k === 'project_title' || k === 'role_name' || k === 'award_name') || Object.keys(formData)[0];
+          setFormData(prev => ({ ...prev, [primaryKey]: transcript }));
+          setMessage({ text: `🎙️ Voice captured: "${transcript}"`, type: 'success' });
+        }
+      };
+
+      recognition.onerror = (event) => {
+        setIsRecording(false);
+        setMessage({ text: `Voice recognition error: ${event.error}`, type: 'error' });
+      };
+
+      recognition.onend = () => {
+        setIsRecording(false);
+      };
+
+      recognition.start();
+    } catch (e) {
+      setIsRecording(false);
+      setMessage({ text: 'Failed to initialize voice recognition.', type: 'error' });
+    }
+  };
 
   const handleInputChange = (e) => {
     const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;

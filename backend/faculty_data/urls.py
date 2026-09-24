@@ -18,7 +18,9 @@ from .views import (
     student_feedback_analysis,
     fetch_doi_metadata, parse_certificate_ai, naac_ssr_criterion3,
     calculate_pbas_score, audit_logs_list, department_radar_comparison,
-    bulk_import_activities, system_health_check
+    bulk_import_activities, system_health_check,
+    iqac_monthly_report_data, export_iqac_excel,
+    iqac_reports_list, iqac_delete_report
 )
 
 router = DefaultRouter()
@@ -50,6 +52,10 @@ urlpatterns = [
     # Reports & Downloads
     path('reports/consolidated/', consolidated_report, name='consolidated_report'),
     path('reports/naac-ssr-criterion3/', naac_ssr_criterion3, name='naac_ssr_criterion3'),
+    path('reports/iqac-monthly/', iqac_monthly_report_data, name='iqac_monthly_report_data'),
+    path('reports/iqac-monthly/list/', iqac_reports_list, name='iqac_reports_list'),
+    path('reports/iqac-monthly/<int:pk>/delete/', iqac_delete_report, name='iqac_delete_report'),
+    path('reports/iqac-monthly/export-excel/', export_iqac_excel, name='export_iqac_excel'),
     path('certificates/download-zip/', download_certificate_bundle, name='download_certificate_bundle'),
     
     # Smart Data Entry Helpers

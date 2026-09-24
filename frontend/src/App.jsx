@@ -23,6 +23,7 @@ import DepartmentComparison from './pages/DepartmentComparison';
 import CollaborationGraph from './pages/CollaborationGraph';
 import AuditLogs from './pages/AuditLogs';
 import BulkDataManagement from './pages/BulkDataManagement';
+import IQACMonthlyReport from './pages/IQACMonthlyReport';
 
 // A simple Protected Route wrapper
 const ProtectedRoute = ({ children }) => {
@@ -56,6 +57,7 @@ function App() {
             <Route path="/data-entry" element={<DataEntry />} />
             <Route path="/verification" element={<Verification />} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/iqac-report" element={<IQACMonthlyReport />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/admin-dashboard" element={<AdminDashboard />} />
             <Route path="/analytics" element={<Analytics />} />

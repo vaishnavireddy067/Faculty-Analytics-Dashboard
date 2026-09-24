@@ -1769,4 +1769,361 @@ def system_health_check(request):
     })
 
 
+# --- Official Institutional IQAC Monthly Report Endpoints ---
+
+@api_view(['GET', 'POST'])
+@permission_classes([permissions.IsAuthenticated])
+def iqac_monthly_report_data(request):
+    """
+    Handles fetching and saving customized 12-section IQAC Monthly Reports into the database.
+    """
+    from .models import IQACReport
+    from core.models import User
+    from .models import Publication, Patent, Book, FdpTraining, Grant, Activity, Certificate
+
+    if request.method == 'POST':
+        # Save or update report data in DB
+        dept = request.data.get('department', 'Computer Science & Engineering (Data Science) and AI&DS')
+        month = request.data.get('month', 'AUGUST').upper()
+        year = str(request.data.get('year', '2025'))
+        academic_year = request.data.get('academic_year', '2025-26')
+        sections_data = request.data.get('sections', {})
+
+        report_obj, created = IQACReport.objects.update_or_create(
+            department=dept,
+            month=month,
+            year=year,
+            defaults={
+                'academic_year': academic_year,
+                'institution_name': request.data.get('institution_name', 'AVN INSTITUTE OF ENGINEERING & TECHNOLOGY'),
+                'accreditation_details': request.data.get('accreditation_details', 'Accredited by NAAC & NBA | An Autonomous Institute Affiliated to JNTU Hyderabad'),
+                'sections_data': sections_data,
+                'created_by': request.user
+            }
+        )
+
+        return Response({
+            'success': True,
+            'message': f"IQAC Report for {dept} ({month} {year}) saved successfully in database!",
+            'report_id': report_obj.id,
+            'updated_at': report_obj.updated_at.strftime('%Y-%m-%d %H:%M:%S')
+        })
+
+    # GET Request
+    dept = request.query_params.get('department', 'Computer Science & Engineering (Data Science) and AI&DS')
+    month = request.query_params.get('month', 'AUGUST').upper()
+    year = str(request.query_params.get('year', '2025'))
+    academic_year = request.query_params.get('academic_year', '2025-26')
+
+    # Check if a custom saved report exists in DB
+    existing = IQACReport.objects.filter(department=dept, month=month, year=year).first()
+    if existing and existing.sections_data:
+        return Response({
+            "id": existing.id,
+            "institution_name": existing.institution_name,
+            "accreditation_details": existing.accreditation_details,
+            "report_title": f"IQAC REPORT OF DEPARTMENT OF {dept.upper()} FOR {month.upper()}, {year}",
+            "department": existing.department,
+            "month": existing.month,
+            "year": existing.year,
+            "academic_year": existing.academic_year,
+            "is_saved_in_db": True,
+            "updated_at": existing.updated_at.strftime('%Y-%m-%d %H:%M:%S'),
+            "sections": existing.sections_data
+        })
+
+    # If not saved yet, build initial baseline data with DB records & college template defaults
+    pubs_qs = Publication.objects.all()
+    if dept and dept != 'ALL':
+        pubs_qs = pubs_qs.filter(Q(faculty__department__icontains='CSE') | Q(faculty__department__icontains='DS') | Q(faculty__department__icontains=dept))
+
+    journal_pubs = []
+    for idx, p in enumerate(pubs_qs[:10], 1):
+        journal_pubs.append({
+            "s_no": idx,
+            "authors": p.authors or p.faculty.get_full_name() or p.faculty.username,
+            "title": p.title,
+            "journal": p.journal_name,
+            "volume_issue": f"Vol. 12, Issue 4, pp. {p.pages or '45-52'}, {p.year}",
+            "indexing": p.indexing
+        })
+
+    patents_qs = Patent.objects.all()
+    patents_list = []
+    for idx, pat in enumerate(patents_qs[:5], 1):
+        patents_list.append({
+            "s_no": idx,
+            "authors": pat.faculty.get_full_name() or pat.faculty.username,
+            "title": pat.title,
+            "agency": "Indian Patent Office (IPO)",
+            "filing_no_year": f"{pat.application_number or '202541098765'}, {pat.year}",
+            "status": pat.patent_status
+        })
+
+    fdps_qs = FdpTraining.objects.all()
+    fdps_attended = []
+    for idx, f in enumerate(fdps_qs[:8], 1):
+        fdps_attended.append({
+            "s_no": idx,
+            "faculty_name": f.faculty.get_full_name() or f.faculty.username,
+            "program_name": f.title,
+            "organized_by": f.organization,
+            "duration": f"{f.duration_days} Days ({f.start_date} to {f.end_date})"
+        })
+
+    if not fdps_attended:
+        fdps_attended = [
+            {
+                "s_no": 1,
+                "faculty_name": "Mr. V. Jagadeeshwar Reddy",
+                "program_name": "Adaptive Intelligent circuits for edge AI Devices",
+                "organized_by": "AVNIET",
+                "duration": "One week (17-08-2026 to 22-08-2026)"
+            }
+        ]
+
+    student_events = [
+        { "s_no": 1, "name": "The Art of programming in C", "association": "-", "level": "Department level", "duration": "1 day (03-08-2026)", "chief_guest": "Mr. A. Narender", "honorarium": "-", "misc_expenses": "-", "target_students": "III DS-A,B and III AI&DS" },
+        { "s_no": 2, "name": "Orientation day", "association": "-", "level": "College level", "duration": "1 day (05-08-2026)", "chief_guest": "Mr. A.V.N Reddy", "honorarium": "-", "misc_expenses": "-", "target_students": "Newly joined first year students" },
+        { "s_no": 3, "name": "KRITHI MEDHA data intelligence logo launch", "association": "-", "level": "Department level", "duration": "1 day (08-08-2026)", "chief_guest": "Mr. P. Nageshwara Reddy, Mr. Shaik Abdul Nabi", "honorarium": "-", "misc_expenses": "-", "target_students": "All year students of AI&DS and CSE(DS)" },
+        { "s_no": 4, "name": "Technical event under Krithi medha Automation Bot", "association": "-", "level": "Department level", "duration": "1 day (08-08-2026)", "chief_guest": "Mr. P. Nageshwara Reddy", "honorarium": "-", "misc_expenses": "-", "target_students": "All year students of AI&DS and CSE(DS)" },
+        { "s_no": 5, "name": "Independence Day celebrations", "association": "-", "level": "College level", "duration": "15-08-2026", "chief_guest": "Mr. P. Nageshwara Reddy", "honorarium": "-", "misc_expenses": "-", "target_students": "All Branches students and Faculty" },
+        { "s_no": 6, "name": "Tree Plantation program", "association": "NSS", "level": "College level", "duration": "29-08-2026", "chief_guest": "Mr. P. Nageshwara Reddy", "honorarium": "-", "misc_expenses": "-", "target_students": "All Branches students and Faculty" }
+    ]
+
+    student_achievements_curricular = [
+        {"s_no": 1, "roll_no": "245U1A6745", "name": "G.PRANEETH", "year_sem": "III/I", "event_name": "EUREKA pitching competition", "organized_by": "E Cell & R&D", "duration": "1 day (27-08-2026)", "prizes": "Cash prize (1000/-)"},
+        {"s_no": 2, "roll_no": "245U1A6750", "name": "J.BHAVANI", "year_sem": "III/I", "event_name": "EUREKA pitching competition", "organized_by": "E Cell & R&D", "duration": "1 day (27-08-2026)", "prizes": "Cash prize (1000/-)"},
+        {"s_no": 3, "roll_no": "245U1A6705", "name": "A.RUTHVIK", "year_sem": "III/I", "event_name": "EUREKA pitching competition", "organized_by": "E Cell & R&D", "duration": "1 day (27-08-2026)", "prizes": "Cash prize (1000/-)"},
+        {"s_no": 4, "roll_no": "245U1A6767", "name": "K.A.VAISHNAVI", "year_sem": "III/I", "event_name": "HakIT * MRDU 26 24 hours national hackathon", "organized_by": "Mallareddy University", "duration": "22-08-2026 to 23-08-2026", "prizes": "Finalist / Certificate"},
+        {"s_no": 5, "roll_no": "245U1A7235", "name": "MD SAIF", "year_sem": "III/I", "event_name": "HakIT * MRDU 26 24 hours national hackathon", "organized_by": "Mallareddy University", "duration": "22-08-2026 to 23-08-2026", "prizes": "Participation"},
+        {"s_no": 6, "roll_no": "255U1A6731", "name": "Divya deepika", "year_sem": "II/I", "event_name": "HakIT * MRDU 26 24 hours national hackathon", "organized_by": "Mallareddy University", "duration": "22-08-2026 to 23-08-2026", "prizes": "Participation"},
+        {"s_no": 7, "roll_no": "255U1A6704", "name": "Nerlekar Anvishree", "year_sem": "II/I", "event_name": "HakIT * MRDU 26 24 hours national hackathon", "organized_by": "Mallareddy University", "duration": "22-08-2026 to 23-08-2026", "prizes": "Participation"}
+    ]
+
+    online_certifications = [
+        {"s_no": 1, "roll_no": "All students of DS-A,B", "name": "-", "year_sem": "III/I", "course_name": "Introduction of Data Science", "organized_by": "Mrs. Swathi Sugur", "duration": "7 HOURS", "grade": "Online certification course"},
+        {"s_no": 2, "roll_no": "All students of DS-A, AI&DS", "name": "-", "year_sem": "III/I", "course_name": "Data Mining", "organized_by": "Mrs. Revathi Durgam", "duration": "10 HOURS", "grade": "Online certification course"}
+    ]
+
+    placements_ds = [
+        {"s_no": 1, "name": "CHANDU PRAKASH", "roll_no": "235U1A6712", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 2, "name": "D. SRINIVAS", "roll_no": "235U1A6718", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 3, "name": "G. NIKHIL REDDY", "roll_no": "235U1A6725", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 4, "name": "KALAL HARSHAVARDHAN GOUD", "roll_no": "235U1A6730", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 5, "name": "KALKI KARTHIK", "roll_no": "235U1A6731", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 6, "name": "K SIDDARTH REDDY", "roll_no": "235U1A6735", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 7, "name": "MD. Matheen", "roll_no": "235U1A6745", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 8, "name": "ARAVIND REDDY", "roll_no": "235U1A6749", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 9, "name": "R. AKASH", "roll_no": "235U1A6751", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 10, "name": "V. KARTHIK GOUD", "roll_no": "235U1A6762", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 11, "name": "M VENKAT KALYAN", "roll_no": "235U1A6765", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"}
+    ]
+
+    placements_aids = [
+        {"s_no": 1, "name": "ANANTHUNE ADITHYA", "roll_no": "235U1A7202", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 2, "name": "APPALA RANJITH", "roll_no": "235U1A7204", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 3, "name": "B. NITHIN", "roll_no": "235U1A7206", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 4, "name": "B. AKUL REDDY", "roll_no": "235U1A7209", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 5, "name": "CH. NANDU", "roll_no": "235U1A7215", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 6, "name": "CHOPPADANDI PRANITH", "roll_no": "235U1A7216", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 7, "name": "D. PRANEETH", "roll_no": "235U1A7217", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 8, "name": "G. ARJUN KUMAR", "roll_no": "235U1A7220", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 9, "name": "G NARSIMHA REDDY", "roll_no": "235U1A7222", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 10, "name": "G. SIVAPRASANTH REDDY", "roll_no": "235U1A7227", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 11, "name": "G. ADITHYA VARDHAN", "roll_no": "235U1A7229", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 12, "name": "K. RAJKUMAR", "roll_no": "235U1A7231", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 13, "name": "MARAM ROHITH REDDY", "roll_no": "235U1A7239", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 14, "name": "SRAVAN KUMAR", "roll_no": "235U1A7240", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 15, "name": "M. AKHIL REDDY", "roll_no": "235U1A7242", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 16, "name": "MUDU NAGESHWARA RAO", "roll_no": "235U1A7243", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 17, "name": "N PAVAN KUMAR REDDY", "roll_no": "235U1A7244", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 18, "name": "N. SAI KIRAN", "roll_no": "235U1A7246", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 19, "name": "P GOUTHAM GOUD", "roll_no": "235U1A7248", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 20, "name": "P. CHARAN REDDY", "roll_no": "235U1A7250", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 21, "name": "P. PRANAY CHANDRA", "roll_no": "235U1A7251", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 22, "name": "P. MADHU", "roll_no": "235U1A7252", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 23, "name": "MUZAMMIL SHAIK", "roll_no": "235U1A7258", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 24, "name": "TANNIRU VENU", "roll_no": "235U1A7261", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 25, "name": "U ANJANIPRASAD", "roll_no": "235U1A7262", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 26, "name": "DHARAVATH VIJAY KUMAR", "roll_no": "245U5A7201", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"},
+        {"s_no": 27, "name": "KUNDARAPU SIDDHARTHA", "roll_no": "245U5A7204", "date": "17-08-2026", "company": "BYD", "package": "6.5 LPA"}
+    ]
+
+    initial_sections = {
+        "1_student_events": student_events,
+        "2_faculty_events": [
+            { "s_no": 1, "name": "Faculty Upskilling on GenAI Tools", "association": "CSI Chapter", "level": "Department level", "duration": "2 days", "chief_guest": "Dr. K. Srinivas", "faculty_count": "24", "honorarium": "-", "misc_expenses": "-" }
+        ],
+        "3_value_added_courses": [
+            { "s_no": 1, "name": "Full Stack Web Development with Django & React", "resource_person": "Internal Faculty Team", "level": "Department level", "duration": "30 Hours", "contact_periods": "30", "students_registered": "68", "remuneration": "-", "target_students": "II & III Year Students" }
+        ],
+        "4_advanced_learners": [
+            { "s_no": 1, "name": "Hands-on Deep Learning Model Optimization", "level": "Department level", "duration": "1 Day", "contact_periods": "6 Hours", "chief_guest": "Industry ML Architect", "honorarium": "-", "misc_expenses": "-", "target_students": "Top 20 Merit Students" }
+        ],
+        "5_student_achievements": {
+            "a_curricular": student_achievements_curricular,
+            "b_extracurricular": [
+                { "s_no": 1, "roll_no": "245U1A6712", "name": "CHANDU PRAKASH", "year_sem": "III/I", "event_name": "Inter-College Cricket Championship", "organized_by": "Sports Board", "duration": "2 days", "prizes": "Runners Up Trophy" }
+            ],
+            "c_online_certifications": online_certifications,
+            "d_placements": {
+                "ds_byd": placements_ds,
+                "aids_byd": placements_aids
+            }
+        },
+        "6_faculty_achievements": {
+            "a_journal_publications": journal_pubs,
+            "b_conference_publications": [
+                { "s_no": 1, "authors": "Mrs. Swathi Sugur, Mr. A. Narender", "title": "Automated Curriculum Alignment using Transformers", "journal": "IEEE ICAC-2025", "volume_issue": "IEEE Xplore, 2025", "indexing": "Scopus" }
+            ],
+            "c_patents": patents_list,
+            "d_inhouse_projects": [
+                { "s_no": 1, "authors": "Dr. V. Jagadeeshwar Reddy", "title": "Autonomous Campus Navigation Bot", "duration": "6 Months", "grant_amount": "₹75,000" }
+            ],
+            "e_funded_projects": [
+                { "s_no": 1, "authors": "Dr. K. Srinivas (PI)", "title": "AICTE RPS: Edge Computing Testbed", "agency": "AICTE", "duration": "2 Years", "grant_amount": "₹18,50,000" }
+            ],
+            "f_workshops_organized": [
+                { "s_no": 1, "coordinator": "Mrs. Revathi Durgam", "program_name": "Workshop on Python for Data Engineering", "duration": "3 Days", "grant_amount": "₹30,000", "agency": "CSI", "target_audience": "Faculty & Students" }
+            ],
+            "g_workshops_attended": fdps_attended,
+            "h_certifications_completed": [
+                { "s_no": 1, "faculty_name": "Mrs. Swathi Sugur", "course_name": "Deep Learning Specialization", "conducted_by": "Coursera", "duration": "4 Weeks", "grade": "Elite + Gold" }
+            ],
+            "i_books_published": [
+                { "s_no": 1, "authors": "Dr. P. Nageshwara Reddy", "title": "Foundations of Modern Data Science", "publisher": "Springer Nature", "volume_issue": "ISBN: 978-3-030-99881-2, 2025", "category": "International" }
+            ],
+            "j_resource_person": [
+                { "s_no": 1, "faculty_name": "Dr. V. Anugu", "position": "Keynote Speaker on AI in Higher Ed", "duration": "1 Day", "organization": "JNTUH Conclave", "category": "National" }
+            ],
+            "k_awards": [
+                { "s_no": 1, "faculty_name": "Mr. A. Narender", "award_name": "Best Department Mentor Award", "awarding_body": "Institution Council", "date": "15-08-2026", "category": "Institutional" }
+            ]
+        },
+        "7_non_teaching_training": [
+            { "s_no": 1, "name": "Mr. Ramesh K.", "program": "Laboratory Safety & Hardware Troubleshooting", "duration": "2 Days", "venue": "College Seminar Hall", "sponsorship": "Management (₹2,500)" }
+        ],
+        "8_infrastructure_investment": [
+            { "s_no": 1, "name": "High-Performance GPU Computing Lab (RTX 4090)", "specs": "Intel i9, 64GB DDR5, 24GB VRAM", "quantity": "15 Units", "date": "10-08-2026", "supplier": "Dell Commercial Systems", "amount": "₹24,50,000" }
+        ],
+        "9_mous_signed": [
+            { "s_no": 1, "org_name": "BYD Auto India Ltd.", "purpose": "Student Internships, Campus Placements & R&D", "date": "01-08-2026", "validity": "3 Years" },
+            { "s_no": 2, "org_name": "Red Hat Academy", "purpose": "Cloud Computing & Linux Certification Training", "date": "15-08-2026", "validity": "2 Years" }
+        ],
+        "10_alumni_activities": "Alumni interaction session conducted on 20-08-2026 by Mr. K. Rohit (Batch 2023, Software Engineer at BYD) on 'Career Opportunities in Embedded Systems & AI'.",
+        "11_parent_teacher_meetings": "Monthly academic progress review meeting scheduled on 30-08-2026 for 2nd and 3rd year students with attendance below 75%.",
+        "12_other_information": "Department successfully inaugurated the Krithi Medha AI & Data Science Student Association with 120+ active student members."
+    }
+
+    return Response({
+        "institution_name": "AVN INSTITUTE OF ENGINEERING & TECHNOLOGY",
+        "accreditation_details": "Accredited by NAAC & NBA | An Autonomous Institute Affiliated to JNTU Hyderabad",
+        "report_title": f"IQAC REPORT OF DEPARTMENT OF {dept.upper()} FOR {month.upper()}, {year}",
+        "department": dept,
+        "month": month,
+        "year": year,
+        "academic_year": academic_year,
+        "is_saved_in_db": False,
+        "sections": initial_sections
+    })
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def iqac_reports_list(request):
+    """
+    Returns an archive list of all stored monthly IQAC reports.
+    """
+    from .models import IQACReport
+    reports = IQACReport.objects.all().order_by('-updated_at')
+    data = []
+    for r in reports:
+        data.append({
+            "id": r.id,
+            "department": r.department,
+            "month": r.month,
+            "year": r.year,
+            "academic_year": r.academic_year,
+            "updated_at": r.updated_at.strftime('%b %d, %Y %H:%M'),
+            "created_by": r.created_by.username if r.created_by else 'Admin'
+        })
+    return Response(data)
+
+
+@api_view(['DELETE'])
+@permission_classes([permissions.IsAuthenticated])
+def iqac_delete_report(request, pk):
+    """
+    Deletes an archived IQAC report by ID.
+    """
+    from .models import IQACReport
+    try:
+        report = IQACReport.objects.get(pk=pk)
+        report.delete()
+        return Response({'success': True, 'message': 'Report deleted successfully.'})
+    except IQACReport.DoesNotExist:
+        return Response({'error': 'Report not found'}, status=404)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def export_iqac_excel(request):
+    """
+    Exports the comprehensive IQAC monthly report into an Excel workbook.
+    """
+    dept = request.query_params.get('department', 'CSE (DS) & AI&DS')
+    month = request.query_params.get('month', 'AUGUST')
+    year = request.query_params.get('year', '2025')
+
+    from .models import IQACReport
+    existing = IQACReport.objects.filter(department=dept, month=month, year=year).first()
+    sections = existing.sections_data if existing and existing.sections_data else {}
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f"{month[:3]}_{year}"
+
+    ws.append(["AVN INSTITUTE OF ENGINEERING & TECHNOLOGY"])
+    ws.append(["Accredited by NAAC & NBA | An Autonomous Institute Affiliated to JNTU Hyderabad"])
+    ws.append([f"IQAC REPORT OF DEPARTMENT OF {dept.upper()} FOR {month.upper()}, {year}"])
+    ws.append([])
+
+    # 1. Student Events
+    ws.append(["1. Programmes / Events organized for the students:"])
+    ws.append(["S.No", "Name of the Programme", "In Association with", "College/Department level", "Duration", "Chief Guest / Resource Person", "Honorarium (Rs.)", "Misc Expenses (Rs.)", "Target Students"])
+    student_events = sections.get("1_student_events", [])
+    if student_events:
+        for idx, item in enumerate(student_events, 1):
+            ws.append([item.get('s_no', idx), item.get('name', ''), item.get('association', '-'), item.get('level', ''), item.get('duration', ''), item.get('chief_guest', ''), item.get('honorarium', '-'), item.get('misc_expenses', '-'), item.get('target_students', '')])
+    else:
+        ws.append([1, "The Art of programming in C", "-", "Department level", "1 day (03-08-2026)", "Mr. A. Narender", "-", "-", "III DS-A,B and III AI&DS"])
+    ws.append([])
+
+    # 5.d Placements
+    ws.append(["5.d Placements:"])
+    ws.append(["S.No", "Name", "Roll No", "Company", "Date of Appointment", "Package"])
+    placements_ds = sections.get("5_student_achievements", {}).get("d_placements", {}).get("ds_byd", [])
+    for idx, p in enumerate(placements_ds, 1):
+        ws.append([p.get('s_no', idx), p.get('name', ''), p.get('roll_no', ''), p.get('company', 'BYD'), p.get('date', ''), p.get('package', '6.5 LPA')])
+    ws.append([])
+
+    # 6.g FDPs attended
+    ws.append(["6.g Workshops/FDPs/STTPs attended:"])
+    ws.append(["S.No", "Name of the Faculty", "Name of Workshop/FDP/STTP", "Organized by", "Duration"])
+    fdps = sections.get("6_faculty_achievements", {}).get("g_workshops_attended", [])
+    for idx, f in enumerate(fdps, 1):
+        ws.append([f.get('s_no', idx), f.get('faculty_name', ''), f.get('program_name', ''), f.get('organized_by', ''), f.get('duration', '')])
+    ws.append([])
+
+    ws.append(["DEPARTMENT IQAC COORDINATOR", "", "", "", "", "HOD"])
+
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename="IQAC_Report_{dept.replace(" ", "_")}_{month}_{year}.xlsx"'
+    wb.save(response)
+    return response
+
+
+
+
 

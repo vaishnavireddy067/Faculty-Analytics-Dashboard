@@ -408,3 +408,24 @@ class Certificate(BaseActivityModel):
     def __str__(self):
         return f"Certificate: {self.title} ({self.category}) - {self.faculty.username}"
 
+
+class IQACReport(models.Model):
+    department = models.CharField(max_length=255, default="Computer Science & Engineering (Data Science) and AI&DS")
+    month = models.CharField(max_length=50, default="AUGUST")
+    year = models.CharField(max_length=20, default="2025")
+    academic_year = models.CharField(max_length=50, default="2025-26")
+    institution_name = models.CharField(max_length=255, default="AVN INSTITUTE OF ENGINEERING & TECHNOLOGY")
+    accreditation_details = models.CharField(max_length=255, default="Accredited by NAAC & NBA | An Autonomous Institute Affiliated to JNTU Hyderabad")
+    sections_data = models.JSONField(default=dict, help_text="Stores all 12 sections and customized tables")
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='iqac_reports')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+        unique_together = ('department', 'month', 'year')
+
+    def __str__(self):
+        return f"IQAC Report - {self.department} ({self.month} {self.year})"
+
+

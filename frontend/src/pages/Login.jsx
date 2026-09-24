@@ -133,9 +133,44 @@ const Login = () => {
                 </div>
               )}
 
-              <form className="space-y-6" onSubmit={handleLogin}>
+              <div className="mb-4">
+                <div className="flex items-center gap-2 p-3 bg-indigo-50/80 border border-indigo-100 rounded-xl text-xs text-indigo-800">
+                  <span className="text-base">✨</span>
+                  <span><strong>Universal Access:</strong> Anyone can log in with <strong>any email</strong>! New emails are automatically provisioned.</span>
+                </div>
+              </div>
+
+              {/* Quick 1-Click Role Login Chips */}
+              <div className="mb-4">
+                <p className="text-xs font-semibold text-gray-500 mb-2">⚡ Quick 1-Click Demo Accounts:</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setUsername('faculty1@example.com'); setPassword('password123'); }}
+                    className="px-2.5 py-2 text-xs font-medium rounded-lg bg-white border border-gray-200 hover:border-indigo-400 hover:bg-indigo-50/50 text-gray-700 hover:text-indigo-600 transition-all text-center"
+                  >
+                    🎓 Faculty
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setUsername('hod@example.com'); setPassword('password123'); }}
+                    className="px-2.5 py-2 text-xs font-medium rounded-lg bg-white border border-gray-200 hover:border-indigo-400 hover:bg-indigo-50/50 text-gray-700 hover:text-indigo-600 transition-all text-center"
+                  >
+                    🏛️ HOD
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setUsername('admin@example.com'); setPassword('password123'); }}
+                    className="px-2.5 py-2 text-xs font-medium rounded-lg bg-white border border-gray-200 hover:border-indigo-400 hover:bg-indigo-50/50 text-gray-700 hover:text-indigo-600 transition-all text-center"
+                  >
+                    🛡️ Admin
+                  </button>
+                </div>
+              </div>
+
+              <form className="space-y-5" onSubmit={handleLogin}>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Username or Email</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Email Address or Username</label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <Mail size={18} className="text-gray-400" />
@@ -145,19 +180,19 @@ const Login = () => {
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
                       className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all" 
-                      placeholder="faculty1 or john@university.edu"
+                      placeholder="e.g. user@gmail.com, faculty1, anymail@edu"
                       required
                     />
                   </div>
                 </div>
 
                 <div>
-                  <div className="flex justify-between items-center mb-2">
+                  <div className="flex justify-between items-center mb-1.5">
                     <label className="block text-sm font-medium text-gray-700">Password</label>
                     <button 
                       type="button" 
                       onClick={() => { setView('forgot'); setResetSent(false); setError(''); }}
-                      className="text-sm font-medium text-indigo-600 hover:text-indigo-500 bg-transparent border-none p-0 cursor-pointer"
+                      className="text-xs font-medium text-indigo-600 hover:text-indigo-500 bg-transparent border-none p-0 cursor-pointer"
                     >
                       Forgot password?
                     </button>
@@ -171,7 +206,7 @@ const Login = () => {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all" 
-                      placeholder="••••••••"
+                      placeholder="Enter password (e.g. password123)"
                       required
                     />
                   </div>
@@ -184,7 +219,7 @@ const Login = () => {
                 )}
 
                 <div className="flex items-center">
-                  <input id="remember-me" type="checkbox" className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" />
+                  <input id="remember-me" type="checkbox" defaultChecked className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" />
                   <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
                     Remember me
                   </label>
@@ -197,7 +232,7 @@ const Login = () => {
 
               <div className="text-center mt-6">
                 <p className="text-sm text-gray-500">
-                  Don't have an account?{' '}
+                  Want a custom profile?{' '}
                   <button 
                     type="button"
                     onClick={() => { setView('register'); setError(''); setSuccessMsg(''); setPassword(''); }}
