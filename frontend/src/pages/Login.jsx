@@ -191,12 +191,12 @@ const Login = () => {
       localStorage.setItem(userDatastoreKey, JSON.stringify(initialStore));
     }
 
-    // Automatically sign in upon registration
-    localStorage.setItem('access_token', 'fad_auth_token_' + Date.now());
-    localStorage.setItem('refresh_token', 'fad_auth_refresh_' + Date.now());
-    localStorage.setItem('current_user_email', regEmail);
-    localStorage.setItem('current_user_info', JSON.stringify(newUser));
-    navigate('/dashboard');
+    // Return to login screen with success message and prefilled username
+    setSuccessMsg(`Account created successfully for ${regEmail}! Please sign in with your password.`);
+    setUsername(regEmail);
+    setPassword('');
+    setError('');
+    setView('login');
     setLoading(false);
   };
 
