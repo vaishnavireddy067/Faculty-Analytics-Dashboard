@@ -25,25 +25,7 @@ const Login = () => {
       const saved = localStorage.getItem('fad_user_accounts');
       if (saved) return JSON.parse(saved);
     } catch (e) {}
-    // Initial known accounts
-    return [
-      {
-        email: 'anuguvaishnavireddy0@gmail.com',
-        username: 'anuguvaishnavi',
-        password: 'password123',
-        firstName: 'Dr. Vaishnavi',
-        lastName: 'Anugu',
-        department: 'CSE'
-      },
-      {
-        email: 'admin@institution.edu',
-        username: 'admin',
-        password: 'admin123',
-        firstName: 'System',
-        lastName: 'Administrator',
-        department: 'Administration'
-      }
-    ];
+    return [];
   };
 
   const handleLogin = async (e) => {
@@ -54,6 +36,12 @@ const Login = () => {
 
     const inputUser = username.trim().toLowerCase();
     const inputPass = password.trim();
+
+    if (!inputUser) {
+      setError('Please enter your email or username.');
+      setLoading(false);
+      return;
+    }
 
     try {
       // 1. Try Backend API first if online
@@ -73,18 +61,19 @@ const Login = () => {
         navigate('/dashboard');
         return;
       } else if (response.status === 401) {
-        throw new Error('Invalid email or password.');
+        throw new Error('Invalid credentials');
       }
     } catch (err) {
       // 2. Validate against registered accounts store
       const users = getRegisteredUsers();
       const existingUser = users.find(u => 
         (u.email && u.email.toLowerCase() === inputUser) || 
-        (u.username && u.username.toLowerCase() === inputUser)
+        (u.username && u.username.toLowerCase() === inputUser) ||
+        (u.email && u.email.toLowerCase().split('@')[0] === inputUser)
       );
 
       if (existingUser) {
-        if (existingUser.password === inputPass || !existingUser.password) {
+        if (!existingUser.password || existingUser.password === inputPass) {
           localStorage.setItem('access_token', 'fad_auth_token_' + Date.now());
           localStorage.setItem('refresh_token', 'fad_auth_refresh_' + Date.now());
           localStorage.setItem('current_user_email', existingUser.email || inputUser);
@@ -122,7 +111,8 @@ const Login = () => {
     setSuccessMsg('');
     setLoading(true);
 
-    const regEmail = email.trim().toLowerCase();
+    const regEmail = (email.trim() || username.trim()).toLowerCase();
+    const regUsername = (username.trim() || regEmail.split('@')[0]).toLowerCase();
     const regPass = password.trim();
 
     if (!regEmail || !regPass) {
@@ -139,7 +129,7 @@ const Login = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
-          username: regEmail, password: regPass, email: regEmail, firstName, lastName, 
+          username: regUsername, password: regPass, email: regEmail, firstName, lastName, 
           phone_number: phone, department 
         }),
       });
@@ -149,29 +139,64 @@ const Login = () => {
 
     // Save to authentic registered users store
     const users = getRegisteredUsers();
-    const alreadyExists = users.some(u => u.email?.toLowerCase() === regEmail);
-    if (alreadyExists) {
-      setError('An account with this email already exists! Please sign in.');
-      setLoading(false);
-      return;
-    }
+    const existingIndex = users.findIndex(u => 
+      (u.email && u.email.toLowerCase() === regEmail) || 
+      (u.username && u.username.toLowerCase() === regUsername)
+    );
 
     const newUser = {
       email: regEmail,
-      username: regEmail.split('@')[0],
+      username: regUsername,
       password: regPass,
       firstName: firstName || 'Faculty',
       lastName: lastName || 'Member',
       phone,
       department: department || 'CSE'
     };
-    users.push(newUser);
+
+    if (existingIndex >= 0) {
+      users[existingIndex] = newUser;
+    } else {
+      users.push(newUser);
+    }
     localStorage.setItem('fad_user_accounts', JSON.stringify(users));
 
-    setSuccessMsg(`Account created successfully for ${regEmail}! Please sign in with your password.`);
-    setUsername(regEmail);
-    setPassword('');
-    setView('login');
+    // Initialize user profile in client datastore
+    const userDatastoreKey = 'fad_user_data_' + regEmail;
+    const existingStore = localStorage.getItem(userDatastoreKey);
+    if (!existingStore) {
+      const initialStore = {
+        profile: {
+          username: regUsername,
+          email: regEmail,
+          first_name: firstName || 'Faculty',
+          last_name: lastName || 'Member',
+          department: department || 'CSE',
+          phone_number: phone || '',
+          total_citations: 0,
+          h_index: 0,
+          i10_index: 0
+        },
+        publications: [],
+        patents: [],
+        grants: [],
+        roles: [],
+        certificates: [],
+        books: [],
+        'fdp-training': [],
+        consultancy: [],
+        certifications: [],
+        saved_reports: []
+      };
+      localStorage.setItem(userDatastoreKey, JSON.stringify(initialStore));
+    }
+
+    // Automatically sign in upon registration
+    localStorage.setItem('access_token', 'fad_auth_token_' + Date.now());
+    localStorage.setItem('refresh_token', 'fad_auth_refresh_' + Date.now());
+    localStorage.setItem('current_user_email', regEmail);
+    localStorage.setItem('current_user_info', JSON.stringify(newUser));
+    navigate('/dashboard');
     setLoading(false);
   };
 
