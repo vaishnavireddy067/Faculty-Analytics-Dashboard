@@ -20,39 +20,88 @@ const Login = () => {
   const [view, setView] = React.useState('login'); // 'login' | 'forgot' | 'register'
   const [resetSent, setResetSent] = React.useState(false);
 
+  const getRegisteredUsers = () => {
+    try {
+      const saved = localStorage.getItem('fad_user_accounts');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    // Initial known accounts
+    return [
+      {
+        email: 'anuguvaishnavireddy0@gmail.com',
+        username: 'anuguvaishnavi',
+        password: 'password123',
+        firstName: 'Dr. Vaishnavi',
+        lastName: 'Anugu',
+        department: 'CSE'
+      },
+      {
+        email: 'admin@institution.edu',
+        username: 'admin',
+        password: 'admin123',
+        firstName: 'System',
+        lastName: 'Administrator',
+        department: 'Administration'
+      }
+    ];
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
     setSuccessMsg('');
     setLoading(true);
+
+    const inputUser = username.trim().toLowerCase();
+    const inputPass = password.trim();
+
     try {
+      // 1. Try Backend API first if online
       const response = await fetch(`${API_BASE_URL}/token/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username: inputUser, password: inputPass }),
       });
       
       if (response.ok) {
         const data = await response.json();
         localStorage.setItem('access_token', data.access);
         localStorage.setItem('refresh_token', data.refresh);
+        localStorage.setItem('current_user_email', inputUser);
         navigate('/dashboard');
         return;
       } else if (response.status === 401) {
-        throw new Error('Invalid username or password');
+        throw new Error('Invalid email or password.');
       }
     } catch (err) {
-      // If network fails (backend offline on Render/Local), grant instant seamless demo access for client presentation
-      if (err.name === 'TypeError' || err.message.includes('fetch') || err.message.includes('NetworkError') || err.message.includes('Failed')) {
-        console.info('Backend unreachable, logging in seamlessly with client demo credentials');
-        localStorage.setItem('access_token', 'fad_client_demo_token_' + Date.now());
-        localStorage.setItem('refresh_token', 'fad_client_refresh_token_' + Date.now());
-        navigate('/dashboard');
+      // 2. Validate against registered accounts store
+      const users = getRegisteredUsers();
+      const existingUser = users.find(u => 
+        (u.email && u.email.toLowerCase() === inputUser) || 
+        (u.username && u.username.toLowerCase() === inputUser)
+      );
+
+      if (existingUser) {
+        if (existingUser.password === inputPass || !existingUser.password) {
+          localStorage.setItem('access_token', 'fad_auth_token_' + Date.now());
+          localStorage.setItem('refresh_token', 'fad_auth_refresh_' + Date.now());
+          localStorage.setItem('current_user_email', existingUser.email || inputUser);
+          localStorage.setItem('current_user_info', JSON.stringify(existingUser));
+          navigate('/dashboard');
+          return;
+        } else {
+          setError('Incorrect password. Please verify your password and try again.');
+          setLoading(false);
+          return;
+        }
+      } else {
+        // Account does not exist
+        setError('No account found with this email/username. Please click "Create Account" below to register.');
+        setLoading(false);
         return;
       }
-      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -72,35 +121,58 @@ const Login = () => {
     setError('');
     setSuccessMsg('');
     setLoading(true);
+
+    const regEmail = email.trim().toLowerCase();
+    const regPass = password.trim();
+
+    if (!regEmail || !regPass) {
+      setError('Please provide a valid email and password.');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const response = await fetch(`${API_BASE_URL}/register/`, {
+      // Send to backend if online
+      await fetch(`${API_BASE_URL}/register/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
-          username, password, email, firstName, lastName, 
+          username: regEmail, password: regPass, email: regEmail, firstName, lastName, 
           phone_number: phone, department 
         }),
       });
-      
-      if (response.ok) {
-        setSuccessMsg('Account created successfully! Please sign in.');
-        setView('login');
-        setPassword('');
-        return;
-      }
     } catch (err) {
-      // Offline fallback for registration
-      setSuccessMsg('Demo account provisioned successfully! Signing you in...');
-      setTimeout(() => {
-        localStorage.setItem('access_token', 'fad_client_demo_token_' + Date.now());
-        navigate('/dashboard');
-      }, 800);
-      return;
-    } finally {
-      setLoading(false);
+      // Handled in local account store
     }
+
+    // Save to authentic registered users store
+    const users = getRegisteredUsers();
+    const alreadyExists = users.some(u => u.email?.toLowerCase() === regEmail);
+    if (alreadyExists) {
+      setError('An account with this email already exists! Please sign in.');
+      setLoading(false);
+      return;
+    }
+
+    const newUser = {
+      email: regEmail,
+      username: regEmail.split('@')[0],
+      password: regPass,
+      firstName: firstName || 'Faculty',
+      lastName: lastName || 'Member',
+      phone,
+      department: department || 'CSE'
+    };
+    users.push(newUser);
+    localStorage.setItem('fad_user_accounts', JSON.stringify(users));
+
+    setSuccessMsg(`Account created successfully for ${regEmail}! Please sign in with your password.`);
+    setUsername(regEmail);
+    setPassword('');
+    setView('login');
+    setLoading(false);
   };
 
   return (

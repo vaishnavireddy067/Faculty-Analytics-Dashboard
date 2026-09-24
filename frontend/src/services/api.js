@@ -8,7 +8,7 @@ const getAuthHeaders = () => {
   };
 };
 
-// Initial Mock Datastore for Seamless Client Demos & Offline Experience
+// Dynamic User Datastore - Starts Clean & Updates with Actual User Entries
 const INITIAL_MOCK_STORE = {
   profile: {
     id: 1,
@@ -17,153 +17,86 @@ const INITIAL_MOCK_STORE = {
     first_name: 'Dr. Vaishnavi',
     last_name: 'Anugu',
     department: 'CSE',
-    designation: 'Associate Professor & HOD',
-    employee_id: 'AVN-CSE-042',
-    phone_number: '+91 98765 43210',
-    date_of_joining: '2021-06-15',
-    highest_qualification: 'Ph.D in Artificial Intelligence',
-    scopus_id: '57219842100',
-    orcid_id: '0000-0002-1825-0097',
-    google_scholar_id: 'GS-VN-2024',
-    total_citations: 342,
-    h_index: 12,
-    i10_index: 16
+    designation: 'Faculty / Lead',
+    employee_id: 'AVN-CSE-001',
+    phone_number: '',
+    date_of_joining: '2024-06-01',
+    highest_qualification: 'Ph.D in Engineering',
+    scopus_id: '',
+    orcid_id: '',
+    google_scholar_id: '',
+    total_citations: 0,
+    h_index: 0,
+    i10_index: 0
   },
-  stats: {
-    role: 'HOD',
-    kpis: {
-      total_faculty: 128,
-      total_publications: 314,
-      total_patents: 29,
-      total_grants_amount: 14500000
-    },
-    trend_data: [
-      { name: '2021', publications: 42 },
-      { name: '2022', publications: 58 },
-      { name: '2023', publications: 74 },
-      { name: '2024', publications: 96 },
-      { name: '2025', publications: 114 }
-    ],
-    dept_data: [
-      { name: 'CSE', value: 45 },
-      { name: 'ECE', value: 35 },
-      { name: 'AI&DS', value: 25 },
-      { name: 'MECH', value: 15 },
-      { name: 'CIVIL', value: 8 }
-    ],
-    recent_activities: [
-      { id: 1, user: 'Dr. Vaishnavi Anugu', dept: 'CSE', action: 'Published: Deep Learning in Healthcare', time: 'Aug 14, 2025' },
-      { id: 2, user: 'Dr. Ramesh Kumar', dept: 'ECE', action: 'Patent: Smart Grid Edge Monitoring', time: 'Aug 10, 2025' },
-      { id: 3, user: 'Dr. S. Reddy', dept: 'AI&DS', action: 'Grant: AICTE Research Promotion Scheme', time: 'Aug 04, 2025' }
-    ]
-  },
-  publications: [
-    {
-      id: 1,
-      title: 'Scalable Graph Neural Networks for Dynamic Faculty Performance Modeling',
-      journal_name: 'IEEE Transactions on Knowledge and Data Engineering',
-      publication_type: 'JOURNAL',
-      indexed_in: 'SCOPUS_SCI',
-      impact_factor: 8.9,
-      year: 2025,
-      doi: '10.1109/TKDE.2025.342109',
-      status: 'VERIFIED',
-      first_author: 'Dr. Vaishnavi Anugu',
-      co_authors: 'K. S. Sharma, M. Reynolds'
-    },
-    {
-      id: 2,
-      title: 'Real-time Autonomous Decision Matrix for Higher Education Analytics',
-      journal_name: 'Springer Nature Computer Science',
-      publication_type: 'JOURNAL',
-      indexed_in: 'SCOPUS',
-      impact_factor: 4.2,
-      year: 2024,
-      doi: '10.1007/s42979-024-02845-x',
-      status: 'VERIFIED',
-      first_author: 'Dr. Vaishnavi Anugu',
-      co_authors: 'R. P. Verma'
-    }
-  ],
-  patents: [
-    {
-      id: 1,
-      title: 'Automated Academic Appraisal and Accreditation Engine Using Distributed Ledgers',
-      application_number: '202541098421 A',
-      status: 'PUBLISHED',
-      country: 'India',
-      filing_date: '2025-02-14',
-      publication_date: '2025-06-20',
-      inventors: 'Dr. Vaishnavi Anugu, Team AVN'
-    }
-  ],
-  grants: [
-    {
-      id: 1,
-      project_title: 'AI-Driven Multimodal Cognitive Assessment Platform (SERB CRG)',
-      funding_agency: 'SERB / DST Government of India',
-      amount: 4500000,
-      duration_years: 3,
-      sanction_order_no: 'CRG/2025/004921',
-      status: 'ONGOING',
-      principal_investigator: 'Dr. Vaishnavi Anugu',
-      start_date: '2025-04-01'
-    }
-  ],
-  roles: [
-    {
-      id: 1,
-      role_name: 'IQAC & NAAC Coordinator',
-      academic_year: '2025-26',
-      department: 'CSE',
-      from_date: '2025-06-01',
-      to_date: '2026-05-31',
-      description: 'Heading institutional quality assurance, criteria 3 research analytics & NBA tier-1 readiness.',
-      status: 'APPROVED'
-    },
-    {
-      id: 2,
-      role_name: 'Exam Coordinator',
-      academic_year: '2025-26',
-      department: 'CSE',
-      from_date: '2025-06-01',
-      to_date: '2026-05-31',
-      description: 'Supervising mid-term and semester end examinations and result analysis.',
-      status: 'APPROVED'
-    }
-  ],
-  certificates: [
-    {
-      id: 1,
-      title: 'Faculty Development Program on Advanced Generative AI & LLMs',
-      category: 'FDP',
-      issuing_organization: 'IIT Madras & AICTE ATAL',
-      issue_date: '2025-07-15',
-      academic_year: '2025-26',
-      status: 'VERIFIED'
-    }
-  ]
+  publications: [],
+  patents: [],
+  grants: [],
+  roles: [],
+  certificates: [],
+  books: [],
+  'fdp-training': [],
+  consultancy: [],
+  certifications: [],
+  saved_reports: []
 };
 
 const getLocalMockStore = () => {
   try {
-    const saved = localStorage.getItem('fad_mock_store_v2');
+    const userEmail = localStorage.getItem('current_user_email') || 'default_user';
+    const saved = localStorage.getItem('fad_user_data_' + userEmail);
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (parsed?.stats?.kpis) return parsed;
+      return { ...INITIAL_MOCK_STORE, ...parsed };
     }
   } catch (e) {
     console.warn(e);
   }
-  return INITIAL_MOCK_STORE;
+  return { ...INITIAL_MOCK_STORE };
 };
 
 const saveLocalMockStore = (store) => {
   try {
-    localStorage.setItem('fad_mock_store_v2', JSON.stringify(store));
+    const userEmail = localStorage.getItem('current_user_email') || 'default_user';
+    localStorage.setItem('fad_user_data_' + userEmail, JSON.stringify(store));
   } catch (e) {
     console.warn(e);
   }
+};
+
+const computeDynamicStats = (store) => {
+  const pubs = store.publications || [];
+  const pats = store.patents || [];
+  const grnts = store.grants || [];
+  const totalGrants = grnts.reduce((sum, g) => sum + (Number(g.amount) || 0), 0);
+
+  const currentYear = new Date().getFullYear();
+  const trend_data = [
+    { name: String(currentYear - 2), publications: pubs.filter(p => Number(p.year) === currentYear - 2).length },
+    { name: String(currentYear - 1), publications: pubs.filter(p => Number(p.year) === currentYear - 1).length },
+    { name: String(currentYear), publications: pubs.filter(p => Number(p.year) === currentYear || !p.year).length }
+  ];
+
+  const recent_activities = [
+    ...pubs.map(p => ({ id: p.id, user: store.profile?.username || 'You', dept: store.profile?.department || 'CSE', action: `Published: ${p.title || 'Paper'}`, time: 'Recently' })),
+    ...pats.map(p => ({ id: p.id, user: store.profile?.username || 'You', dept: store.profile?.department || 'CSE', action: `Patent: ${p.title || 'Patent'}`, time: 'Recently' })),
+    ...grnts.map(g => ({ id: g.id, user: store.profile?.username || 'You', dept: store.profile?.department || 'CSE', action: `Grant: ${g.project_title || 'Research Grant'}`, time: 'Recently' }))
+  ].slice(0, 5);
+
+  return {
+    role: 'FACULTY',
+    kpis: {
+      total_faculty: 1,
+      total_publications: pubs.length,
+      total_patents: pats.length,
+      total_grants_amount: totalGrants
+    },
+    trend_data,
+    dept_data: [
+      { name: store.profile?.department || 'CSE', value: pubs.length }
+    ],
+    recent_activities
+  };
 };
 
 const handleMockFallback = (endpoint, options = {}) => {
@@ -173,138 +106,184 @@ const handleMockFallback = (endpoint, options = {}) => {
 
   // 1. Analytics Stats & AI Insights
   if (cleanEndpoint.includes('/analytics/stats')) {
-    return store.stats;
+    return computeDynamicStats(store);
   }
   if (cleanEndpoint.includes('/analytics/ai-insights')) {
+    const pubs = store.publications || [];
+    const pats = store.patents || [];
     return {
-      summary: 'High research momentum in CSE/AI&DS with +38% increase in Q1 Scopus indexed publications.',
+      summary: pubs.length > 0 
+        ? `Active research trajectory with ${pubs.length} recorded publication(s) and ${pats.length} patent(s).`
+        : 'Welcome to your analytics dashboard. Begin by adding your publications, patents, or grants to generate AI insights.',
       recommendations: [
-        'Apply for DST-SERB Core Research Grant before Oct 30 deadline.',
-        '2 patent applications ready for formal commercial filing.'
+        'Update research credentials & Scopus / ORCID IDs in your Faculty Profile.',
+        'Record recent conference/journal submissions and grant applications.'
       ],
-      top_performers: ['Dr. Vaishnavi Anugu', 'Dr. Ramesh Kumar', 'Dr. Priya Sharma']
+      top_performers: [store.profile?.first_name ? `${store.profile.first_name} ${store.profile.last_name || ''}` : 'Faculty Member']
     };
   }
 
   // 2. Accreditation & NAAC SSR
   if (cleanEndpoint.includes('/faculty/accreditation') || cleanEndpoint.includes('/naac-ssr-criterion3')) {
+    const pubs = (store.publications || []).length;
+    const pats = (store.patents || []).length;
+    const grnts = (store.grants || []).length;
     return {
-      predicted_grade: 'A++',
-      overall_score: 94.2,
+      predicted_grade: pubs > 5 ? 'A++' : pubs > 0 ? 'A+' : 'Evaluating',
+      overall_score: Math.min(100, (pubs * 10) + (pats * 15) + (grnts * 20)),
       criteria: [
-        { id: '3.1', name: 'Promotion of Research and Facilities', score: 92, max_score: 100, status: 'Strong' },
-        { id: '3.2', name: 'Resource Mobilization for Research (Grants)', score: 88, max_score: 100, status: 'Strong' },
-        { id: '3.3', name: 'Innovation Ecosystem & Incubation', score: 85, max_score: 100, status: 'Good' },
-        { id: '3.4', name: 'Research Publications & Awards', score: 96, max_score: 100, status: 'Exceptional' },
-        { id: '3.5', name: 'Consultancy Projects & Revenue', score: 80, max_score: 100, status: 'Good' },
-        { id: '3.6', name: 'Extension Activities & Social Responsibility', score: 90, max_score: 100, status: 'Strong' },
-        { id: '3.7', name: 'Collaborations & Academic MOUs', score: 94, max_score: 100, status: 'Exceptional' }
+        { id: '3.1', name: 'Promotion of Research and Facilities', score: Math.min(100, pubs * 12), max_score: 100, status: pubs > 3 ? 'Strong' : 'In Progress' },
+        { id: '3.2', name: 'Resource Mobilization for Research (Grants)', score: Math.min(100, grnts * 25), max_score: 100, status: grnts > 0 ? 'Strong' : 'In Progress' },
+        { id: '3.3', name: 'Innovation Ecosystem & Incubation', score: Math.min(100, pats * 20), max_score: 100, status: pats > 0 ? 'Good' : 'In Progress' },
+        { id: '3.4', name: 'Research Publications & Awards', score: Math.min(100, pubs * 15), max_score: 100, status: pubs > 2 ? 'Strong' : 'In Progress' },
+        { id: '3.5', name: 'Consultancy Projects & Revenue', score: Math.min(100, (store.consultancy || []).length * 20), max_score: 100, status: 'In Progress' },
+        { id: '3.6', name: 'Extension Activities & Social Responsibility', score: Math.min(100, (store.roles || []).length * 25), max_score: 100, status: 'In Progress' },
+        { id: '3.7', name: 'Collaborations & Academic MOUs', score: Math.min(100, pubs * 10), max_score: 100, status: 'In Progress' }
       ],
-      recommendations: ['Increase corporate consultancy projects in MECH & CIVIL.', 'Sustain Q1 Scopus publication velocity.']
+      recommendations: ['Keep adding your research publications and institutional contributions.']
     };
   }
 
   // 3. Rankings & Leaderboard
   if (cleanEndpoint.includes('/ranking') || cleanEndpoint.includes('/leaderboard')) {
+    const userScore = ((store.publications || []).length * 10) + ((store.patents || []).length * 15);
+    const userName = store.profile?.first_name ? `${store.profile.first_name} ${store.profile.last_name || ''}` : 'You';
     const list = [
-      { rank: 1, name: 'Dr. Vaishnavi Anugu', department: 'CSE', score: 98.4, publications: 18, patents: 4, citations: 342, badge: 'Top Innovator 🏆' },
-      { rank: 2, name: 'Dr. Rajesh Sharma', department: 'ECE', score: 94.1, publications: 14, patents: 3, citations: 280, badge: 'Research Leader 🥇' },
-      { rank: 3, name: 'Dr. Priya Kulkarni', department: 'AI&DS', score: 91.5, publications: 12, patents: 2, citations: 190, badge: 'Publication Champion 📚' },
-      { rank: 4, name: 'Dr. Suresh Verma', department: 'IT', score: 88.2, publications: 11, patents: 2, citations: 160, badge: 'Grant Winner 💰' },
-      { rank: 5, name: 'Dr. Anand Kumar', department: 'MECH', score: 85.0, publications: 9, patents: 2, citations: 120, badge: 'Active Mentor 🌟' }
+      { rank: 1, name: userName, department: store.profile?.department || 'CSE', score: userScore || 10, publications: (store.publications || []).length, patents: (store.patents || []).length, citations: store.profile?.total_citations || 0, badge: 'Active Researcher 🚀' }
     ];
     return { rankings: list, top_faculty: list };
   }
 
   // 4. Research Collaboration Network
   if (cleanEndpoint.includes('/analytics/network') || cleanEndpoint.includes('/collaboration')) {
+    const userName = store.profile?.first_name ? `${store.profile.first_name} ${store.profile.last_name || ''}` : 'You';
     return {
       nodes: [
-        { id: '1', label: 'Dr. Vaishnavi Anugu', group: 'CSE', domain: 'AI/ML', papers: 18, citations: 340 },
-        { id: '2', label: 'Dr. Rajesh Sharma', group: 'ECE', domain: 'IoT', papers: 14, citations: 280 },
-        { id: '3', label: 'Dr. Priya Kulkarni', group: 'AI&DS', domain: 'Data Science', papers: 12, citations: 190 },
-        { id: '4', label: 'Dr. Suresh Verma', group: 'IT', domain: 'Security', papers: 11, citations: 160 },
-        { id: '5', label: 'Dr. Anand Kumar', group: 'MECH', domain: 'Robotics', papers: 9, citations: 120 }
+        { id: '1', label: userName, group: store.profile?.department || 'CSE', domain: 'Faculty', papers: (store.publications || []).length, citations: store.profile?.total_citations || 0 }
       ],
-      edges: [
-        { from: '1', to: '2', value: 4 },
-        { from: '1', to: '3', value: 5 },
-        { from: '2', to: '4', value: 3 },
-        { from: '3', to: '5', value: 2 },
-        { from: '1', to: '5', value: 2 }
-      ]
+      edges: []
     };
   }
 
   // 5. Department Heatmap
   if (cleanEndpoint.includes('/department-heatmap')) {
+    const currentYear = new Date().getFullYear();
+    const dept = store.profile?.department || 'CSE';
     return {
       heatmap: [
-        { department: 'CSE', year: 2022, value: 24 }, { department: 'CSE', year: 2023, value: 38 }, { department: 'CSE', year: 2024, value: 46 }, { department: 'CSE', year: 2025, value: 58 },
-        { department: 'ECE', year: 2022, value: 18 }, { department: 'ECE', year: 2023, value: 26 }, { department: 'ECE', year: 2024, value: 34 }, { department: 'ECE', year: 2025, value: 42 },
-        { department: 'AI&DS', year: 2022, value: 12 }, { department: 'AI&DS', year: 2023, value: 22 }, { department: 'AI&DS', year: 2024, value: 32 }, { department: 'AI&DS', year: 2025, value: 44 },
-        { department: 'MECH', year: 2022, value: 14 }, { department: 'MECH', year: 2023, value: 18 }, { department: 'MECH', year: 2024, value: 22 }, { department: 'MECH', year: 2025, value: 28 },
-        { department: 'CIVIL', year: 2022, value: 8 }, { department: 'CIVIL', year: 2023, value: 12 }, { department: 'CIVIL', year: 2024, value: 16 }, { department: 'CIVIL', year: 2025, value: 20 }
+        { department: dept, year: currentYear - 1, value: 0 },
+        { department: dept, year: currentYear, value: (store.publications || []).length }
       ]
     };
   }
 
   // 5.1 IQAC Monthly Report & Document Vault
   if (cleanEndpoint.includes('/iqac-monthly/list')) {
-    return [
-      { id: 1, department: 'Computer Science & Engineering (Data Science) and AI&DS', month: 'AUGUST', year: '2025', academic_year: '2025-26', updated_at: '2025-08-31' }
-    ];
+    return store.saved_reports || [];
   }
   if (cleanEndpoint.includes('/iqac-monthly')) {
     if (method === 'POST') {
+      let bodyData = {};
+      try {
+        bodyData = typeof options.body === 'string' ? JSON.parse(options.body) : (options.body || {});
+      } catch (e) {}
+      
+      const newReportId = bodyData.id || Date.now();
+      const updatedTimestamp = new Date().toISOString();
+      const savedReportObj = {
+        ...bodyData,
+        id: newReportId,
+        updated_at: updatedTimestamp,
+        is_saved_in_db: true
+      };
+
+      if (!store.saved_reports) store.saved_reports = [];
+      const existingIdx = store.saved_reports.findIndex(r => String(r.id) === String(newReportId) || (r.month === bodyData.month && r.year === bodyData.year && r.department === bodyData.department));
+      if (existingIdx >= 0) {
+        store.saved_reports[existingIdx] = savedReportObj;
+      } else {
+        store.saved_reports.unshift(savedReportObj);
+      }
+      saveLocalMockStore(store);
+
       return {
         success: true,
-        report_id: 1,
+        report_id: newReportId,
         message: 'IQAC Report saved successfully!',
-        updated_at: new Date().toISOString()
+        updated_at: updatedTimestamp
       };
     }
+
+    if (method === 'DELETE') {
+      const parts = cleanEndpoint.split('/');
+      const idToDelete = parts[parts.indexOf('iqac-monthly') + 1];
+      if (store.saved_reports) {
+        store.saved_reports = store.saved_reports.filter(r => String(r.id) !== String(idToDelete));
+        saveLocalMockStore(store);
+      }
+      return { success: true };
+    }
+
+    // GET single report
+    const urlParams = new URLSearchParams(endpoint.includes('?') ? endpoint.split('?')[1] : '');
+    const reqId = urlParams.get('report_id');
+    if (reqId && store.saved_reports) {
+      const found = store.saved_reports.find(r => String(r.id) === String(reqId));
+      if (found) return found;
+    }
+
+    // Default clean template structure for new report
     return {
-      id: 1,
+      id: Date.now(),
       institution_name: 'AVN INSTITUTE OF ENGINEERING & TECHNOLOGY',
       accreditation_details: 'Accredited by NAAC & NBA | An Autonomous Institute Affiliated to JNTU Hyderabad',
-      report_title: 'IQAC REPORT OF DEPARTMENT OF COMPUTER SCIENCE & ENGINEERING FOR AUGUST, 2025',
-      department: 'Computer Science & Engineering (Data Science) and AI&DS',
-      month: 'AUGUST',
-      year: '2025',
+      report_title: `IQAC REPORT OF DEPARTMENT OF ${store.profile?.department || 'COMPUTER SCIENCE & ENGINEERING'}`,
+      department: store.profile?.department || 'Computer Science & Engineering',
+      month: 'SEPTEMBER',
+      year: String(new Date().getFullYear()),
       academic_year: '2025-26',
-      is_saved_in_db: true,
+      is_saved_in_db: false,
       sections: {
-        '1_student_events': [
-          { s_no: 1, name: 'Hands-on Workshop on Machine Learning & Edge Devices', association: 'CSI Student Chapter', level: 'Department Level', duration: '2 Days', chief_guest: 'Dr. K. Srinivas (IIT H)', honorarium: '5,000', misc_expenses: '2,500', target_students: 'III & IV Year CSE/AI&DS' }
-        ],
-        '2_advanced_learners': [
-          { s_no: 1, roll_no: '22AVN0501', student_name: 'A. Rahul', year_sec: 'IV-A', activity: 'Selected for Smart India Hackathon Finalist', mentor: 'Dr. Vaishnavi Anugu' }
-        ],
-        '3_curricular_events': [
-          { s_no: 1, event_name: 'Technical Symposium: CodeQuest 2025', date: '2025-08-20', faculty_incharge: 'Prof. Ramesh', participants_count: 140 }
-        ],
-        '4_placements': [
-          { s_no: 1, roll_no: '21AVN0512', name: 'M. Sneha', company: 'TCS Digital', package_lpa: '7.5 LPA', role: 'Software Engineer' }
-        ],
-        '5_journal_publications': [
-          { s_no: 1, authors: 'Dr. Vaishnavi Anugu, et al.', title: 'Graph Neural Networks in Healthcare Analytics', journal: 'IEEE Transactions on Knowledge & Data Engineering', issn_isbn: '1041-4347', indexing: 'Scopus / SCI (Q1)', impact_factor: '8.9' }
-        ],
+        '1_student_events': [],
+        '2_advanced_learners': [],
+        '3_curricular_events': [],
+        '4_placements': [],
+        '5_journal_publications': (store.publications || []).map((p, idx) => ({
+          s_no: idx + 1,
+          authors: p.authors || store.profile?.username || '',
+          title: p.title || '',
+          journal: p.journal_name || '',
+          issn_isbn: p.issn_isbn || '',
+          indexing: p.indexing || 'Scopus / Peer Reviewed',
+          impact_factor: p.impact_factor || ''
+        })),
         '6_conference_publications': [],
-        '7_patents': [
-          { s_no: 1, inventors: 'Dr. Vaishnavi Anugu', title: 'Automated Academic Appraisal and Accreditation Engine', app_no: '202541098421 A', status: 'Published', date: '2025-06-20' }
-        ],
-        '8_books': [],
-        '9_fdp_attended': [
-          { s_no: 1, faculty_name: 'Dr. Vaishnavi Anugu', fdp_name: 'AICTE ATAL FDP on Generative AI', organization: 'IIT Madras', duration: '5 Days', dates: '2025-07-15 to 2025-07-19' }
-        ],
+        '7_patents': (store.patents || []).map((p, idx) => ({
+          s_no: idx + 1,
+          inventors: p.inventors || store.profile?.username || '',
+          title: p.title || '',
+          app_no: p.application_number || '',
+          status: p.status || 'Published',
+          date: p.publication_date || ''
+        })),
+        '8_books': (store.books || []).map((b, idx) => ({
+          s_no: idx + 1,
+          authors: b.authors || '',
+          title: b.title || '',
+          publisher: b.publisher || '',
+          isbn: b.isbn || ''
+        })),
+        '9_fdp_attended': (store['fdp-training'] || []).map((f, idx) => ({
+          s_no: idx + 1,
+          faculty_name: f.faculty_name || store.profile?.first_name || '',
+          fdp_name: f.program_title || '',
+          organization: f.organizing_institute || '',
+          duration: f.duration || '',
+          dates: f.from_date ? `${f.from_date} to ${f.to_date || ''}` : ''
+        })),
         '10_fdp_organized': [],
-        '11_mous': [
-          { s_no: 1, company_name: 'EdTech Solutions Pvt Ltd', date_signed: '2025-08-01', purpose: 'Student Internships & Faculty Research' }
-        ],
-        '12_meetings': [
-          { s_no: 1, meeting_type: 'Departmental Academic Advisory Board (DAB)', date: '2025-08-05', key_decisions: 'Curriculum revision for AICTE Model Syllabus 2025' }
-        ],
+        '11_mous': [],
+        '12_meetings': [],
         'custom_sections': []
       }
     };
