@@ -58,6 +58,7 @@ function App() {
             <Route path="/verification" element={<Verification />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/iqac-report" element={<IQACMonthlyReport />} />
+            <Route path="/iqac-monthly-report" element={<IQACMonthlyReport />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/admin-dashboard" element={<AdminDashboard />} />
             <Route path="/analytics" element={<Analytics />} />
