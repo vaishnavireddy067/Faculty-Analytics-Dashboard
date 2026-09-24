@@ -492,34 +492,51 @@ const IQACMonthlyReport = () => {
                 </tr>
               </thead>
               <tbody>
-                {s["1_student_events"]?.map((item, i) => (
-                  <tr key={i} className="border-b border-black">
-                    <td className="border border-black p-1.5 text-center font-medium">{item.s_no || i + 1}</td>
-                    <td className="border border-black p-1.5 font-medium">
-                      {isEditing ? (
-                        <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.name} onChange={(e) => {
-                          const updated = [...s["1_student_events"]];
-                          updated[i].name = e.target.value;
-                          updateSectionField('1_student_events', updated);
-                        }} />
-                      ) : item.name}
-                    </td>
-                    <td className="border border-black p-1.5 text-center">{item.association || '-'}</td>
-                    <td className="border border-black p-1.5">{item.level}</td>
-                    <td className="border border-black p-1.5">{item.duration}</td>
-                    <td className="border border-black p-1.5">{item.chief_guest}</td>
-                    <td className="border border-black p-1.5 text-center">{item.honorarium || '-'}</td>
-                    <td className="border border-black p-1.5 text-center">{item.misc_expenses || '-'}</td>
-                    <td className="border border-black p-1.5">{item.target_students}</td>
-                    {isEditing && (
-                      <td className="border border-black p-1.5 print:hidden text-center">
-                        <button onClick={() => handleDeleteRow('1_student_events', i)} className="text-rose-600 hover:text-rose-800">
-                          <Trash2 size={12} />
-                        </button>
+                {s["1_student_events"]?.length > 0 ? (
+                  s["1_student_events"].map((item, i) => (
+                    <tr key={i} className="border-b border-black">
+                      <td className="border border-black p-1.5 text-center font-medium">{item.s_no || i + 1}</td>
+                      <td className="border border-black p-1.5 font-medium">
+                        {isEditing ? (
+                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.name} onChange={(e) => {
+                            const updated = [...s["1_student_events"]];
+                            updated[i].name = e.target.value;
+                            updateSectionField('1_student_events', updated);
+                          }} />
+                        ) : item.name}
                       </td>
-                    )}
-                  </tr>
-                ))}
+                      <td className="border border-black p-1.5 text-center">{item.association || '-'}</td>
+                      <td className="border border-black p-1.5">{item.level}</td>
+                      <td className="border border-black p-1.5">{item.duration}</td>
+                      <td className="border border-black p-1.5">{item.chief_guest}</td>
+                      <td className="border border-black p-1.5 text-center">{item.honorarium || '-'}</td>
+                      <td className="border border-black p-1.5 text-center">{item.misc_expenses || '-'}</td>
+                      <td className="border border-black p-1.5">{item.target_students}</td>
+                      {isEditing && (
+                        <td className="border border-black p-1.5 print:hidden text-center">
+                          <button onClick={() => handleDeleteRow('1_student_events', i)} className="text-rose-600 hover:text-rose-800">
+                            <Trash2 size={12} />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))
+                ) : (
+                  [1, 2].map(n => (
+                    <tr key={n} className="border-b border-black h-7">
+                      <td className="border border-black p-1.5 text-center">{n}</td>
+                      <td className="border border-black p-1.5"></td>
+                      <td className="border border-black p-1.5"></td>
+                      <td className="border border-black p-1.5"></td>
+                      <td className="border border-black p-1.5"></td>
+                      <td className="border border-black p-1.5"></td>
+                      <td className="border border-black p-1.5"></td>
+                      <td className="border border-black p-1.5"></td>
+                      <td className="border border-black p-1.5"></td>
+                      {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
