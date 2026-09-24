@@ -5,8 +5,7 @@ import {
   Layers, Award, BookOpen, Users, Briefcase, ChevronDown, 
   ChevronRight, Edit3, Save, Database, History, AlertCircle, Plus, X,
   Share2, Copy, Check, FolderArchive, PlusSquare, ExternalLink, Search
-} from 'lucide-react';
-import { fetchAPI } from '../services/api';
+import { fetchAPI, API_BASE_URL } from '../services/api';
 
 const IQACMonthlyReport = () => {
   const [department, setDepartment] = useState('Computer Science & Engineering (Data Science) and AI&DS');
@@ -101,7 +100,7 @@ const IQACMonthlyReport = () => {
     setSaving(true);
     setSaveSuccess('');
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/faculty/reports/iqac-monthly/', {
+      const res = await fetch(`${API_BASE_URL}/faculty/reports/iqac-monthly/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -148,7 +147,7 @@ const IQACMonthlyReport = () => {
   const handleDeleteReport = async (reportId) => {
     if (!window.confirm("Are you sure you want to delete this archived report from the database?")) return;
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/faculty/reports/iqac-monthly/${reportId}/delete/`, {
+      const res = await fetch(`${API_BASE_URL}/faculty/reports/iqac-monthly/${reportId}/delete/`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`
@@ -331,7 +330,7 @@ const IQACMonthlyReport = () => {
 
   // Handle Excel Export (.csv / .xlsx download)
   const handleExportExcel = () => {
-    window.open(`http://127.0.0.1:8000/api/faculty/reports/iqac-monthly/export-excel/?department=${encodeURIComponent(department)}&month=${month}&year=${year}`, '_blank');
+    window.open(`${API_BASE_URL}/faculty/reports/iqac-monthly/export-excel/?department=${encodeURIComponent(department)}&month=${month}&year=${year}`, '_blank');
   };
 
   if (!reportData && loading) {
@@ -633,7 +632,7 @@ const IQACMonthlyReport = () => {
 
                   <div className="flex items-center justify-between pt-1 border-t border-gray-200 dark:border-slate-700 text-[11px]">
                     <a
-                      href={`http://127.0.0.1:8000/api/faculty/reports/iqac-monthly/export-excel/?department=${encodeURIComponent(doc.department)}&month=${doc.month}&year=${doc.year}`}
+                      href={`${API_BASE_URL}/faculty/reports/iqac-monthly/export-excel/?department=${encodeURIComponent(doc.department)}&month=${doc.month}&year=${doc.year}`}
                       target="_blank"
                       rel="noreferrer"
                       className="text-emerald-600 hover:underline flex items-center gap-1 font-medium"

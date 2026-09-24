@@ -4,7 +4,7 @@ import {
   BookOpen, Award, Briefcase, GraduationCap, Shield, Globe,
   Mail, Phone, MapPin, Share2, Sparkles, RefreshCw
 } from 'lucide-react';
-import { facultyService } from '../services/api';
+import { facultyService, API_BASE_URL } from '../services/api';
 
 const CVGenerator = () => {
   const [template, setTemplate] = useState('aicte'); // 'aicte' | 'ugc' | 'ieee' | 'modern'
@@ -36,7 +36,7 @@ const CVGenerator = () => {
     setLoading(true);
     try {
       const [prof, pubs, pats, grnts, rols, fdpList] = await Promise.all([
-        fetch('http://127.0.0.1:8000/api/faculty/profile/', {
+        fetch(`${API_BASE_URL}/faculty/profile/`, {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
         }).then(r => r.ok ? r.json() : null).catch(() => null),
         facultyService.getAll('publications').catch(() => []),

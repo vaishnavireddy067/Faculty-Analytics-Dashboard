@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchAPI } from '../services/api';
+import { fetchAPI, API_BASE_URL } from '../services/api';
 import { Users, FileText, Award, IndianRupee, TrendingUp, TrendingDown, Download, FileSpreadsheet, Brain, Star } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { Target, Medal, MessageSquareText, CalendarDays, Clock } from 'lucide-react';
@@ -65,19 +65,19 @@ const Dashboard = () => {
   }, []);
 
   const handleExportPDF = () => {
-    window.open('http://127.0.0.1:8000/api/analytics/export/pdf/', '_blank');
+    window.open(`${API_BASE_URL}/analytics/export/pdf/`, '_blank');
   };
 
   const handleExportExcel = () => {
-    window.open('http://127.0.0.1:8000/api/analytics/export/excel/', '_blank');
+    window.open(`${API_BASE_URL}/analytics/export/excel/`, '_blank');
   };
 
   const handleExportCompliance = (type) => {
-    window.open(`http://127.0.0.1:8000/api/analytics/export/compliance/${type}/`, '_blank');
+    window.open(`${API_BASE_URL}/analytics/export/compliance/${type}/`, '_blank');
   };
 
   const handleExportAppraisal = () => {
-    window.open('http://127.0.0.1:8000/api/analytics/export/appraisal/', '_blank');
+    window.open(`${API_BASE_URL}/analytics/export/appraisal/`, '_blank');
   };
 
   if (loading) {

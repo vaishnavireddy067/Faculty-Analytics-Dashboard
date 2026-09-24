@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import CommandPalette from './CommandPalette';
 import NotificationCenter from './NotificationCenter';
+import { API_BASE_URL } from '../services/api';
 
 const DashboardLayout = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -45,7 +46,7 @@ const DashboardLayout = () => {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const res = await fetch('http://127.0.0.1:8000/api/faculty/profile/', {
+        const res = await fetch(`${API_BASE_URL}/faculty/profile/`, {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
         });
         if (res.ok) {

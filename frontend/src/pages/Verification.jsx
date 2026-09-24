@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { facultyService } from '../services/api';
+import { facultyService, BASE_URL } from '../services/api';
 import { CheckCircle, XCircle, FileText, ExternalLink, Clock, ScanSearch, ShieldCheck, AlertTriangle } from 'lucide-react';
-import api from '../services/api';
 
 const Verification = () => {
   const [activeTab, setActiveTab] = useState('publications');
@@ -149,7 +148,7 @@ const Verification = () => {
                         <div className="flex flex-col items-center gap-2">
                           {record.proof_document ? (
                             <a 
-                              href={`http://127.0.0.1:8000${record.proof_document}`} 
+                              href={`${BASE_URL}${record.proof_document}`} 
                               target="_blank" 
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1 px-3 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-full text-xs font-medium transition-colors mb-1"

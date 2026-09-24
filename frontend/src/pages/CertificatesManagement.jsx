@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UploadCloud, FileText, CheckCircle2, Clock, XCircle, Search, Filter, Plus, Award, ShieldCheck, Download, ExternalLink, Calendar, Building } from 'lucide-react';
+import { API_BASE_URL } from '../services/api';
 
 const CATEGORIES = [
   { key: 'ALL', label: 'All Certificates' },
@@ -32,7 +33,7 @@ const CertificatesManagement = () => {
   const fetchCertificates = async () => {
     try {
       setLoading(true);
-      const res = await fetch('http://127.0.0.1:8000/api/faculty/certificates/', {
+      const res = await fetch(`${API_BASE_URL}/faculty/certificates/`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
       });
       if (res.ok) {
@@ -114,7 +115,7 @@ const CertificatesManagement = () => {
     if (formData.proof_document) data.append('proof_document', formData.proof_document);
 
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/faculty/certificates/', {
+      const res = await fetch(`${API_BASE_URL}/faculty/certificates/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`

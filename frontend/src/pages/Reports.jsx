@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchAPI } from '../services/api';
+import { fetchAPI, API_BASE_URL } from '../services/api';
 import { Download, FileSpreadsheet, FileText, CheckCircle, BarChart2, Filter, Award, ShieldCheck, Archive, Eye, RefreshCw, Printer } from 'lucide-react';
 
 const Reports = () => {
@@ -141,16 +141,16 @@ const Reports = () => {
   };
 
   const handleDownloadZipBundle = () => {
-    const url = `http://127.0.0.1:8000/api/faculty/certificates/download-zip/?department=${selectedDept === 'ALL' ? '' : selectedDept}`;
+    const url = `${API_BASE_URL}/faculty/certificates/download-zip/?department=${selectedDept === 'ALL' ? '' : selectedDept}`;
     window.open(url, '_blank');
   };
 
   const handleExportCompliance = (type) => {
-    window.open(`http://127.0.0.1:8000/api/analytics/export/compliance/${type}/`, '_blank');
+    window.open(`${API_BASE_URL}/analytics/export/compliance/${type}/`, '_blank');
   };
 
   const handleExportAppraisal = () => {
-    window.open('http://127.0.0.1:8000/api/analytics/export/appraisal/', '_blank');
+    window.open(`${API_BASE_URL}/analytics/export/appraisal/`, '_blank');
   };
 
   if (loading) {
@@ -194,7 +194,7 @@ const Reports = () => {
               Open & Download IQAC Report
             </a>
             <a
-              href="http://127.0.0.1:8000/api/faculty/reports/iqac-monthly/export-excel/"
+              href={`${API_BASE_URL}/faculty/reports/iqac-monthly/export-excel/`}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white text-sm font-bold border border-white/20 backdrop-blur-xs transition"

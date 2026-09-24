@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Plus, Clock, FileText, CheckCircle2, XCircle, AlertCircle, Calendar, Briefcase, Award, Filter, Search } from 'lucide-react';
+import { API_BASE_URL } from '../services/api';
 
 const PREDEFINED_ROLES = [
   'Exam Coordinator',
@@ -38,7 +39,7 @@ const RolesManagement = () => {
   const fetchRoles = async () => {
     try {
       setLoading(true);
-      const res = await fetch('http://127.0.0.1:8000/api/faculty/roles/', {
+      const res = await fetch(`${API_BASE_URL}/faculty/roles/`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
       });
       if (res.ok) {
@@ -119,7 +120,7 @@ const RolesManagement = () => {
     if (formData.proof_document) data.append('proof_document', formData.proof_document);
 
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/faculty/roles/', {
+      const res = await fetch(`${API_BASE_URL}/faculty/roles/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`
