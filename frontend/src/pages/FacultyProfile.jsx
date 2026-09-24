@@ -9,16 +9,25 @@ import {
 import { QRCodeCanvas } from 'qrcode.react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts';
 
-function formatAcademicName(username, role) {
-  if (!username) return 'Dr. Faculty Member';
-  if (username.includes('@')) {
-    const raw = username.split('@')[0];
-    const cleaned = raw.replace(/\d+$/, '');
-    const words = cleaned.replace(/[._-]/g, ' ').split(' ').filter(Boolean);
-    const capitalized = words.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+function formatAcademicName(profile) {
+  if (!profile) return 'Faculty Member';
+  if (profile.first_name || profile.last_name) {
+    const full = `${profile.first_name || ''} ${profile.last_name || ''}`.trim();
+    return full.startsWith('Dr.') ? full : `Dr. ${full}`;
+  }
+  try {
+    const info = JSON.parse(localStorage.getItem('current_user_info') || '{}');
+    if (info.firstName || info.lastName) {
+      const full = `${info.firstName || ''} ${info.lastName || ''}`.trim();
+      return full.startsWith('Dr.') ? full : `Dr. ${full}`;
+    }
+  } catch (e) {}
+  if (profile.username) {
+    const raw = profile.username.replace(/@.*$/, '').replace(/\d+$/, '');
+    const capitalized = raw.replace(/[._-]/g, ' ').split(' ').filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     return capitalized ? `Dr. ${capitalized}` : 'Dr. Faculty Member';
   }
-  return username.startsWith('Dr.') ? username : `Dr. ${username}`;
+  return 'Dr. Faculty Member';
 }
 
 const FacultyProfile = () => {
@@ -44,8 +53,8 @@ const FacultyProfile = () => {
     setSyncing(true);
     setTimeout(() => {
       setSyncing(false);
-      alert('Successfully synchronized with ORCID and Google Scholar! 12 new records indexed.');
-    }, 1800);
+      alert('ORCID & Research synchronization check completed.');
+    }, 1500);
   };
 
   const handleCopyEmail = (email) => {
@@ -111,9 +120,12 @@ const FacultyProfile = () => {
     );
   }
 
-  const displayName = formatAcademicName(profile.username, profile.role);
+  const displayName = formatAcademicName(profile);
   const userEmail = profile.email || profile.username;
   const departmentName = profile.department || 'Artificial Intelligence & Data Science';
+  const pubsCount = profile.recent_publications?.length || profile.counts?.publications || 0;
+  const patsCount = patentsList.length || profile.counts?.patents || 0;
+  const fdpsCount = fdpsList.length || profile.counts?.fdps || 0;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-12">
@@ -125,7 +137,7 @@ const FacultyProfile = () => {
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.2),transparent_70%)]"></div>
           <div className="absolute top-4 right-6 flex items-center gap-2 bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-full text-xs font-semibold text-white border border-white/30 shadow-sm">
             <ShieldCheck size={14} className="text-emerald-300" />
-            <span>Verified Academic ID: FAC-{profile.username?.slice(0, 5).toUpperCase() || '8842'}</span>
+            <span>Verified Academic ID: {profile.employee_id || `FAC-${(profile.username || 'USR').slice(0, 5).toUpperCase()}`}</span>
           </div>
         </div>
 
@@ -175,10 +187,16 @@ const FacultyProfile = () => {
                 {copiedEmail ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} className="text-gray-400" />}
               </button>
 
-              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-medium bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-800/40">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                ORCID: 0000-0002-8821-764X
-              </span>
+              {profile.orcid_id ? (
+                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-medium bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-800/40">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  ORCID: {profile.orcid_id}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 border border-gray-200 dark:border-slate-700">
+                  ORCID: Not Linked
+                </span>
+              )}
             </div>
           </div>
 
@@ -254,21 +272,25 @@ const FacultyProfile = () => {
         {/* Left Column: Stats, Digital Twin & Institutional Roles */}
         <div className="space-y-6">
           
-          {/* 🏅 Research Achievement Badges (Clean No-Scrollbar Grid) */}
+          {/* 🏅 Research Achievement Badges */}
           <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-800 transition-colors">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider">Research Honors</h3>
-              <span className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold">4 Unlocked</span>
+              <span className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold">{pubsCount > 0 ? `${Math.min(4, pubsCount + patsCount)} Unlocked` : '0 Unlocked'}</span>
             </div>
             <div className="grid grid-cols-4 gap-2.5">
-              {(profile.badges || [
-                {"icon": "🥇", "title": "100 Citations"},
-                {"icon": "📚", "title": "25 Pubs"},
-                {"icon": "💡", "title": "Patent Holder"},
-                {"icon": "🏆", "title": "Top Faculty"}
-              ]).map((badge, i) => (
-                <div key={i} className="flex flex-col items-center justify-center p-2 rounded-2xl bg-gradient-to-b from-gray-50 to-amber-50/30 dark:from-slate-800 dark:to-slate-800/60 border border-gray-100 dark:border-slate-700/60 hover:scale-105 transition-transform cursor-pointer group shadow-xs">
-                  <div className="w-10 h-10 bg-amber-100/60 dark:bg-amber-950/40 rounded-xl flex items-center justify-center text-xl shadow-xs group-hover:rotate-6 transition-transform mb-1">
+              {[
+                { icon: "🚀", title: "Active Member", unlocked: true },
+                { icon: "📚", title: "Publications", unlocked: pubsCount > 0 },
+                { icon: "💡", title: "Patent Holder", unlocked: patsCount > 0 },
+                { icon: "🏆", title: "Research Lead", unlocked: pubsCount >= 5 }
+              ].map((badge, i) => (
+                <div key={i} className={`flex flex-col items-center justify-center p-2 rounded-2xl border transition-all ${
+                  badge.unlocked 
+                    ? 'bg-gradient-to-b from-gray-50 to-amber-50/30 dark:from-slate-800 dark:to-slate-800/60 border-gray-100 dark:border-slate-700/60 hover:scale-105' 
+                    : 'bg-gray-50/40 dark:bg-slate-900 border-dashed border-gray-200 dark:border-slate-800 opacity-40'
+                }`}>
+                  <div className="w-10 h-10 bg-amber-100/60 dark:bg-amber-950/40 rounded-xl flex items-center justify-center text-xl mb-1">
                     {badge.icon}
                   </div>
                   <span className="text-[10px] font-bold text-gray-700 dark:text-slate-300 text-center leading-tight truncate w-full">{badge.title}</span>
@@ -277,7 +299,7 @@ const FacultyProfile = () => {
             </div>
           </div>
 
-          {/* ⚡ Digital Research Twin Card (AI Dashboard) */}
+          {/* ⚡ Digital Research Twin Card */}
           <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-purple-950 p-6 rounded-3xl shadow-lg text-white relative overflow-hidden border border-indigo-900/50">
             <div className="absolute -top-16 -right-16 w-44 h-44 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none"></div>
             
@@ -295,29 +317,29 @@ const FacultyProfile = () => {
             <div className="grid grid-cols-2 gap-3 mb-5 relative z-10">
               <div className="bg-white/5 backdrop-blur-md rounded-2xl p-3.5 border border-white/10 hover:bg-white/10 transition-colors">
                 <p className="text-indigo-200 text-xs font-medium mb-1">Research Health</p>
-                <p className="text-2xl font-black text-emerald-400 tracking-tight">{profile.digital_twin?.research_health || '87%'}</p>
+                <p className="text-2xl font-black text-emerald-400 tracking-tight">{pubsCount > 0 ? `${Math.min(100, pubsCount * 25)}%` : '0%'}</p>
               </div>
               <div className="bg-white/5 backdrop-blur-md rounded-2xl p-3.5 border border-white/10 hover:bg-white/10 transition-colors">
                 <p className="text-indigo-200 text-xs font-medium mb-1">Promotion Chance</p>
-                <p className="text-2xl font-black text-amber-300 tracking-tight">{profile.digital_twin?.promotion_chance || '92%'}</p>
+                <p className="text-2xl font-black text-amber-300 tracking-tight">{pubsCount > 2 ? 'Strong' : 'In Progress'}</p>
               </div>
               <div className="bg-white/5 backdrop-blur-md rounded-2xl p-3.5 border border-white/10 hover:bg-white/10 transition-colors">
                 <p className="text-indigo-200 text-xs font-medium mb-1">Predicted API</p>
-                <p className="text-xl font-bold text-white tracking-tight">{profile.digital_twin?.predicted_api || '156'}</p>
+                <p className="text-xl font-bold text-white tracking-tight">{(pubsCount * 15) + (patsCount * 20)}</p>
               </div>
               <div className="bg-white/5 backdrop-blur-md rounded-2xl p-3.5 border border-white/10 hover:bg-white/10 transition-colors">
                 <p className="text-indigo-200 text-xs font-medium mb-1">Growth Index</p>
-                <p className="text-xl font-bold text-white tracking-tight">{profile.digital_twin?.research_growth || 'High'}</p>
+                <p className="text-xl font-bold text-white tracking-tight">{pubsCount > 0 ? 'Active' : 'Initial Phase'}</p>
               </div>
             </div>
             
             <div className="pt-4 border-t border-white/10 relative z-10">
               <div className="flex items-center justify-between text-xs mb-1.5">
                 <span className="text-indigo-200 font-medium">Research Impact Score</span>
-                <span className="text-xl font-black text-white">{profile.impact_score || 845} <span className="text-xs text-indigo-300 font-normal">/ 1000</span></span>
+                <span className="text-xl font-black text-white">{Math.min(1000, (pubsCount * 60) + (patsCount * 100))} <span className="text-xs text-indigo-300 font-normal">/ 1000</span></span>
               </div>
               <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden p-0.5 border border-white/5">
-                <div className="bg-gradient-to-r from-emerald-400 via-cyan-400 to-indigo-400 h-full rounded-full shadow-[0_0_12px_rgba(52,211,153,0.6)]" style={{ width: '84.5%' }}></div>
+                <div className="bg-gradient-to-r from-emerald-400 via-cyan-400 to-indigo-400 h-full rounded-full shadow-[0_0_12px_rgba(52,211,153,0.6)]" style={{ width: `${Math.min(100, ((pubsCount * 60) + (patsCount * 100)) / 10)}%` }}></div>
               </div>
             </div>
           </div>
@@ -338,7 +360,10 @@ const FacultyProfile = () => {
                   </RadarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="flex h-full items-center justify-center text-gray-400 text-xs">No radar data available</div>
+                <div className="flex flex-col h-full items-center justify-center text-gray-400 text-xs text-center p-4">
+                  <Target size={28} className="text-gray-300 dark:text-slate-600 mb-2" />
+                  <p>Radar chart generates automatically as you record publications, patents, and grants.</p>
+                </div>
               )}
             </div>
           </div>
@@ -365,21 +390,8 @@ const FacultyProfile = () => {
                   </div>
                 ))
               ) : (
-                <div className="space-y-2">
-                  <div className="p-3 bg-indigo-50/50 dark:bg-indigo-950/30 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-bold text-indigo-900 dark:text-indigo-200">Exam Coordinator</p>
-                      <p className="text-[11px] text-indigo-600 dark:text-indigo-400">AY: 2025–2026</p>
-                    </div>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">Verified</span>
-                  </div>
-                  <div className="p-3 bg-purple-50/50 dark:bg-purple-950/30 rounded-2xl border border-purple-100 dark:border-purple-900/50 flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-bold text-purple-900 dark:text-purple-200">IQAC Department Member</p>
-                      <p className="text-[11px] text-purple-600 dark:text-purple-400">AY: 2025–2026</p>
-                    </div>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">Verified</span>
-                  </div>
+                <div className="p-4 bg-gray-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-gray-200 dark:border-slate-700 text-center text-xs text-gray-400">
+                  No institutional roles assigned yet. Add roles from Roles Management.
                 </div>
               )}
             </div>
@@ -549,7 +561,7 @@ const FacultyProfile = () => {
               <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
                 <Calendar className="text-emerald-500" size={18} /> Academic Contribution Activity
               </h3>
-              <span className="text-xs font-semibold text-gray-400">142 Activities in 2025–26</span>
+              <span className="text-xs font-semibold text-gray-400">{pubsCount + patsCount + fdpsCount} Activities Recorded</span>
             </div>
 
             <div className="flex flex-col">
@@ -557,19 +569,17 @@ const FacultyProfile = () => {
                 {Array.from({ length: 14 }).map((_, col) => (
                   <div key={col} className="flex flex-col gap-1.5 flex-shrink-0">
                     {Array.from({ length: 7 }).map((_, row) => {
-                      const isActive = ((col * 7 + row) % 3 === 0) || ((col * 7 + row) % 5 === 0);
+                      const hasActivities = (pubsCount + patsCount + fdpsCount) > 0;
+                      const isActive = hasActivities && (((col * 7 + row) % 4 === 0));
                       let bgClass = "bg-gray-100 dark:bg-slate-800";
                       if (isActive) {
-                        const val = (col + row) % 3;
-                        if (val === 0) bgClass = "bg-emerald-500 dark:bg-emerald-500";
-                        else if (val === 1) bgClass = "bg-emerald-400 dark:bg-emerald-400";
-                        else bgClass = "bg-emerald-200 dark:bg-emerald-800";
+                        bgClass = "bg-emerald-500 dark:bg-emerald-500";
                       }
                       return (
                         <div 
                           key={`${col}-${row}`} 
                           className={`w-4 h-4 rounded-md ${bgClass} hover:ring-2 hover:ring-emerald-400 transition-all cursor-pointer`}
-                          title={isActive ? `Contribution on Week ${col+1}, Day ${row+1}` : "No activities"}
+                          title={isActive ? `Contribution activity logged` : "No activity"}
                         />
                       );
                     })}
@@ -595,36 +605,36 @@ const FacultyProfile = () => {
             {/* Goals Tracker */}
             <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-800 p-6 transition-colors">
               <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                <Target className="text-indigo-500" size={18} /> 2026 Goals Tracker
+                <Target className="text-indigo-500" size={18} /> Academic Goals Tracker
               </h3>
               <div className="space-y-4">
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-xs font-bold text-gray-700 dark:text-slate-300">SCOPUS Publications</span>
-                    <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{profile.counts?.publications || 2} / 5</span>
+                    <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{pubsCount} / 5</span>
                   </div>
                   <div className="w-full bg-gray-100 dark:bg-slate-800 rounded-full h-2">
-                    <div className="bg-indigo-500 h-2 rounded-full" style={{ width: `${Math.min(100, ((profile.counts?.publications || 2) / 5) * 100)}%` }}></div>
+                    <div className="bg-indigo-500 h-2 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, (pubsCount / 5) * 100)}%` }}></div>
                   </div>
                 </div>
                 
                 <div>
                   <div className="flex justify-between items-center mb-1">
-                    <span className="text-xs font-bold text-gray-700 dark:text-slate-300">Patent Publications</span>
-                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{profile.counts?.patents || 1} / 2</span>
+                    <span className="text-xs font-bold text-gray-700 dark:text-slate-300">Patent Applications</span>
+                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{patsCount} / 2</span>
                   </div>
                   <div className="w-full bg-gray-100 dark:bg-slate-800 rounded-full h-2">
-                    <div className="bg-emerald-500 h-2 rounded-full" style={{ width: `${Math.min(100, ((profile.counts?.patents || 1) / 2) * 100)}%` }}></div>
+                    <div className="bg-emerald-500 h-2 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, (patsCount / 2) * 100)}%` }}></div>
                   </div>
                 </div>
                 
                 <div>
                   <div className="flex justify-between items-center mb-1">
-                    <span className="text-xs font-bold text-gray-700 dark:text-slate-300">FDPs & Workshops</span>
-                    <span className="text-xs font-bold text-purple-600 dark:text-purple-400">{profile.counts?.fdps || 3} / 4</span>
+                    <span className="text-xs font-bold text-gray-700 dark:text-slate-300">FDPs & Certifications</span>
+                    <span className="text-xs font-bold text-purple-600 dark:text-purple-400">{fdpsCount} / 4</span>
                   </div>
                   <div className="w-full bg-gray-100 dark:bg-slate-800 rounded-full h-2">
-                    <div className="bg-purple-500 h-2 rounded-full" style={{ width: `${Math.min(100, ((profile.counts?.fdps || 3) / 4) * 100)}%` }}></div>
+                    <div className="bg-purple-500 h-2 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, (fdpsCount / 4) * 100)}%` }}></div>
                   </div>
                 </div>
               </div>
@@ -636,21 +646,23 @@ const FacultyProfile = () => {
                 <TrendingUp className="text-emerald-500" size={18} /> Career Milestones
               </h3>
               <div className="space-y-3 relative">
-                {(profile.career_timeline || [
-                  {"year": "2020", "event": "Joined as Assistant Professor"},
-                  {"year": "2022", "event": "Published Q1 SCI Journal Paper"},
-                  {"year": "2024", "event": "Awarded Research Excellence Award"}
-                ]).slice(0, 3).map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-3">
-                    <div className="w-7 h-7 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center justify-center flex-shrink-0">
-                      {item.year.slice(-2)}'
+                {(advancedData?.timeline && advancedData.timeline.length > 0) ? (
+                  advancedData.timeline.slice(0, 3).map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-3">
+                      <div className="w-7 h-7 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center justify-center flex-shrink-0">
+                        {String(item.year || '25').slice(-2)}'
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-gray-800 dark:text-slate-200">{item.title || item.event}</p>
+                        <p className="text-[10px] text-gray-400">Year: {item.year || 'Current'}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs font-bold text-gray-800 dark:text-slate-200">{item.event}</p>
-                      <p className="text-[10px] text-gray-400">Year: {item.year}</p>
-                    </div>
+                  ))
+                ) : (
+                  <div className="p-4 bg-gray-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-gray-200 dark:border-slate-700 text-center text-xs text-gray-400">
+                    Milestones and achievements will appear as you record career history.
                   </div>
-                ))}
+                )}
               </div>
             </div>
 
@@ -661,7 +673,7 @@ const FacultyProfile = () => {
             <h3 className="text-base font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
               <Users className="text-indigo-600 dark:text-indigo-400" size={18} /> AI Recommended Collaborators
             </h3>
-            <p className="text-xs text-gray-500 dark:text-slate-400 mb-4">Recommended peers in AI, Data Mining & Deep Learning to co-author grants.</p>
+            <p className="text-xs text-gray-500 dark:text-slate-400 mb-4">Recommended peers in {departmentName} to co-author grants and papers.</p>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="flex items-center justify-between p-3.5 bg-white dark:bg-slate-800/80 rounded-2xl border border-indigo-50 dark:border-slate-700 shadow-xs">
@@ -671,11 +683,11 @@ const FacultyProfile = () => {
                   </div>
                   <div>
                     <h4 className="font-bold text-xs text-gray-900 dark:text-white">Dr. D. Ramana</h4>
-                    <p className="text-[11px] text-gray-400">Deep Learning • 28 Pubs</p>
+                    <p className="text-[11px] text-gray-400">{departmentName} • Research Peer</p>
                   </div>
                 </div>
                 <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950 px-2 py-1 rounded-lg">
-                  89% Match
+                  92% Match
                 </span>
               </div>
 
@@ -686,11 +698,11 @@ const FacultyProfile = () => {
                   </div>
                   <div>
                     <h4 className="font-bold text-xs text-gray-900 dark:text-white">Dr. S. Kulkarni</h4>
-                    <p className="text-[11px] text-gray-400">NLP & LLMs • 19 Pubs</p>
+                    <p className="text-[11px] text-gray-400">{departmentName} • Research Peer</p>
                   </div>
                 </div>
                 <span className="text-[11px] font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950 px-2 py-1 rounded-lg">
-                  82% Match
+                  88% Match
                 </span>
               </div>
             </div>

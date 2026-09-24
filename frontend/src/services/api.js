@@ -8,56 +8,84 @@ const getAuthHeaders = () => {
   };
 };
 
-// Dynamic User Datastore - Starts Clean & Updates with Actual User Entries
-const INITIAL_MOCK_STORE = {
-  profile: {
+const getInitialProfileForUser = () => {
+  let userInfo = {};
+  try {
+    userInfo = JSON.parse(localStorage.getItem('current_user_info') || '{}');
+  } catch (e) {}
+
+  const email = localStorage.getItem('current_user_email') || userInfo.email || 'faculty@institution.edu';
+  const firstName = userInfo.firstName || (email.split('@')[0] || 'Faculty');
+  const lastName = userInfo.lastName || '';
+  const department = userInfo.department || 'AI&DS';
+  const phone = userInfo.phone || '';
+
+  return {
     id: 1,
-    username: 'anuguvaishnavi',
-    email: 'anuguvaishnavireddy0@gmail.com',
-    first_name: 'Dr. Vaishnavi',
-    last_name: 'Anugu',
-    department: 'CSE',
-    designation: 'Faculty / Lead',
-    employee_id: 'AVN-CSE-001',
-    phone_number: '',
-    date_of_joining: '2024-06-01',
-    highest_qualification: 'Ph.D in Engineering',
+    username: userInfo.username || email.split('@')[0],
+    email: email,
+    first_name: firstName,
+    last_name: lastName,
+    department: department,
+    designation: 'Faculty',
+    employee_id: `FAC-${(userInfo.username || email.split('@')[0]).slice(0, 5).toUpperCase()}`,
+    phone_number: phone,
+    date_of_joining: new Date().toISOString().split('T')[0],
+    highest_qualification: 'Post Graduate / Ph.D',
     scopus_id: '',
     orcid_id: '',
     google_scholar_id: '',
     total_citations: 0,
     h_index: 0,
-    i10_index: 0
-  },
-  publications: [],
-  patents: [],
-  grants: [],
-  roles: [],
-  certificates: [],
-  books: [],
-  'fdp-training': [],
-  consultancy: [],
-  certifications: [],
-  saved_reports: []
+    i10_index: 0,
+    badges: [],
+    radar_data: null,
+    digital_twin: {
+      research_health: '0%',
+      promotion_chance: 'Evaluating',
+      predicted_api: '0',
+      research_growth: 'Getting Started'
+    },
+    impact_score: 0
+  };
 };
 
 const getLocalMockStore = () => {
+  const defaultProfile = getInitialProfileForUser();
+  const baseStore = {
+    profile: defaultProfile,
+    publications: [],
+    patents: [],
+    grants: [],
+    roles: [],
+    certificates: [],
+    books: [],
+    'fdp-training': [],
+    consultancy: [],
+    certifications: [],
+    saved_reports: []
+  };
+
   try {
-    const userEmail = localStorage.getItem('current_user_email') || 'default_user';
+    const userEmail = localStorage.getItem('current_user_email') || defaultProfile.email;
     const saved = localStorage.getItem('fad_user_data_' + userEmail);
     if (saved) {
       const parsed = JSON.parse(saved);
-      return { ...INITIAL_MOCK_STORE, ...parsed };
+      return {
+        ...baseStore,
+        ...parsed,
+        profile: { ...defaultProfile, ...(parsed.profile || {}) }
+      };
     }
   } catch (e) {
     console.warn(e);
   }
-  return { ...INITIAL_MOCK_STORE };
+  return baseStore;
 };
 
 const saveLocalMockStore = (store) => {
   try {
-    const userEmail = localStorage.getItem('current_user_email') || 'default_user';
+    const userEmail = localStorage.getItem('current_user_email') || store.profile?.email || 'default_user';
     localStorage.setItem('fad_user_data_' + userEmail, JSON.stringify(store));
   } catch (e) {
     console.warn(e);
@@ -430,16 +458,18 @@ const handleMockFallback = (endpoint, options = {}) => {
     };
   }
   if (cleanEndpoint.includes('/growth-score') || cleanEndpoint.includes('/skill-gap') || cleanEndpoint.includes('/workload') || cleanEndpoint.includes('/student-impact') || cleanEndpoint.includes('/timeline')) {
+    const pubs = store.publications || [];
+    const grnts = store.grants || [];
+    const userMilestones = [
+      ...pubs.map(p => ({ year: String(p.year || new Date().getFullYear()), title: `Published: ${p.title || 'Paper'}`, type: 'Publication' })),
+      ...grnts.map(g => ({ year: String(g.sanction_date?.slice(0, 4) || new Date().getFullYear()), title: `Grant: ${g.project_title || 'Project'}`, type: 'Grant' }))
+    ];
     return {
-      growth_score: 94,
-      teaching_hours: 16,
-      lab_hours: 6,
-      students_mentored: 45,
-      results: [
-        { year: '2025', title: 'Promoted to Associate Professor', type: 'Milestone' },
-        { year: '2024', title: 'Sanctioned SERB CRG Grant ₹45 Lakhs', type: 'Grant' },
-        { year: '2023', title: 'Published 4 IEEE Transactions Papers', type: 'Publication' }
-      ]
+      growth_score: Math.min(100, pubs.length * 15),
+      teaching_hours: 0,
+      lab_hours: 0,
+      students_mentored: 0,
+      results: userMilestones
     };
   }
 
