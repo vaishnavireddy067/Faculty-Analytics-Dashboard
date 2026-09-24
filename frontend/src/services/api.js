@@ -30,34 +30,31 @@ const INITIAL_MOCK_STORE = {
     i10_index: 16
   },
   stats: {
-    total_faculty: 128,
-    total_publications: 314,
-    total_patents: 29,
-    total_grants: 18,
-    total_grants_amount: 14500000,
-    total_fdps: 87,
-    verified_publications: 289,
-    pending_verifications: 12,
-    pbas_average_score: 94.2,
-    role: 'FACULTY',
-    department_stats: [
-      { department: 'CSE', publications: 112, patents: 11, grants_amount: 5200000 },
-      { department: 'AI&DS', publications: 78, patents: 8, grants_amount: 3800000 },
-      { department: 'ECE', publications: 64, patents: 5, grants_amount: 3100000 },
-      { department: 'EEE', publications: 32, patents: 3, grants_amount: 1400000 },
-      { department: 'MECH', publications: 28, patents: 2, grants_amount: 1000000 }
+    role: 'HOD',
+    kpis: {
+      total_faculty: 128,
+      total_publications: 314,
+      total_patents: 29,
+      total_grants_amount: 14500000
+    },
+    trend_data: [
+      { name: '2021', publications: 42 },
+      { name: '2022', publications: 58 },
+      { name: '2023', publications: 74 },
+      { name: '2024', publications: 96 },
+      { name: '2025', publications: 114 }
     ],
-    publication_trends: [
-      { year: '2021', count: 42, citations: 56 },
-      { year: '2022', count: 58, citations: 92 },
-      { year: '2023', count: 74, citations: 148 },
-      { year: '2024', count: 96, citations: 215 },
-      { year: '2025', count: 114, citations: 342 }
+    dept_data: [
+      { name: 'CSE', value: 45 },
+      { name: 'ECE', value: 35 },
+      { name: 'AI&DS', value: 25 },
+      { name: 'MECH', value: 15 },
+      { name: 'CIVIL', value: 8 }
     ],
     recent_activities: [
-      { id: 1, title: 'Deep Learning in Precision Healthcare', type: 'Publication', author: 'Dr. Vaishnavi Anugu', date: '2025-08-14', status: 'VERIFIED' },
-      { id: 2, title: 'IoT Edge Framework for Smart Grid Monitoring', type: 'Patent', author: 'Dr. Ramesh Kumar', date: '2025-08-10', status: 'VERIFIED' },
-      { id: 3, title: 'AICTE Research Promotion Scheme Grant', type: 'Grant', author: 'Dr. S. Reddy', date: '2025-08-04', status: 'APPROVED' }
+      { id: 1, user: 'Dr. Vaishnavi Anugu', dept: 'CSE', action: 'Published: Deep Learning in Healthcare', time: 'Aug 14, 2025' },
+      { id: 2, user: 'Dr. Ramesh Kumar', dept: 'ECE', action: 'Patent: Smart Grid Edge Monitoring', time: 'Aug 10, 2025' },
+      { id: 3, user: 'Dr. S. Reddy', dept: 'AI&DS', action: 'Grant: AICTE Research Promotion Scheme', time: 'Aug 04, 2025' }
     ]
   },
   publications: [
