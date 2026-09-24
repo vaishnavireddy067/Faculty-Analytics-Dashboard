@@ -5,6 +5,7 @@ import {
   Layers, Award, BookOpen, Users, Briefcase, ChevronDown, 
   ChevronRight, Edit3, Save, Database, History, AlertCircle, Plus, X,
   Share2, Copy, Check, FolderArchive, PlusSquare, ExternalLink, Search
+} from 'lucide-react';
 import { fetchAPI, API_BASE_URL } from '../services/api';
 
 const IQACMonthlyReport = () => {
