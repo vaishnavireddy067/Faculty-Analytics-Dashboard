@@ -191,8 +191,12 @@ const Login = () => {
       localStorage.setItem(userDatastoreKey, JSON.stringify(initialStore));
     }
 
+    // Clear any previous session tokens so user must log in with their password
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+
     // Return to login screen with success message and prefilled username
-    setSuccessMsg(`Account created successfully for ${regEmail}! Please sign in with your password.`);
+    setSuccessMsg(`Account created successfully for ${regEmail}! Please enter your password to Sign In.`);
     setUsername(regEmail);
     setPassword('');
     setError('');
