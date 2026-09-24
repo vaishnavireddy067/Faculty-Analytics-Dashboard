@@ -147,8 +147,11 @@ const INITIAL_MOCK_STORE = {
 
 const getLocalMockStore = () => {
   try {
-    const saved = localStorage.getItem('fad_mock_store');
-    if (saved) return JSON.parse(saved);
+    const saved = localStorage.getItem('fad_mock_store_v2');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed?.stats?.kpis) return parsed;
+    }
   } catch (e) {
     console.warn(e);
   }
@@ -157,7 +160,7 @@ const getLocalMockStore = () => {
 
 const saveLocalMockStore = (store) => {
   try {
-    localStorage.setItem('fad_mock_store', JSON.stringify(store));
+    localStorage.setItem('fad_mock_store_v2', JSON.stringify(store));
   } catch (e) {
     console.warn(e);
   }
