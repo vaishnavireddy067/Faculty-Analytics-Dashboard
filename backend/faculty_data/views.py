@@ -1986,20 +1986,130 @@ def export_iqac_excel(request):
         ws.append(["-", "Nil / No entries", "-", "-", "-", "-", "-", "-", "-"])
     ws.append([])
 
+    # 2. Faculty Events
+    ws.append(["2. Programmes / Events organized for the faculties:"])
+    ws.append(["S.No", "Name of the Programme", "In Association with", "College/Department level", "Duration", "Chief Guest / Resource Person", "No. Registered", "Honorarium (Rs.)", "Misc Expenses (Rs.)"])
+    fac_events = sections.get("2_faculty_events", [])
+    if fac_events:
+        for idx, item in enumerate(fac_events, 1):
+            ws.append([item.get('s_no', idx), item.get('name', ''), item.get('association', '-'), item.get('level', ''), item.get('duration', ''), item.get('chief_guest', ''), item.get('faculty_count', '-'), item.get('honorarium', '-'), item.get('misc_expenses', '-')])
+    else:
+        ws.append(["-", "Nil / No entries", "-", "-", "-", "-", "-", "-", "-"])
+    ws.append([])
+
+    # 3. Value Added Courses
+    ws.append(["3. Value Added / Certification Courses conducted:"])
+    ws.append(["S.No", "Name of Course", "Resource Person", "Level", "Duration", "Contact Periods", "Students Registered", "Remuneration", "Target Students"])
+    vac = sections.get("3_value_added_courses", [])
+    if vac:
+        for idx, item in enumerate(vac, 1):
+            ws.append([item.get('s_no', idx), item.get('name', ''), item.get('resource_person', ''), item.get('level', ''), item.get('duration', ''), item.get('contact_periods', ''), item.get('students_registered', ''), item.get('remuneration', '-'), item.get('target_students', '')])
+    else:
+        ws.append(["-", "Nil / No entries", "-", "-", "-", "-", "-", "-", "-"])
+    ws.append([])
+
+    # 4. Advanced Learners
+    ws.append(["4. Activities Arranged/conducted for Advanced learners:"])
+    ws.append(["S.No", "Name of Activity", "Level", "Duration", "Contact Periods", "Chief Guest", "Honorarium", "Misc Expenses", "Target Students"])
+    adv = sections.get("4_advanced_learners", [])
+    if adv:
+        for idx, item in enumerate(adv, 1):
+            ws.append([item.get('s_no', idx), item.get('name', ''), item.get('level', ''), item.get('duration', ''), item.get('contact_periods', ''), item.get('chief_guest', ''), item.get('honorarium', '-'), item.get('misc_expenses', '-'), item.get('target_students', '')])
+    else:
+        ws.append(["-", "Nil / No entries", "-", "-", "-", "-", "-", "-", "-"])
+    ws.append([])
+
+    # 5. Student Achievements
+    ws.append(["5. Student Achievements:"])
+    # 5.a Curricular
+    ws.append(["a. Curricular & Co-Curricular Activities:"])
+    ws.append(["S.No", "Roll No", "Name", "Year & Sem", "Event Name", "Organized by", "Duration", "Prizes won"])
+    for idx, item in enumerate(sections.get("5_student_achievements", {}).get("a_curricular", []), 1):
+        ws.append([item.get('s_no', idx), item.get('roll_no', ''), item.get('name', ''), item.get('year_sem', ''), item.get('event_name', ''), item.get('organized_by', ''), item.get('duration', ''), item.get('prizes', '-')])
+    ws.append([])
+
+    # 5.c Certifications
+    ws.append(["c. Online Certification Courses / Internships:"])
+    ws.append(["S.No", "Roll No", "Name", "Year & Sem", "Course / Internship Name", "Organized by", "Duration", "Grade / Status"])
+    for idx, item in enumerate(sections.get("5_student_achievements", {}).get("c_online_certifications", []), 1):
+        ws.append([item.get('s_no', idx), item.get('roll_no', ''), item.get('name', ''), item.get('year_sem', ''), item.get('course_name', ''), item.get('organized_by', ''), item.get('duration', ''), item.get('grade', '-')])
+    ws.append([])
+
     # 5.d Placements
-    ws.append(["5.d Placements:"])
+    ws.append(["d. Placements:"])
     ws.append(["S.No", "Name", "Roll No", "Company", "Date of Appointment", "Package"])
     placements_ds = sections.get("5_student_achievements", {}).get("d_placements", {}).get("ds_byd", [])
     for idx, p in enumerate(placements_ds, 1):
         ws.append([p.get('s_no', idx), p.get('name', ''), p.get('roll_no', ''), p.get('company', 'BYD'), p.get('date', ''), p.get('package', '6.5 LPA')])
+    placements_aids = sections.get("5_student_achievements", {}).get("d_placements", {}).get("aids_byd", [])
+    for idx, p in enumerate(placements_aids, len(placements_ds) + 1):
+        ws.append([p.get('s_no', idx), p.get('name', ''), p.get('roll_no', ''), p.get('company', 'BYD'), p.get('date', ''), p.get('package', '6.5 LPA')])
+    ws.append([])
+
+    # 6. Faculty Achievements
+    ws.append(["6. Faculty Achievements:"])
+    # 6.a Journal Publications
+    ws.append(["a. Journal Publications:"])
+    ws.append(["S.No", "Authors", "Title of Paper", "Journal Name", "Volume, Issue, Year", "Indexing"])
+    for idx, p in enumerate(sections.get("6_faculty_achievements", {}).get("a_journal_publications", []), 1):
+        ws.append([p.get('s_no', idx), p.get('authors', ''), p.get('title', ''), p.get('journal', ''), p.get('volume_issue', ''), p.get('indexing', '')])
+    ws.append([])
+
+    # 6.c Patents
+    ws.append(["c. Patents Published/ Granted:"])
+    ws.append(["S.No", "Authors", "Patent Title", "Agency", "Filing No. & Year", "Status"])
+    for idx, pt in enumerate(sections.get("6_faculty_achievements", {}).get("c_patents", []), 1):
+        ws.append([pt.get('s_no', idx), pt.get('authors', ''), pt.get('title', ''), pt.get('agency', ''), pt.get('filing_no_year', ''), pt.get('status', '')])
     ws.append([])
 
     # 6.g FDPs attended
-    ws.append(["6.g Workshops/FDPs/STTPs attended:"])
-    ws.append(["S.No", "Name of the Faculty", "Name of Workshop/FDP/STTP", "Organized by", "Duration"])
-    fdps = sections.get("6_faculty_achievements", {}).get("g_workshops_attended", [])
-    for idx, f in enumerate(fdps, 1):
+    ws.append(["g. Workshops/FDPs/STTPs attended:"])
+    ws.append(["S.No", "Faculty Name", "Program Name", "Organized by", "Duration"])
+    for idx, f in enumerate(sections.get("6_faculty_achievements", {}).get("g_workshops_attended", []), 1):
         ws.append([f.get('s_no', idx), f.get('faculty_name', ''), f.get('program_name', ''), f.get('organized_by', ''), f.get('duration', '')])
+    ws.append([])
+
+    # 7. Non-teaching training
+    ws.append(["7. Training programs conducted for Non-Teaching Staff:"])
+    ws.append(["S.No", "Training Program Name", "Target Staff", "Resource Person", "Duration", "Participants"])
+    for idx, t in enumerate(sections.get("7_non_teaching_training", []), 1):
+        ws.append([t.get('s_no', idx), t.get('program_name', ''), t.get('target_staff', ''), t.get('resource_person', ''), t.get('duration', ''), t.get('participants', '')])
+    ws.append([])
+
+    # 8. Infrastructure
+    ws.append(["8. Investment on Infrastructure:"])
+    ws.append(["S.No", "Infrastructure Name", "Specifications", "Quantity", "Date of Purchase", "Supplier", "Amount Paid (Rs.)"])
+    for idx, inf in enumerate(sections.get("8_infrastructure_investment", []), 1):
+        ws.append([inf.get('s_no', idx), inf.get('name', ''), inf.get('specs', ''), inf.get('quantity', ''), inf.get('date', ''), inf.get('supplier', ''), inf.get('amount', '')])
+    ws.append([])
+
+    # 9. MoUs
+    ws.append(["9. MoUs signed:"])
+    ws.append(["S.No", "Institution / Industry", "Purpose of MoU", "Date of Signing", "Validity", "Activities Planned"])
+    for idx, m in enumerate(sections.get("9_mous_signed", []), 1):
+        ws.append([m.get('s_no', idx), m.get('company', ''), m.get('purpose', ''), m.get('date', ''), m.get('validity', ''), m.get('activities', '')])
+    ws.append([])
+
+    # Custom Tables
+    for ct in sections.get("custom_tables", []):
+        ws.append([ct.get('title', 'Custom Section')])
+        cols = ct.get('columns', [])
+        ws.append(cols)
+        for r in ct.get('rows', []):
+            ws.append([r.get(c, '') for c in cols])
+        ws.append([])
+
+    # 10, 11, 12
+    ws.append(["10. Alumni Activities (if any):"])
+    ws.append([sections.get("10_alumni_activities") or "Nil"])
+    ws.append([])
+
+    ws.append(["11. Parent Teacher meetings (if any):"])
+    ws.append([sections.get("11_parent_teacher_meetings") or "Nil"])
+    ws.append([])
+
+    ws.append(["12. Other Information (if any):"])
+    ws.append([sections.get("12_other_information") or "Nil"])
     ws.append([])
 
     ws.append(["DEPARTMENT IQAC COORDINATOR", "", "", "", "", "HOD"])
