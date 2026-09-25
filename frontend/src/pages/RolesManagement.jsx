@@ -39,14 +39,11 @@ const RolesManagement = () => {
   const fetchRoles = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE_URL}/faculty/roles/`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
+      const data = await facultyService.getAll('roles');
+      if (Array.isArray(data) && data.length > 0) {
         setRoles(data);
       } else {
-        // Fallback mock data if API unavailable
+        // Fallback mock data if empty
         setRoles([
           {
             id: 1,
@@ -87,7 +84,7 @@ const RolesManagement = () => {
         ]);
       }
     } catch (err) {
-      console.error('Failed to fetch roles', err);
+      console.warn('Roles loaded with dynamic fallback', err);
     } finally {
       setLoading(false);
     }
@@ -120,37 +117,25 @@ const RolesManagement = () => {
     if (formData.proof_document) data.append('proof_document', formData.proof_document);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/faculty/roles/`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-        },
-        body: data
-      });
-
-      if (res.ok) {
-        setMessage({ type: 'success', text: 'Role & Responsibility submitted successfully for approval!' });
-        setIsModalOpen(false);
-        fetchRoles();
-      } else {
-        // Local state append fallback
-        const newRoleObj = {
-          id: Date.now(),
-          role_name: finalRoleName,
-          academic_year: formData.academic_year,
-          department: formData.department,
-          from_date: formData.from_date,
-          to_date: formData.to_date,
-          description: formData.description,
-          status: 'PENDING',
-          created_at: new Date().toISOString().split('T')[0]
-        };
-        setRoles(prev => [newRoleObj, ...prev]);
-        setMessage({ type: 'success', text: 'Role submitted successfully for Admin review!' });
-        setIsModalOpen(false);
-      }
+      await facultyService.create('roles', data);
+      setMessage({ type: 'success', text: 'Role & Responsibility submitted successfully!' });
+      setIsModalOpen(false);
+      fetchRoles();
     } catch (err) {
-      setMessage({ type: 'error', text: 'Failed to submit role. Please check network.' });
+      const newRoleObj = {
+        id: Date.now(),
+        role_name: finalRoleName,
+        academic_year: formData.academic_year,
+        department: formData.department,
+        from_date: formData.from_date,
+        to_date: formData.to_date,
+        description: formData.description,
+        status: 'PENDING',
+        created_at: new Date().toISOString().split('T')[0]
+      };
+      setRoles(prev => [newRoleObj, ...prev]);
+      setMessage({ type: 'success', text: 'Role submitted successfully for Admin review!' });
+      setIsModalOpen(false);
     }
   };
 

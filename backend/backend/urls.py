@@ -6,7 +6,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework_simplejwt.views import TokenRefreshView
-from core.views import CustomTokenObtainPairView, api_register
+from core.views import CustomTokenObtainPairView, api_register, google_auth_login, google_auth_config
 from faculty_data.views import system_health_check
 
 urlpatterns = [
@@ -14,6 +14,8 @@ urlpatterns = [
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/register/', api_register, name='api_register'),
+    path('api/auth/google/', google_auth_login, name='google_auth_login'),
+    path('api/auth/google/config/', google_auth_config, name='google_auth_config'),
     path('api/health/', system_health_check, name='system_health_check_root'),
     path('api/analytics/', include('analytics.urls')),
     path('api/faculty/', include('faculty_data.urls')),

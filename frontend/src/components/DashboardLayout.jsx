@@ -46,15 +46,32 @@ const DashboardLayout = () => {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
+        const userInfoStr = localStorage.getItem('current_user_info');
+        if (userInfoStr) {
+          try {
+            const parsed = JSON.parse(userInfoStr);
+            if (parsed.username || parsed.firstName || parsed.email) {
+              setUsername(parsed.firstName || parsed.username || parsed.email.split('@')[0]);
+            }
+          } catch(e) {}
+        }
+        const userEmail = localStorage.getItem('current_user_email');
+        if (userEmail && (!username || username === 'Faculty')) {
+          setUsername(userEmail.split('@')[0]);
+        }
+
         const res = await fetch(`${API_BASE_URL}/faculty/profile/`, {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setUsername(data.username || 'Faculty');
+        }).catch(() => null);
+        
+        if (res && res.ok) {
+          const data = await res.json().catch(() => null);
+          if (data && data.username) {
+            setUsername(data.username);
+          }
         }
       } catch (err) {
-        console.error('Failed to load profile', err);
+        console.warn('Profile load silent fallback:', err);
       }
     };
     fetchProfile();

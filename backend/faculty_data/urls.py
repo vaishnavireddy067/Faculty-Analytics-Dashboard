@@ -7,7 +7,7 @@ from .views import (
     FacultyGoalViewSet, FacultyTimelineViewSet, DiscussionPostViewSet, ResearchAssetViewSet,
     FacultyRoleViewSet, CertificateViewSet, consolidated_report, download_certificate_bundle,
     faculty_profile, faculty_settings, export_cv, analyze_feedback, plagiarism_scan,
-    ai_predict, ai_copilot, ai_trends, voice_parse, document_verify,
+    ai_predict, ai_copilot, ai_trends, voice_parse, document_verify, test_gemini_key, ai_status,
     analytics_ranking, admin_dashboard,
     growth_score, team_builder, publication_impact, research_map, accreditation_package,
     newsletter_generator, skill_gap, funding_finder, workload_analyzer, student_impact,

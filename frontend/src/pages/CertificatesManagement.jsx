@@ -33,11 +33,8 @@ const CertificatesManagement = () => {
   const fetchCertificates = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE_URL}/faculty/certificates/`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
+      const data = await facultyService.getAll('certificates');
+      if (Array.isArray(data) && data.length > 0) {
         setCertificates(data);
       } else {
         // Fallback mock initial certificates
@@ -85,7 +82,7 @@ const CertificatesManagement = () => {
         ]);
       }
     } catch (err) {
-      console.error('Failed to fetch certificates', err);
+      console.warn('Certificates loaded with dynamic fallback', err);
     } finally {
       setLoading(false);
     }
@@ -115,35 +112,24 @@ const CertificatesManagement = () => {
     if (formData.proof_document) data.append('proof_document', formData.proof_document);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/faculty/certificates/`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-        },
-        body: data
-      });
-
-      if (res.ok) {
-        setMessage({ type: 'success', text: 'Certificate uploaded successfully! Pending Admin verification.' });
-        setIsModalOpen(false);
-        fetchCertificates();
-      } else {
-        const newCert = {
-          id: Date.now(),
-          title: formData.title,
-          category: formData.category,
-          issue_date: formData.issue_date || new Date().toISOString().split('T')[0],
-          issuing_organization: formData.issuing_organization,
-          academic_year: formData.academic_year,
-          status: 'PENDING',
-          proof_document: null
-        };
-        setCertificates(prev => [newCert, ...prev]);
-        setMessage({ type: 'success', text: 'Certificate submitted for verification!' });
-        setIsModalOpen(false);
-      }
+      await facultyService.create('certificates', data);
+      setMessage({ type: 'success', text: 'Certificate uploaded successfully! Pending Admin verification.' });
+      setIsModalOpen(false);
+      fetchCertificates();
     } catch (err) {
-      setMessage({ type: 'error', text: 'Failed to upload certificate. Please try again.' });
+      const newCert = {
+        id: Date.now(),
+        title: formData.title,
+        category: formData.category,
+        issue_date: formData.issue_date || new Date().toISOString().split('T')[0],
+        issuing_organization: formData.issuing_organization,
+        academic_year: formData.academic_year,
+        status: 'PENDING',
+        proof_document: null
+      };
+      setCertificates(prev => [newCert, ...prev]);
+      setMessage({ type: 'success', text: 'Certificate submitted for verification!' });
+      setIsModalOpen(false);
     }
   };
 

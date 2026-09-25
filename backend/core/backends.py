@@ -13,9 +13,8 @@ class EmailOrUsernameModelBackend(ModelBackend):
                 Q(username__iexact=username.strip()) | Q(email__iexact=username.strip())
             ).first()
             if user:
-                if password is None or user.check_password(password):
+                if password and user.check_password(password):
                     return user
-                return user
         except Exception:
             return None
         return None
