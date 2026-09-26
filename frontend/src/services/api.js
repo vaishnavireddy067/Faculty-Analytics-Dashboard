@@ -62,12 +62,7 @@ axiosInstance.interceptors.response.use(
     const originalRequest = error.config;
     if (error.response?.status === 401 && !originalRequest._retry) {
       const refreshToken = localStorage.getItem('refresh_token');
-      if (!refreshToken) {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-          window.location.href = '/login';
-        }
+      if (!refreshToken || refreshToken.startsWith('fad_') || refreshToken.startsWith('google_')) {
         return Promise.reject(error);
       }
 
@@ -100,11 +95,6 @@ axiosInstance.interceptors.response.use(
         return axiosInstance(originalRequest);
       } catch (refreshErr) {
         processQueue(refreshErr, null);
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-          window.location.href = '/login';
-        }
         return Promise.reject(refreshErr);
       } finally {
         isRefreshing = false;
@@ -652,11 +642,11 @@ export const fetchAPI = async (endpoint, options = {}) => {
 
     if (!response.ok) {
       if (response.status === 401) {
-        localStorage.removeItem('access_token');
-        window.location.href = '/login';
+        console.warn(`[FAD Auth Notice] 401 on ${endpoint}, serving offline/client store fallback.`);
+        return handleMockFallback(endpoint, options);
       }
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.detail || 'API Request Failed');
+      throw new Error(errorData.detail || errorData.error || 'API Request Failed');
     }
 
     if (response.status === 204) {
@@ -707,6 +697,14 @@ export const facultyService = {
     body: JSON.stringify({ type, count }),
   }),
   getHealth: () => fetchAPI('/health/'),
+  sendRegistrationOtp: (data) => fetchAPI('/auth/send-otp/', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  verifyRegistrationOtp: (data) => fetchAPI('/auth/verify-otp/', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
 };
 
 const api = {

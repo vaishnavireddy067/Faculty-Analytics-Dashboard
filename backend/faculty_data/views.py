@@ -1169,26 +1169,63 @@ def sync_external_profiles(request):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def leaderboard(request):
-    """Returns top faculty for gamification"""
-    return Response({
-        "top_faculty": [
-            {"name": "Dr. Sarah Connor", "department": "CSE", "score": 985, "badges": ["Top Innovator", "Gold Publisher"]},
-            {"name": "Dr. John Smith", "department": "ECE", "score": 850, "badges": ["Grant Winner"]},
-            {"name": "Dr. Alan Turing", "department": "CSE", "score": 790, "badges": ["Top Mentor"]}
-        ]
-    })
+    """Returns top faculty for gamification calculated dynamically from real database records"""
+    from django.contrib.auth import get_user_model
+    UserModel = get_user_model()
+    users = UserModel.objects.all()
+    top_faculty = []
+    
+    for u in users:
+        pub_count = Publication.objects.filter(user=u).count()
+        patent_count = Patent.objects.filter(user=u).count()
+        grant_count = Grant.objects.filter(user=u).count()
+        fdp_count = FdpTraining.objects.filter(user=u).count()
+        
+        score = (pub_count * 25) + (patent_count * 50) + (grant_count * 40) + (fdp_count * 15)
+        if score == 0:
+            score = 100 # Base score for joining
+            
+        badges = []
+        if patent_count > 0:
+            badges.append("Top Innovator")
+        if pub_count >= 5:
+            badges.append("Gold Publisher")
+        elif pub_count > 0:
+            badges.append("Active Researcher")
+        if grant_count > 0:
+            badges.append("Grant Winner")
+        if not badges:
+            badges.append("Faculty Member")
+            
+        name = u.get_full_name().strip() or u.username
+        dept = u.department or "CSE"
+        
+        top_faculty.append({
+            "name": name,
+            "department": dept,
+            "score": score,
+            "badges": badges
+        })
+        
+    top_faculty = sorted(top_faculty, key=lambda x: x['score'], reverse=True)
+    return Response({"top_faculty": top_faculty})
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def mentorship_projects(request):
-    """Returns student projects seeking industry mentorship"""
-    return Response({
-        "projects": [
-            {"id": 1, "title": "AI-Powered Drone Navigation", "faculty": "Dr. Sarah Connor", "students": "UG Group A", "domain": "Artificial Intelligence", "status": "Seeking Sponsorship"},
-            {"id": 2, "title": "Blockchain for Healthcare Records", "faculty": "Dr. John Smith", "students": "PG Team", "domain": "Cybersecurity", "status": "Mentorship Needed"},
-            {"id": 3, "title": "Smart Grid Energy Optimizer", "faculty": "Dr. Alan Turing", "students": "Ph.D. Scholar", "domain": "IoT", "status": "Seeking Sponsorship"}
-        ]
-    })
+    """Returns student projects seeking industry mentorship from database"""
+    projects = StudentProject.objects.all()
+    project_list = []
+    for p in projects:
+        project_list.append({
+            "id": p.id,
+            "title": p.title,
+            "faculty": p.faculty.get_full_name() or p.faculty.username if p.faculty else (request.user.get_full_name() or request.user.username),
+            "students": f"Student Batch {p.id}",
+            "domain": p.domain or "Engineering & Technology",
+            "status": "Mentorship Needed"
+        })
+    return Response({"projects": project_list})
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
