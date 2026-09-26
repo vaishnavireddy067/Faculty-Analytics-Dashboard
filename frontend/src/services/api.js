@@ -27,6 +27,7 @@ export const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
+    'Bypass-Tunnel-Reminder': 'true',
   },
   timeout: 10000,
 });
@@ -37,6 +38,7 @@ axiosInstance.interceptors.request.use(
     if (token && !config.headers['Authorization']) {
       config.headers['Authorization'] = `Bearer ${token}`;
     }
+    config.headers['Bypass-Tunnel-Reminder'] = 'true';
     return config;
   },
   (error) => Promise.reject(error)
@@ -622,6 +624,7 @@ const handleMockFallback = (endpoint, options = {}) => {
 export const fetchAPI = async (endpoint, options = {}) => {
   const headers = {
     ...getAuthHeaders(),
+    'Bypass-Tunnel-Reminder': 'true',
     ...options.headers,
   };
 
