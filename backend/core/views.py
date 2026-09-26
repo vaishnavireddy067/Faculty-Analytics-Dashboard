@@ -44,14 +44,12 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         # Verify password
         if not user.check_password(password):
             raise serializers.ValidationError({
-                "detail": "Invalid password. Please check your credentials or reset your password."
+                "detail": "Incorrect password. Please check your password and try again."
             })
 
-        # Check if email is verified
-        if not user.is_email_verified and not user.is_superuser:
-            raise serializers.ValidationError({
-                "detail": "Your email is not verified yet. Please complete the email OTP verification."
-            })
+        if not user.is_email_verified:
+            user.is_email_verified = True
+            user.save(update_fields=['is_email_verified'])
 
         # Generate JWT tokens
         refresh = RefreshToken.for_user(user)
@@ -89,14 +87,6 @@ def send_registration_otp(request):
 
         if not email or '@' not in email:
             return Response({'error': 'Please provide a valid institutional or personal email address.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Check if user already exists
-        existing_user = User.objects.filter(email__iexact=email).first()
-        if existing_user and existing_user.has_usable_password():
-            return Response({
-                'error': f'An account is already registered with {email}. Please sign in directly.',
-                'user_exists': True
-            }, status=status.HTTP_400_BAD_REQUEST)
 
         # Generate secure 6-digit numeric OTP
         otp_code = f"{secrets.randbelow(900000) + 100000}"
