@@ -198,35 +198,37 @@ def verify_registration_otp(request):
         phone_number = (data.get('phone_number') or data.get('phone') or '').strip()
         role = data.get('role', 'FACULTY')
 
-        if not email or not otp:
-            return Response({'error': 'Email and 6-digit OTP are required.'}, status=status.HTTP_400_BAD_REQUEST)
+        clean_otp = re.sub(r'[^0-9]', '', str(otp or '')).strip()
 
-        # Check OTP record
+        if not email or not clean_otp or len(clean_otp) < 6:
+            return Response({'error': 'A valid 6-digit verification code is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check if the submitted OTP matches ANY valid, unexpired OTP for this email
         otp_record = EmailVerificationOTP.objects.filter(
             email__iexact=email,
-            is_verified=False
-        ).order_by('-created_at').first()
+            otp=clean_otp,
+            is_verified=False,
+            expires_at__gte=timezone.now()
+        ).first()
 
         if not otp_record:
-            return Response({'error': 'No active verification code found for this email. Please request a new code.'}, status=status.HTTP_400_BAD_REQUEST)
+            any_record = EmailVerificationOTP.objects.filter(
+                email__iexact=email,
+                is_verified=False
+            ).order_by('-created_at').first()
 
-        if timezone.now() > otp_record.expires_at:
-            return Response({'error': 'Verification code has expired. Please request a new code.'}, status=status.HTTP_400_BAD_REQUEST)
+            if not any_record:
+                return Response({'error': 'No active verification code found. Please click Resend Code.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if otp_record.attempts >= 5:
-            return Response({'error': 'Maximum verification attempts exceeded. Please request a new code.'}, status=status.HTTP_400_BAD_REQUEST)
+            if timezone.now() > any_record.expires_at:
+                return Response({'error': 'Verification code has expired. Please click Resend Code.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if otp_record.otp != otp:
-            otp_record.attempts += 1
-            otp_record.save()
-            remaining = 5 - otp_record.attempts
             return Response({
-                'error': f'Invalid verification code. ({remaining} attempt{"s" if remaining != 1 else ""} remaining)'
+                'error': 'Invalid verification code. Please enter the 6-digit code received in your email.'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # OTP is Valid! Mark as verified
-        otp_record.is_verified = True
-        otp_record.save()
+        # OTP is Valid! Mark all OTPs for this email as verified
+        EmailVerificationOTP.objects.filter(email__iexact=email).update(is_verified=True)
 
         # Clean/unique username
         clean_username = re.sub(r'[^a-zA-Z0-9_.]', '', username) or 'faculty_user'
