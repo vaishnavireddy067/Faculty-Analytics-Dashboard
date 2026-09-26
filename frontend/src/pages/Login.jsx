@@ -422,9 +422,6 @@ const Login = () => {
 
       if (response && response.ok) {
         const data = await response.json().catch(() => ({}));
-        if (data.debug_otp) {
-          setDebugOtp(data.debug_otp);
-        }
         setSuccessMsg(data.message || `A 6-digit verification code has been dispatched to ${regEmail}.`);
         setView('otp-verify');
         setOtpTimer(60);
@@ -433,22 +430,11 @@ const Login = () => {
         const errData = await response.json().catch(() => ({}));
         setError(errData.error || 'Unable to send verification OTP. Please try again.');
       } else {
-        // Mock fallback for offline local simulation
-        const mockCode = String(Math.floor(100000 + Math.random() * 900000));
-        setDebugOtp(mockCode);
-        setSuccessMsg(`A 6-digit verification code has been dispatched to ${regEmail}.`);
-        setView('otp-verify');
-        setOtpTimer(60);
-        setOtp('');
+        setError(`Cannot reach backend email server at ${API_BASE_URL}. Please ensure your backend is online.`);
       }
     } catch (err) {
-      console.warn('Backend OTP service notice:', err);
-      const mockCode = String(Math.floor(100000 + Math.random() * 900000));
-      setDebugOtp(mockCode);
-      setSuccessMsg(`A 6-digit verification code has been dispatched to ${regEmail}.`);
-      setView('otp-verify');
-      setOtpTimer(60);
-      setOtp('');
+      console.error('Backend OTP connection error:', err);
+      setError(`Cannot reach backend email server at ${API_BASE_URL}. Please ensure your backend is online.`);
     } finally {
       setLoading(false);
     }
@@ -472,22 +458,16 @@ const Login = () => {
 
       if (response && response.ok) {
         const data = await response.json().catch(() => ({}));
-        if (data.debug_otp) {
-          setDebugOtp(data.debug_otp);
-        }
         setSuccessMsg(`A fresh verification code was sent to ${regEmail}.`);
         setOtpTimer(60);
+      } else if (response) {
+        const errData = await response.json().catch(() => ({}));
+        setError(errData.error || 'Unable to resend OTP.');
       } else {
-        const mockCode = String(Math.floor(100000 + Math.random() * 900000));
-        setDebugOtp(mockCode);
-        setSuccessMsg(`A fresh verification code was sent to ${regEmail}.`);
-        setOtpTimer(60);
+        setError(`Cannot reach backend email server at ${API_BASE_URL}.`);
       }
     } catch (err) {
-      const mockCode = String(Math.floor(100000 + Math.random() * 900000));
-      setDebugOtp(mockCode);
-      setSuccessMsg(`A fresh verification code was sent to ${regEmail}.`);
-      setOtpTimer(60);
+      setError(`Cannot reach backend email server at ${API_BASE_URL}.`);
     } finally {
       setLoading(false);
     }
