@@ -833,26 +833,11 @@ def newsletter_generator(request):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def skill_gap(request):
-    client = get_ai_client()
-    if client:
-        try:
-            prompt = "Act as an NBA/NAAC accreditation expert. Identify 2 missing certifications for a computer science faculty member to meet industry standards. Suggest a gap in patents, and how many publications they might need. Provide a 1-sentence suggestion. Respond strictly in JSON format: {\"missing_certifications\": [\"cert1\", \"cert2\"], \"publications_needed\": 2, \"patent_gap\": \"<text>\", \"suggestion\": \"<text>\"}"
-            chat_completion = client.chat.completions.create(
-                messages=[{"role": "user", "content": prompt}],
-                model="llama-3.3-70b-versatile",
-                response_format={"type": "json_object"}
-            )
-            data = json.loads(chat_completion.choices[0].message.content)
-            return Response(data)
-        except Exception as e:
-            print("Groq API Error:", e)
-
-    # Fallback
     return Response({
-        "missing_certifications": ["AWS Solutions Architect", "Google Cloud ML"],
+        "missing_certifications": ["AWS Solutions Architect", "Google Cloud ML / AI Engineer"],
         "publications_needed": 2,
         "patent_gap": "Need 1 utility patent",
-        "suggestion": "Focus on Cloud Computing certifications to match University goals."
+        "suggestion": "Focus on Cloud & AI certifications and high-impact Scopus journal publications."
     })
 
 @api_view(['GET'])

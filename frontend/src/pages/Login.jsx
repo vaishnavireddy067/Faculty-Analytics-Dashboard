@@ -39,15 +39,10 @@ const Login = () => {
     };
   }, [otpTimer]);
 
-  // Google OAuth State & Modal
+  // Google OAuth State
   const [googleClientId, setGoogleClientId] = useState(
     () => localStorage.getItem('fad_google_client_id') || import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
   );
-  const [showConfigModal, setShowConfigModal] = useState(false);
-  const [showGoogleAccountModal, setShowGoogleAccountModal] = useState(false);
-  const [customGoogleEmail, setCustomGoogleEmail] = useState('');
-  const [customGoogleName, setCustomGoogleName] = useState('');
-  const [customClientIdInput, setCustomClientIdInput] = useState(googleClientId);
   const googleBtnRef = useRef(null);
 
   // 1. Fetch Google Client ID from Backend or Local Settings
@@ -639,14 +634,6 @@ const Login = () => {
     window.location.href = '/dashboard';
   };
 
-  const handleSaveGoogleClientId = (e) => {
-    e.preventDefault();
-    const cleaned = customClientIdInput.trim();
-    setGoogleClientId(cleaned);
-    localStorage.setItem('fad_google_client_id', cleaned);
-    setShowConfigModal(false);
-    setSuccessMsg('Google Cloud Console OAuth Client ID updated!');
-  };
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -727,16 +714,6 @@ const Login = () => {
                   : 'Enter email to receive reset instructions'}
               </p>
             </div>
-            
-            {/* Google Console Config Button */}
-            <button
-              onClick={() => setShowConfigModal(true)}
-              className="p-2.5 rounded-xl border border-gray-200 text-gray-500 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50/50 transition-all flex items-center gap-1.5 text-xs font-semibold"
-              title="Google Cloud Console OAuth Configuration"
-            >
-              <Settings size={16} />
-              <span className="hidden sm:inline">Google Auth</span>
-            </button>
           </div>
 
           {/* Success / Error Alerts */}
@@ -756,20 +733,20 @@ const Login = () => {
 
           {view === 'login' ? (
             <>
-              {/* --- 1. GOOGLE CLOUD CONSOLE AUTHENTICATION SECTION --- */}
+              {/* --- 1. GOOGLE AUTHENTICATION SECTION --- */}
               <div className="space-y-3">
                 <div className="w-full flex justify-center">
                   <div ref={googleBtnRef} className="w-full flex justify-center min-h-[44px]"></div>
                 </div>
 
-                {/* Custom Google Sign-in Trigger */}
+                {/* Direct Google Sign-In Trigger */}
                 <button
                   type="button"
                   onClick={() => {
-                    if (window.google?.accounts?.id && googleClientId) {
+                    if (window.google?.accounts?.id) {
                       window.google.accounts.id.prompt();
                     } else {
-                      setShowGoogleAccountModal(true);
+                      setError('Google Identity Services is initializing. Please try again in a moment.');
                     }
                   }}
                   disabled={googleLoading}
@@ -1130,167 +1107,6 @@ const Login = () => {
 
         </div>
       </div>
-
-      {/* --- GOOGLE CLOUD CONSOLE CONFIGURATION MODAL --- */}
-      {showConfigModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 border border-gray-100 space-y-5">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100">
-                  <KeyRound size={20} />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900">Google Cloud Console OAuth</h3>
-                  <p className="text-xs text-gray-500">Configure OAuth 2.0 Web Client ID</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setShowConfigModal(false)}
-                className="text-gray-400 hover:text-gray-600 text-xl font-bold p-1 leading-none"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveGoogleClientId} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
-                  Google Client ID (from Google Cloud Console)
-                </label>
-                <input 
-                  type="text" 
-                  value={customClientIdInput}
-                  onChange={(e) => setCustomClientIdInput(e.target.value)}
-                  placeholder="e.g. 1234567890-abcdefg.apps.googleusercontent.com"
-                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-xl font-mono text-xs focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
-                />
-                <p className="text-xs text-gray-500 mt-1.5">
-                  Stored in local browser storage & automatically used for Google Identity Services.
-                </p>
-              </div>
-
-              {/* Instructions Box */}
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs text-slate-700 space-y-2">
-                <div className="font-bold text-slate-900 flex items-center gap-1.5">
-                  <ShieldCheck size={14} className="text-indigo-600" />
-                  How to create in Google Cloud Console:
-                </div>
-                <ol className="list-decimal pl-4 space-y-1 text-slate-600">
-                  <li>Visit <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer" className="text-indigo-600 font-semibold underline">Google Cloud Console</a>.</li>
-                  <li>Click <strong>Create Credentials</strong> → <strong>OAuth client ID</strong>.</li>
-                  <li>Select Application type: <strong>Web application</strong>.</li>
-                  <li>Add Authorized JavaScript origins: <code className="bg-slate-200 px-1 rounded">http://localhost:5173</code> & <code className="bg-slate-200 px-1 rounded">http://127.0.0.1:5173</code>.</li>
-                  <li>Copy your <strong>Client ID</strong> and paste it above.</li>
-                </ol>
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="submit"
-                  className="flex-1 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-sm transition-colors cursor-pointer"
-                >
-                  Save & Connect
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowConfigModal(false)}
-                  className="py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-sm rounded-xl transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* --- REAL GOOGLE ACCOUNT SELECTOR MODAL --- */}
-      {showGoogleAccountModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-7 border border-gray-100 space-y-5 relative overflow-hidden">
-            
-            {/* Top Header */}
-            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-              <div className="flex items-center gap-2.5">
-                <svg className="w-6 h-6" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                </svg>
-                <span className="text-base font-bold text-gray-800 tracking-tight">Sign in with Google</span>
-              </div>
-              <button 
-                onClick={() => setShowGoogleAccountModal(false)}
-                className="text-gray-400 hover:text-gray-600 text-lg font-bold p-1 leading-none rounded-full hover:bg-gray-100"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-1">
-              <h3 className="text-lg font-extrabold text-gray-900">Sign In with Google</h3>
-              <p className="text-xs text-gray-500">Continue to <strong className="text-indigo-600">Faculty Analytics Portal</strong></p>
-            </div>
-
-            {/* Direct Google Account Login Form */}
-            <form 
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (customGoogleEmail.trim()) {
-                  const rawName = customGoogleName.trim() || customGoogleEmail.split('@')[0];
-                  loginWithGoogleUser({
-                    email: customGoogleEmail.trim().toLowerCase(),
-                    name: rawName,
-                    given_name: rawName.split(' ')[0] || 'Faculty',
-                    family_name: rawName.split(' ').slice(1).join(' ') || 'Member',
-                    department: 'Computer Science & Engineering',
-                    picture: `https://api.dicebear.com/7.x/initials/svg?seed=${rawName}`
-                  });
-                }
-              }} 
-              className="space-y-3.5 pt-2"
-            >
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Your Full Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Vaishnavi Anugu"
-                  value={customGoogleName}
-                  onChange={(e) => setCustomGoogleName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Google Email Address *</label>
-                <input
-                  type="email"
-                  placeholder="your.name@gmail.com / institution.edu"
-                  value={customGoogleEmail}
-                  onChange={(e) => setCustomGoogleEmail(e.target.value)}
-                  required
-                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={googleLoading}
-                className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition-colors flex items-center justify-center gap-2 cursor-pointer mt-2"
-              >
-                {googleLoading ? 'Authenticating with Google...' : 'Continue with Google Account'} <ChevronRight size={14} />
-              </button>
-            </form>
-
-            <p className="text-[11px] text-gray-400 text-center leading-relaxed">
-              Google will securely verify and share your authenticated profile with Faculty Analytics.
-            </p>
-
-          </div>
-        </div>
-      )}
 
     </div>
   );
