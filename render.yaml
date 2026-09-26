@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: faculty-analytics-backend
+    env: python
+    rootDir: backend
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn backend.wsgi:application"
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: "*"
+      - key: EMAIL_HOST
+        value: "smtp.gmail.com"
+      - key: EMAIL_PORT
+        value: "587"
+      - key: EMAIL_USE_TLS
+        value: "True"
+      - key: EMAIL_HOST_USER
+        value: "anuguvaishnavireddy6@gmail.com"
+      - key: EMAIL_HOST_PASSWORD
+        value: "nswxqngdddphnsgj"
+      - key: DEFAULT_FROM_EMAIL
+        value: "Faculty Analytics Portal <anuguvaishnavireddy6@gmail.com>"
