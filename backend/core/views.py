@@ -37,51 +37,21 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         ).first()
 
         if not user:
-            # Auto-create user for ANY email entered so anyone can log in with any email
-            is_email = '@' in username_or_email
-            email = username_or_email if is_email else f"{username_or_email}@institution.edu"
-            base_username = username_or_email.split('@')[0] if is_email else username_or_email
-            
-            clean_username = re.sub(r'[^a-zA-Z0-9_.]', '', base_username) or 'faculty_user'
-            unique_username = clean_username
-            counter = 1
-            while User.objects.filter(username__iexact=unique_username).exists():
-                unique_username = f"{clean_username}_{counter}"
-                counter += 1
+            raise serializers.ValidationError({
+                "detail": "No account found with this email/username. Please click 'Create Account' to register and verify with OTP first."
+            })
 
-            role = 'FACULTY'
-            lower_ident = username_or_email.lower()
-            if 'admin' in lower_ident:
-                role = 'ADMIN'
-            elif 'hod' in lower_ident:
-                role = 'HOD'
-            elif 'iqac' in lower_ident:
-                role = 'IQAC'
+        # Verify password
+        if not user.check_password(password):
+            raise serializers.ValidationError({
+                "detail": "Invalid password. Please check your credentials or reset your password."
+            })
 
-            name_parts = clean_username.replace('.', ' ').replace('_', ' ').split()
-            first_name = name_parts[0].capitalize() if name_parts else 'Faculty'
-            last_name = name_parts[1].capitalize() if len(name_parts) > 1 else 'Member'
-
-            user = User.objects.create_user(
-                username=unique_username,
-                email=email,
-                password=password or 'Password123',
-                first_name=first_name,
-                last_name=last_name
-            )
-            user.role = role
-            user.department = 'AI&DS'
-            user.save()
-        else:
-            # If user already exists, verify or initialize password
-            if password:
-                if not user.has_usable_password():
-                    user.set_password(password)
-                    user.save()
-                elif not user.check_password(password):
-                    # If development environment or password matches default
-                    if not (settings.DEBUG and password in ('123456', 'Password123', 'admin', 'password')):
-                        raise serializers.ValidationError({"detail": "Invalid credentials. Please verify your password or use Google Sign-In."})
+        # Check if email is verified
+        if not user.is_email_verified and not user.is_superuser:
+            raise serializers.ValidationError({
+                "detail": "Your email is not verified yet. Please complete the email OTP verification."
+            })
 
         # Generate JWT tokens
         refresh = RefreshToken.for_user(user)

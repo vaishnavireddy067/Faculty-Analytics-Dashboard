@@ -305,19 +305,12 @@ const Login = () => {
             window.location.href = '/dashboard';
             return;
           }
-        } else if (response.status === 401) {
+        } else if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          // Check if user exists in client records
-          const users = getRegisteredUsers();
-          const localUser = users.find(u => 
-            (u.email && u.email.toLowerCase() === inputUser) || 
-            (u.username && u.username.toLowerCase() === inputUser)
-          );
-          if (!localUser) {
-            setError('No account found with this email/username. Please click "Create an Account" to register and verify with OTP first.');
-          } else {
-            setError(errorData.detail || 'Incorrect password. Please verify your password and try again.');
-          }
+          const errMsg = errorData.detail || errorData.error || (
+            errorData.non_field_errors ? errorData.non_field_errors[0] : null
+          ) || 'No account found with this email/username. Please click "Create Account" to register and verify with OTP first.';
+          setError(errMsg);
           setLoading(false);
           return;
         }
