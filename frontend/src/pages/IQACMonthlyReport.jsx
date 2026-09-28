@@ -20,7 +20,7 @@ const EditableCell = React.memo(({
   fieldKey,
   value,
   className = "",
-  placeholder = "-"
+  placeholder = ""
 }) => {
   const { isEditing, updateNestedCell } = useContext(ReportEditorContext);
   const [localVal, setLocalVal] = useState(value ?? '');
@@ -40,7 +40,7 @@ const EditableCell = React.memo(({
   if (!isEditing) {
     return (
       <span className="whitespace-pre-wrap break-words block min-h-[16px]">
-        {value || placeholder}
+        {value ? value : '-'}
       </span>
     );
   }
@@ -60,7 +60,7 @@ const EditableCell = React.memo(({
       className={`w-full bg-transparent hover:bg-slate-100/70 focus:bg-white text-gray-900 border-0 focus:ring-1 focus:ring-indigo-500 rounded px-1 py-0.5 text-[11px] outline-none transition-colors resize-none overflow-hidden leading-tight font-sans whitespace-pre-wrap break-words min-h-[22px] block ${className}`}
       value={localVal}
       onChange={handleChange}
-      placeholder={placeholder}
+      placeholder=""
     />
   );
 });
@@ -286,19 +286,25 @@ const IQACMonthlyReport = () => {
     return [];
   };
 
-  // Helper to add row to array sections
-  const handleAddRow = (sectionKey, defaultRow) => {
+  // Helper to add clean empty row to array sections
+  const handleAddRow = (sectionKey, initialData = {}) => {
     setReportData(prev => {
-      const clone = JSON.parse(JSON.stringify(prev));
+      const clone = JSON.parse(JSON.stringify(prev || {}));
+      if (!clone.sections) clone.sections = {};
       const parts = sectionKey.split('.');
-      let target = clone.sections;
-      for (let i = 0; i < parts.length; i++) {
-        target = target[parts[i]];
+      let curr = clone.sections;
+      for (let i = 0; i < parts.length - 1; i++) {
+        if (!curr[parts[i]]) curr[parts[i]] = {};
+        curr = curr[parts[i]];
       }
-      if (Array.isArray(target)) {
-        defaultRow.s_no = target.length + 1;
-        target.push(defaultRow);
+      const lastKey = parts[parts.length - 1];
+      if (!Array.isArray(curr[lastKey])) {
+        curr[lastKey] = [];
       }
+      curr[lastKey].push({
+        s_no: curr[lastKey].length + 1,
+        ...(initialData || {})
+      });
       return clone;
     });
   };
@@ -919,7 +925,7 @@ const IQACMonthlyReport = () => {
               {isEditing && (
                 <div className="flex items-center gap-1.5 print:hidden">
                   <button
-                    onClick={() => handleAddRow('1_student_events', { name: "New Event", association: "-", level: "Department level", duration: "1 day", chief_guest: "Resource Person", honorarium: "-", misc_expenses: "-", target_students: "All Students" })}
+                    onClick={() => handleAddRow('1_student_events')}
                     className="px-2 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
                   >
                     <Plus size={12} /> + Add Event
@@ -1020,7 +1026,7 @@ const IQACMonthlyReport = () => {
               {isEditing && (
                 <div className="flex items-center gap-1.5 print:hidden">
                   <button
-                    onClick={() => handleAddRow('2_faculty_events', { name: "Faculty FDP/Workshop", association: "CSI", level: "Department level", duration: "2 days", chief_guest: "Speaker", faculty_count: "20", honorarium: "-", misc_expenses: "-" })}
+                    onClick={() => handleAddRow('2_faculty_events')}
                     className="px-2 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
                   >
                     <Plus size={12} /> + Add Row
@@ -1121,7 +1127,7 @@ const IQACMonthlyReport = () => {
               {isEditing && (
                 <div className="flex items-center gap-1.5 print:hidden">
                   <button
-                    onClick={() => handleAddRow('3_value_added_courses', { name: "Course Name", resource_person: "Trainer", level: "Dept level", duration: "30h", contact_periods: "30", students_registered: "50", remuneration: "-", target_students: "UG" })}
+                    onClick={() => handleAddRow('3_value_added_courses')}
                     className="px-2 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
                   >
                     <Plus size={12} /> + Add Course
@@ -1222,7 +1228,7 @@ const IQACMonthlyReport = () => {
               {isEditing && (
                 <div className="flex items-center gap-1.5 print:hidden">
                   <button
-                    onClick={() => handleAddRow('4_advanced_learners', { name: "Advanced Learner Workshop", level: "Department level", duration: "1 Day", contact_periods: "6 Hours", chief_guest: "Domain Expert", honorarium: "-", misc_expenses: "-", target_students: "Top Merit Students" })}
+                    onClick={() => handleAddRow('4_advanced_learners')}
                     className="px-2 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
                   >
                     <Plus size={12} /> + Add Activity
@@ -1329,7 +1335,7 @@ const IQACMonthlyReport = () => {
                 {isEditing && (
                   <div className="flex items-center gap-1.5 print:hidden">
                     <button
-                      onClick={() => handleAddRow('5_student_achievements.a_curricular', { roll_no: "245U1A6700", name: "Student Name", year_sem: "III/I", event_name: "National Hackathon", organized_by: "University", duration: "2 days", prizes: "First Prize" })}
+                      onClick={() => handleAddRow('5_student_achievements.a_curricular')}
                       className="px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
                     >
                       <Plus size={11} /> + Add
@@ -1422,7 +1428,7 @@ const IQACMonthlyReport = () => {
                 {isEditing && (
                   <div className="flex items-center gap-1.5 print:hidden">
                     <button
-                      onClick={() => handleAddRow('5_student_achievements.b_extracurricular', { roll_no: "245U1A6712", name: "Student Name", year_sem: "III/I", event_name: "Sports Event", organized_by: "Sports Board", duration: "1 day", prizes: "Gold Medal" })}
+                      onClick={() => handleAddRow('5_student_achievements.b_extracurricular')}
                       className="px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
                     >
                       <Plus size={11} /> + Add
@@ -1515,7 +1521,7 @@ const IQACMonthlyReport = () => {
                 {isEditing && (
                   <div className="flex items-center gap-1.5 print:hidden">
                     <button
-                      onClick={() => handleAddRow('5_student_achievements.c_online_certifications', { roll_no: "All Students", name: "-", year_sem: "III/I", course_name: "Machine Learning", organized_by: "NPTEL", duration: "12 Weeks", grade: "Elite" })}
+                      onClick={() => handleAddRow('5_student_achievements.c_online_certifications')}
                       className="px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
                     >
                       <Plus size={11} /> + Add Certification
@@ -1612,7 +1618,7 @@ const IQACMonthlyReport = () => {
                   {isEditing && (
                     <div className="flex items-center gap-2 print:hidden">
                       <button
-                        onClick={() => handleAddRow('5_student_achievements.d_placements.ds_byd', { name: "NEW PLACEMENT", roll_no: "235U1A6700", date: "17-08-2026", company: "BYD", package: "6.5 LPA" })}
+                        onClick={() => handleAddRow('5_student_achievements.d_placements.ds_byd')}
                         className="text-indigo-700 hover:text-indigo-900 text-[10px] font-bold cursor-pointer"
                       >
                         + Add Placed Student
@@ -1683,7 +1689,7 @@ const IQACMonthlyReport = () => {
                   {isEditing && (
                     <div className="flex items-center gap-2 print:hidden">
                       <button
-                        onClick={() => handleAddRow('5_student_achievements.d_placements.aids_byd', { name: "NEW PLACEMENT", roll_no: "235U1A7200", date: "17-08-2026", company: "BYD", package: "6.5 LPA" })}
+                        onClick={() => handleAddRow('5_student_achievements.d_placements.aids_byd')}
                         className="text-indigo-700 hover:text-indigo-900 text-[10px] font-bold cursor-pointer"
                       >
                         + Add Placed Student
@@ -1764,7 +1770,7 @@ const IQACMonthlyReport = () => {
                 {isEditing && (
                   <div className="flex items-center gap-1.5 print:hidden">
                     <button
-                      onClick={() => handleAddRow('6_faculty_achievements.a_journal_publications', { authors: "Dr. Faculty Name", title: "Research Paper Title", journal: "International Journal of Engineering", volume_issue: "Vol. 12, Issue 4, 2026", indexing: "Scopus / SCI" })}
+                      onClick={() => handleAddRow('6_faculty_achievements.a_journal_publications')}
                       className="px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
                     >
                       <Plus size={11} /> + Add Publication
@@ -1847,7 +1853,7 @@ const IQACMonthlyReport = () => {
                 {isEditing && (
                   <div className="flex items-center gap-1.5 print:hidden">
                     <button
-                      onClick={() => handleAddRow('6_faculty_achievements.c_patents', { authors: "Faculty Name", title: "Patent Invention Title", agency: "Indian Patent Office", filing_no_year: "202641012345, 2026", status: "Published" })}
+                      onClick={() => handleAddRow('6_faculty_achievements.c_patents')}
                       className="px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
                     >
                       <Plus size={11} /> + Add Patent
@@ -1930,7 +1936,7 @@ const IQACMonthlyReport = () => {
                 {isEditing && (
                   <div className="flex items-center gap-1.5 print:hidden">
                     <button
-                      onClick={() => handleAddRow('6_faculty_achievements.g_workshops_attended', { faculty_name: "Faculty Name", program_name: "AI & Machine Learning FDP", organized_by: "IIT Hyderabad / JNTUH", duration: "5 Days" })}
+                      onClick={() => handleAddRow('6_faculty_achievements.g_workshops_attended')}
                       className="px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
                     >
                       <Plus size={11} /> + Add Workshop/FDP
@@ -2009,7 +2015,7 @@ const IQACMonthlyReport = () => {
               {isEditing && (
                 <div className="flex items-center gap-1.5 print:hidden">
                   <button
-                    onClick={() => handleAddRow('7_non_teaching_training', { program_name: "Lab Equipment Handling & Safety", target_staff: "Technical & Lab Staff", resource_person: "Senior Instructor", duration: "1 Day", participants: "12" })}
+                    onClick={() => handleAddRow('7_non_teaching_training')}
                     className="px-2 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
                   >
                     <Plus size={12} /> + Add Training Program
@@ -2092,7 +2098,7 @@ const IQACMonthlyReport = () => {
               {isEditing && (
                 <div className="flex items-center gap-1.5 print:hidden">
                   <button
-                    onClick={() => handleAddRow('8_infrastructure_investment', { name: "Laboratory Computers / Equipment", specs: "Core i7, 16GB RAM", quantity: "20", date: "15-08-2026", supplier: "Tech Systems", amount: "10,00,000" })}
+                    onClick={() => handleAddRow('8_infrastructure_investment')}
                     className="px-2 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
                   >
                     <Plus size={12} /> + Add Infrastructure Item
@@ -2180,7 +2186,7 @@ const IQACMonthlyReport = () => {
               {isEditing && (
                 <div className="flex items-center gap-1.5 print:hidden">
                   <button
-                    onClick={() => handleAddRow('9_mous_signed', { company: "Industry / Organization Name", purpose: "Collaborative Training & Placements", date: "20-08-2026", validity: "3 Years", activities: "Workshops & Internships" })}
+                    onClick={() => handleAddRow('9_mous_signed')}
                     className="px-2 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
                   >
                     <Plus size={12} /> + Add MoU
