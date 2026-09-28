@@ -2553,6 +2553,39 @@ def faculty_monthly_batch_approve(request):
     })
 
 
+@api_view(['POST', 'PUT'])
+@permission_classes([permissions.IsAuthenticated])
+def faculty_monthly_submission_update_data(request, pk):
+    """
+    Allows HOD or Faculty to update the submission_data (e.g. edit a typo, exclude/include an item, delete an erroneous row)
+    without deleting the entire return.
+    """
+    from .models import FacultyMonthlySubmission, AuditLog
+
+    sub = get_object_or_404(FacultyMonthlySubmission, pk=pk)
+    if sub.faculty != request.user and request.user.role not in ['HOD', 'ADMIN']:
+        return Response({'success': False, 'message': 'Permission denied.'}, status=403)
+
+    submission_data = request.data.get('submission_data')
+    if submission_data is not None:
+        sub.submission_data = submission_data
+        sub.save()
+
+        AuditLog.objects.create(
+            performed_by=request.user,
+            action="MONTHLY_REPORT_ITEMS_UPDATED",
+            target_activity=f"Submission #{sub.id} ({sub.faculty.username})",
+            details=f"Items in monthly return for {sub.month} {sub.year} were updated/curated by {request.user.username}."
+        )
+
+        return Response({
+            'success': True,
+            'message': 'Submission data updated successfully.',
+            'submission_data': sub.submission_data
+        })
+    return Response({'success': False, 'message': 'No submission_data provided.'}, status=400)
+
+
 @api_view(['DELETE', 'POST'])
 @permission_classes([permissions.IsAuthenticated])
 def faculty_monthly_submission_delete(request, pk=None):
@@ -2759,6 +2792,8 @@ def faculty_monthly_consolidate(request):
 
         # 1. FDPs / Workshops Attended
         for row in data.get('fdps_workshops_attended', []):
+            if row.get('excluded') is True or row.get('included') is False:
+                continue
             merged_fdps_attended.append({
                 's_no': sno_counters['fdps_attended'],
                 'faculty_name': fac_name,
@@ -2772,6 +2807,8 @@ def faculty_monthly_consolidate(request):
 
         # 2. Events Organized
         for row in data.get('events_organized', []):
+            if row.get('excluded') is True or row.get('included') is False:
+                continue
             event_type = (row.get('event_type') or 'WORKSHOP').upper()
             target_list = merged_student_events if 'STUDENT' in event_type else merged_faculty_events
             target_key = 'student_events' if 'STUDENT' in event_type else 'faculty_events'
@@ -2795,6 +2832,8 @@ def faculty_monthly_consolidate(request):
 
         # 3. Journal Publications
         for row in data.get('journal_publications', []):
+            if row.get('excluded') is True or row.get('included') is False:
+                continue
             merged_journal_pubs.append({
                 's_no': sno_counters['journal_pubs'],
                 'authors': row.get('authors') or fac_name,
@@ -2808,6 +2847,8 @@ def faculty_monthly_consolidate(request):
 
         # 4. Conference Publications
         for row in data.get('conference_publications', []):
+            if row.get('excluded') is True or row.get('included') is False:
+                continue
             merged_conf_pubs.append({
                 's_no': sno_counters['conf_pubs'],
                 'authors': row.get('authors') or fac_name,
@@ -2820,6 +2861,8 @@ def faculty_monthly_consolidate(request):
 
         # 5. Patents
         for row in data.get('patents', []):
+            if row.get('excluded') is True or row.get('included') is False:
+                continue
             merged_patents.append({
                 's_no': sno_counters['patents'],
                 'authors': row.get('authors') or fac_name,
@@ -2832,6 +2875,8 @@ def faculty_monthly_consolidate(request):
 
         # 6. Awards & Honors
         for row in data.get('awards_honors', []):
+            if row.get('excluded') is True or row.get('included') is False:
+                continue
             merged_awards.append({
                 's_no': sno_counters['awards'],
                 'faculty_name': fac_name,
@@ -2844,6 +2889,8 @@ def faculty_monthly_consolidate(request):
 
         # 7. Guest Lectures / Resource Person
         for row in data.get('guest_lectures', []):
+            if row.get('excluded') is True or row.get('included') is False:
+                continue
             merged_guest_lectures.append({
                 's_no': sno_counters['guest_lectures'],
                 'faculty_name': fac_name,
@@ -2856,6 +2903,8 @@ def faculty_monthly_consolidate(request):
 
         # 8. Certifications
         for row in data.get('certifications', []):
+            if row.get('excluded') is True or row.get('included') is False:
+                continue
             merged_certifications.append({
                 's_no': sno_counters['certifications'],
                 'faculty_name': fac_name,
@@ -2867,6 +2916,8 @@ def faculty_monthly_consolidate(request):
 
         # 9. Student Projects Guided
         for row in data.get('student_projects_guided', []):
+            if row.get('excluded') is True or row.get('included') is False:
+                continue
             merged_student_projects.append({
                 's_no': sno_counters['student_projects'],
                 'faculty_guide': fac_name,

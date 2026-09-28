@@ -272,6 +272,96 @@ const MonthlyReportHub = () => {
     }
   };
 
+  // HOD Action: Toggle Include/Exclude on an individual item inside a faculty submission
+  const handleToggleIncludeItem = async (category, itemIndex) => {
+    if (!selectedPreviewFaculty || !selectedPreviewFaculty.submission_id) return;
+    const currentData = { ...(selectedPreviewFaculty.submission_data || {}) };
+    const currentList = [...(currentData[category] || [])];
+    if (!currentList[itemIndex]) return;
+
+    // Toggle excluded flag
+    const isCurrentlyExcluded = currentList[itemIndex].excluded === true;
+    currentList[itemIndex] = {
+      ...currentList[itemIndex],
+      excluded: !isCurrentlyExcluded
+    };
+    currentData[category] = currentList;
+
+    try {
+      const res = await fetchAPI(`/faculty/monthly-submission/${selectedPreviewFaculty.submission_id}/update-data/`, {
+        method: 'POST',
+        body: JSON.stringify({ submission_data: currentData })
+      });
+      if (res && res.success) {
+        setSelectedPreviewFaculty(prev => ({
+          ...prev,
+          submission_data: currentData
+        }));
+        loadTrackerData();
+      }
+    } catch (err) {
+      console.error("Failed to update item inclusion status:", err);
+    }
+  };
+
+  // HOD Action: Delete an erroneous individual row/item from a faculty submission
+  const handleDeleteSubmissionItem = async (category, itemIndex) => {
+    if (!selectedPreviewFaculty || !selectedPreviewFaculty.submission_id) return;
+    if (!window.confirm("Are you sure you want to remove this record from the faculty submission?")) return;
+
+    const currentData = { ...(selectedPreviewFaculty.submission_data || {}) };
+    const currentList = [...(currentData[category] || [])];
+    currentList.splice(itemIndex, 1);
+    currentData[category] = currentList;
+
+    try {
+      const res = await fetchAPI(`/faculty/monthly-submission/${selectedPreviewFaculty.submission_id}/update-data/`, {
+        method: 'POST',
+        body: JSON.stringify({ submission_data: currentData })
+      });
+      if (res && res.success) {
+        setSelectedPreviewFaculty(prev => ({
+          ...prev,
+          submission_data: currentData
+        }));
+        loadTrackerData();
+      }
+    } catch (err) {
+      console.error("Failed to delete item from submission:", err);
+      alert("Failed to delete item.");
+    }
+  };
+
+  // Consolidated View: Remove a row from consolidated report
+  const handleRemoveConsolidatedRow = (sectionKey, subKeyOrIndex, optionalIndex) => {
+    if (!window.confirm("Remove this entry from the consolidated sheet?")) return;
+    setConsolidatedData(prev => {
+      if (!prev) return prev;
+      if (sectionKey === 'faculty_matrix') {
+        const newMatrix = [...(prev.faculty_matrix || [])];
+        newMatrix.splice(subKeyOrIndex, 1);
+        return { ...prev, faculty_matrix: newMatrix };
+      }
+      if (!prev.sections) return prev;
+      const newSections = { ...prev.sections };
+      if (typeof subKeyOrIndex === 'string' && optionalIndex !== undefined) {
+        if (newSections[sectionKey] && Array.isArray(newSections[sectionKey][subKeyOrIndex])) {
+          const newList = [...newSections[sectionKey][subKeyOrIndex]];
+          newList.splice(optionalIndex, 1);
+          newSections[sectionKey] = {
+            ...newSections[sectionKey],
+            [subKeyOrIndex]: newList
+          };
+        }
+      } else if (Array.isArray(newSections[sectionKey])) {
+        const newList = [...newSections[sectionKey]];
+        newList.splice(subKeyOrIndex, 1);
+        newSections[sectionKey] = newList;
+      }
+      return { ...prev, sections: newSections };
+    });
+  };
+
   // HOD Action: Approve or Request Revision
   const handleHODAction = async (submissionId, action, remarks = '') => {
     if (!submissionId) return;
@@ -1563,12 +1653,13 @@ const MonthlyReportHub = () => {
                       <th className="border border-gray-300 p-2">FDP / Workshops</th>
                       <th className="border border-gray-300 p-2">Other Responsibilities</th>
                       <th className="border border-gray-300 p-2 text-center w-24">Status</th>
+                      <th className="border border-gray-300 p-2 text-center w-12 print:hidden">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(consolidatedData?.faculty_matrix || []).length === 0 ? (
                       <tr>
-                        <td colSpan="8" className="border border-gray-300 p-4 text-center text-gray-400 italic">
+                        <td colSpan="9" className="border border-gray-300 p-4 text-center text-gray-400 italic">
                           Click "⚡ Generate 1-Click Consolidated Report" to compile all faculty matrix data.
                         </td>
                       </tr>
@@ -1591,6 +1682,16 @@ const MonthlyReportHub = () => {
                             }`}>
                               {row.status}
                             </span>
+                          </td>
+                          <td className="border border-gray-300 p-2 text-center print:hidden">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveConsolidatedRow('faculty_matrix', idx)}
+                              className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded cursor-pointer transition-colors"
+                              title="Remove faculty from master matrix"
+                            >
+                              <Trash2 size={12} />
+                            </button>
                           </td>
                         </tr>
                       ))
@@ -1616,12 +1717,13 @@ const MonthlyReportHub = () => {
                     <th className="border border-gray-300 p-2">Resource Person</th>
                     <th className="border border-gray-300 p-2">Date</th>
                     <th className="border border-gray-300 p-2">Outcome</th>
+                    <th className="border border-gray-300 p-2 text-center w-12 print:hidden">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(consolidatedData?.sections?.['1_student_events'] || []).length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="border border-gray-300 p-4 text-center text-gray-400 italic">
+                      <td colSpan="8" className="border border-gray-300 p-4 text-center text-gray-400 italic">
                         Nil activities reported for this month.
                       </td>
                     </tr>
@@ -1635,6 +1737,16 @@ const MonthlyReportHub = () => {
                         <td className="border border-gray-300 p-2">{row.resource_person}</td>
                         <td className="border border-gray-300 p-2">{row.date}</td>
                         <td className="border border-gray-300 p-2">{row.outcome}</td>
+                        <td className="border border-gray-300 p-2 text-center print:hidden">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveConsolidatedRow('1_student_events', idx)}
+                            className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded cursor-pointer"
+                            title="Remove entry"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -1657,12 +1769,13 @@ const MonthlyReportHub = () => {
                     <th className="border border-gray-300 p-2">Resource Person</th>
                     <th className="border border-gray-300 p-2">Date</th>
                     <th className="border border-gray-300 p-2">Outcome</th>
+                    <th className="border border-gray-300 p-2 text-center w-12 print:hidden">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(consolidatedData?.sections?.['2_faculty_events'] || []).length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="border border-gray-300 p-4 text-center text-gray-400 italic">
+                      <td colSpan="8" className="border border-gray-300 p-4 text-center text-gray-400 italic">
                         Nil activities reported for this month.
                       </td>
                     </tr>
@@ -1676,6 +1789,16 @@ const MonthlyReportHub = () => {
                         <td className="border border-gray-300 p-2">{row.resource_person}</td>
                         <td className="border border-gray-300 p-2">{row.date}</td>
                         <td className="border border-gray-300 p-2">{row.outcome}</td>
+                        <td className="border border-gray-300 p-2 text-center print:hidden">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveConsolidatedRow('2_faculty_events', idx)}
+                            className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded cursor-pointer"
+                            title="Remove entry"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -1698,12 +1821,13 @@ const MonthlyReportHub = () => {
                     <th className="border border-gray-300 p-2">Organizing Institution</th>
                     <th className="border border-gray-300 p-2">Duration & Dates</th>
                     <th className="border border-gray-300 p-2 text-center">Status</th>
+                    <th className="border border-gray-300 p-2 text-center w-12 print:hidden">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(consolidatedData?.sections?.['6_faculty_achievements']?.['g_workshops_attended'] || []).length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="border border-gray-300 p-4 text-center text-gray-400 italic">
+                      <td colSpan="8" className="border border-gray-300 p-4 text-center text-gray-400 italic">
                         Nil activities reported for this month.
                       </td>
                     </tr>
@@ -1717,6 +1841,16 @@ const MonthlyReportHub = () => {
                         <td className="border border-gray-300 p-2">{row.organized_by}</td>
                         <td className="border border-gray-300 p-2">{row.dates_duration}</td>
                         <td className="border border-gray-300 p-2 text-center text-emerald-700 font-semibold">{row.status_proof}</td>
+                        <td className="border border-gray-300 p-2 text-center print:hidden">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveConsolidatedRow('6_faculty_achievements', 'g_workshops_attended', idx)}
+                            className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded cursor-pointer"
+                            title="Remove entry"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -1738,12 +1872,13 @@ const MonthlyReportHub = () => {
                     <th className="border border-gray-300 p-2">Journal Name</th>
                     <th className="border border-gray-300 p-2">Vol / Issue / Pages</th>
                     <th className="border border-gray-300 p-2 text-center">Indexing</th>
+                    <th className="border border-gray-300 p-2 text-center w-12 print:hidden">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(consolidatedData?.sections?.['6_faculty_achievements']?.['a_journal_publications'] || []).length === 0 ? (
                     <tr>
-                      <td colSpan="6" className="border border-gray-300 p-4 text-center text-gray-400 italic">
+                      <td colSpan="7" className="border border-gray-300 p-4 text-center text-gray-400 italic">
                         Nil publications reported for this month.
                       </td>
                     </tr>
@@ -1756,6 +1891,16 @@ const MonthlyReportHub = () => {
                         <td className="border border-gray-300 p-2 italic">{row.journal}</td>
                         <td className="border border-gray-300 p-2">{row.volume_issue}</td>
                         <td className="border border-gray-300 p-2 text-center font-bold text-purple-700">{row.indexing}</td>
+                        <td className="border border-gray-300 p-2 text-center print:hidden">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveConsolidatedRow('6_faculty_achievements', 'a_journal_publications', idx)}
+                            className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded cursor-pointer"
+                            title="Remove entry"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -1777,12 +1922,13 @@ const MonthlyReportHub = () => {
                     <th className="border border-gray-300 p-2">Filing Agency</th>
                     <th className="border border-gray-300 p-2">Application No & Year</th>
                     <th className="border border-gray-300 p-2 text-center">Status</th>
+                    <th className="border border-gray-300 p-2 text-center w-12 print:hidden">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(consolidatedData?.sections?.['6_faculty_achievements']?.['c_patents'] || []).length === 0 ? (
                     <tr>
-                      <td colSpan="6" className="border border-gray-300 p-4 text-center text-gray-400 italic">
+                      <td colSpan="7" className="border border-gray-300 p-4 text-center text-gray-400 italic">
                         Nil patents reported for this month.
                       </td>
                     </tr>
@@ -1795,6 +1941,16 @@ const MonthlyReportHub = () => {
                         <td className="border border-gray-300 p-2">{row.agency}</td>
                         <td className="border border-gray-300 p-2">{row.filing_no_year}</td>
                         <td className="border border-gray-300 p-2 text-center font-bold text-amber-700">{row.status}</td>
+                        <td className="border border-gray-300 p-2 text-center print:hidden">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveConsolidatedRow('6_faculty_achievements', 'c_patents', idx)}
+                            className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded cursor-pointer"
+                            title="Remove entry"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -1816,12 +1972,13 @@ const MonthlyReportHub = () => {
                     <th className="border border-gray-300 p-2">Awarding Agency</th>
                     <th className="border border-gray-300 p-2">Date</th>
                     <th className="border border-gray-300 p-2">Details</th>
+                    <th className="border border-gray-300 p-2 text-center w-12 print:hidden">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(consolidatedData?.sections?.['6_faculty_achievements']?.['k_awards'] || []).length === 0 ? (
                     <tr>
-                      <td colSpan="6" className="border border-gray-300 p-4 text-center text-gray-400 italic">
+                      <td colSpan="7" className="border border-gray-300 p-4 text-center text-gray-400 italic">
                         Nil awards reported for this month.
                       </td>
                     </tr>
@@ -1834,6 +1991,16 @@ const MonthlyReportHub = () => {
                         <td className="border border-gray-300 p-2">{row.awarding_agency}</td>
                         <td className="border border-gray-300 p-2">{row.date}</td>
                         <td className="border border-gray-300 p-2">{row.details}</td>
+                        <td className="border border-gray-300 p-2 text-center print:hidden">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveConsolidatedRow('6_faculty_achievements', 'k_awards', idx)}
+                            className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded cursor-pointer"
+                            title="Remove entry"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -1946,17 +2113,42 @@ const MonthlyReportHub = () => {
                           <th className="p-2.5">Organized By</th>
                           <th className="p-2.5">Dates / Duration</th>
                           <th className="p-2.5 w-16 text-center">Days</th>
+                          <th className="p-2.5 text-center">Include in Report</th>
+                          <th className="p-2.5 w-12 text-center">Delete</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
                         {selectedPreviewFaculty.submission_data.fdps_workshops_attended.map((f, i) => (
-                          <tr key={i} className="hover:bg-blue-50/20">
+                          <tr key={i} className={`hover:bg-blue-50/20 ${f.excluded ? 'opacity-50 bg-gray-50/50' : ''}`}>
                             <td className="p-2.5 text-center font-bold text-gray-400">{i + 1}</td>
-                            <td className="p-2.5 font-bold text-gray-900 dark:text-white">{f.title || f.program_name}</td>
+                            <td className={`p-2.5 font-bold text-gray-900 dark:text-white ${f.excluded ? 'line-through text-gray-400' : ''}`}>{f.title || f.program_name}</td>
                             <td className="p-2.5 text-gray-600">{f.role || 'Participant'}</td>
                             <td className="p-2.5 text-gray-600">{f.organization || f.organized_by}</td>
                             <td className="p-2.5 text-gray-600">{f.start_date ? `${f.start_date} to ${f.end_date || f.start_date}` : (f.duration || '-')}</td>
                             <td className="p-2.5 text-center font-semibold">{f.duration_days || 1}</td>
+                            <td className="p-2.5 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleIncludeItem('fdps_workshops_attended', i)}
+                                className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold cursor-pointer transition-all ${
+                                  f.excluded 
+                                    ? 'bg-gray-100 dark:bg-slate-800 text-gray-500 border border-gray-300' 
+                                    : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 shadow-xs'
+                                }`}
+                              >
+                                {f.excluded ? '⚪ Excluded' : '🟢 Included'}
+                              </button>
+                            </td>
+                            <td className="p-2.5 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteSubmissionItem('fdps_workshops_attended', i)}
+                                className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                title="Delete this entry from faculty submission"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -1989,19 +2181,42 @@ const MonthlyReportHub = () => {
                           <th className="p-2.5">Level</th>
                           <th className="p-2.5">Date</th>
                           <th className="p-2.5 text-center">Participants</th>
-                          <th className="p-2.5">Resource Person</th>
+                          <th className="p-2.5 text-center">Include</th>
+                          <th className="p-2.5 w-12 text-center">Delete</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
                         {selectedPreviewFaculty.submission_data.events_organized.map((e, i) => (
-                          <tr key={i} className="hover:bg-indigo-50/20">
+                          <tr key={i} className={`hover:bg-indigo-50/20 ${e.excluded ? 'opacity-50 bg-gray-50/50' : ''}`}>
                             <td className="p-2.5 text-center font-bold text-gray-400">{i + 1}</td>
-                            <td className="p-2.5 font-bold text-gray-900 dark:text-white">{e.title || e.name}</td>
+                            <td className={`p-2.5 font-bold text-gray-900 dark:text-white ${e.excluded ? 'line-through text-gray-400' : ''}`}>{e.title || e.name}</td>
                             <td className="p-2.5 text-gray-600">{e.event_type || 'Workshop'}</td>
                             <td className="p-2.5 text-gray-600">{e.level || 'Department'}</td>
                             <td className="p-2.5 text-gray-600">{e.date || '-'}</td>
                             <td className="p-2.5 text-center font-semibold">{e.participants || e.target_students || '-'}</td>
-                            <td className="p-2.5 text-gray-600">{e.resource_person || '-'}</td>
+                            <td className="p-2.5 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleIncludeItem('events_organized', i)}
+                                className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold cursor-pointer transition-all ${
+                                  e.excluded 
+                                    ? 'bg-gray-100 dark:bg-slate-800 text-gray-500 border border-gray-300' 
+                                    : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 shadow-xs'
+                                }`}
+                              >
+                                {e.excluded ? '⚪ Excluded' : '🟢 Included'}
+                              </button>
+                            </td>
+                            <td className="p-2.5 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteSubmissionItem('events_organized', i)}
+                                className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                title="Delete this entry from faculty submission"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -2037,18 +2252,40 @@ const MonthlyReportHub = () => {
                               <th className="p-2">Journal Name</th>
                               <th className="p-2">Indexing</th>
                               <th className="p-2">ISSN / Vol</th>
-                              <th className="p-2">DOI</th>
+                              <th className="p-2 text-center">Include</th>
+                              <th className="p-2 w-10 text-center">Delete</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-purple-50">
                             {selectedPreviewFaculty.submission_data.journal_publications.map((p, i) => (
-                              <tr key={i}>
+                              <tr key={i} className={p.excluded ? 'opacity-50 bg-gray-50/50' : ''}>
                                 <td className="p-2 text-center text-gray-400">{i + 1}</td>
-                                <td className="p-2 font-bold text-gray-900">{p.title}</td>
+                                <td className={`p-2 font-bold text-gray-900 ${p.excluded ? 'line-through text-gray-400' : ''}`}>{p.title}</td>
                                 <td className="p-2 text-gray-600">{p.journal}</td>
                                 <td className="p-2"><span className="px-1.5 py-0.5 bg-purple-200 text-purple-900 rounded font-bold text-[9px]">{p.indexing || 'Scopus'}</span></td>
                                 <td className="p-2 text-gray-600">{p.issn || p.volume_issue || '-'}</td>
-                                <td className="p-2 text-indigo-600 font-mono text-[10px]">{p.doi || '-'}</td>
+                                <td className="p-2 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleIncludeItem('journal_publications', i)}
+                                    className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold cursor-pointer transition-all ${
+                                      p.excluded 
+                                        ? 'bg-gray-100 text-gray-500 border border-gray-300' 
+                                        : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                    }`}
+                                  >
+                                    {p.excluded ? '⚪ Excluded' : '🟢 Included'}
+                                  </button>
+                                </td>
+                                <td className="p-2 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteSubmissionItem('journal_publications', i)}
+                                    className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded cursor-pointer"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </td>
                               </tr>
                             ))}
                           </tbody>
@@ -2066,16 +2303,40 @@ const MonthlyReportHub = () => {
                               <th className="p-2">Application / Filing No</th>
                               <th className="p-2">Agency</th>
                               <th className="p-2">Status</th>
+                              <th className="p-2 text-center">Include</th>
+                              <th className="p-2 w-10 text-center">Delete</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-amber-50">
                             {selectedPreviewFaculty.submission_data.patents.map((pat, i) => (
-                              <tr key={i}>
+                              <tr key={i} className={pat.excluded ? 'opacity-50 bg-gray-50/50' : ''}>
                                 <td className="p-2 text-center text-gray-400">{i + 1}</td>
-                                <td className="p-2 font-bold text-gray-900">{pat.title}</td>
+                                <td className={`p-2 font-bold text-gray-900 ${pat.excluded ? 'line-through text-gray-400' : ''}`}>{pat.title}</td>
                                 <td className="p-2 font-mono text-gray-700">{pat.filing_no_year || pat.app_no || '-'}</td>
                                 <td className="p-2 text-gray-600">{pat.agency || 'Indian Patent Office'}</td>
                                 <td className="p-2"><span className="px-1.5 py-0.5 bg-amber-200 text-amber-900 rounded font-bold text-[9px]">{pat.status || 'Published'}</span></td>
+                                <td className="p-2 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleIncludeItem('patents', i)}
+                                    className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold cursor-pointer transition-all ${
+                                      pat.excluded 
+                                        ? 'bg-gray-100 text-gray-500 border border-gray-300' 
+                                        : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                    }`}
+                                  >
+                                    {pat.excluded ? '⚪ Excluded' : '🟢 Included'}
+                                  </button>
+                                </td>
+                                <td className="p-2 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteSubmissionItem('patents', i)}
+                                    className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded cursor-pointer"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </td>
                               </tr>
                             ))}
                           </tbody>
@@ -2089,45 +2350,164 @@ const MonthlyReportHub = () => {
               {/* 4. Awards, Guest Lectures & Projects */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 
-                {/* Awards */}
-                <div className="border border-gray-200 dark:border-slate-800 rounded-2xl p-3.5 space-y-2">
-                  <div className="font-bold text-gray-900 dark:text-white flex items-center justify-between border-b pb-1.5">
-                    <span>🏆 Awards & Honors</span>
-                    <span className="text-[10px] font-bold text-rose-600">{(selectedPreviewFaculty.submission_data?.awards_honors || []).length}</span>
-                  </div>
-                  {(selectedPreviewFaculty.submission_data?.awards_honors || []).length === 0 ? (
-                    <p className="text-gray-400 italic text-[11px]">Nil awards.</p>
-                  ) : (
-                    selectedPreviewFaculty.submission_data.awards_honors.map((a, i) => (
-                      <div key={i} className="p-2 bg-rose-50/50 rounded-lg text-[11px]">
-                        <div className="font-bold text-rose-950">{a.award_name || a.title}</div>
+              {/* 4. Awards & Honors */}
+              <div className="border border-gray-200 dark:border-slate-800 rounded-2xl p-3.5 space-y-2">
+                <div className="font-bold text-gray-900 dark:text-white flex items-center justify-between border-b pb-1.5">
+                  <span>🏆 Awards, Honors & Fellowships</span>
+                  <span className="text-[10px] font-bold text-rose-600">{(selectedPreviewFaculty.submission_data?.awards_honors || []).length}</span>
+                </div>
+                {(selectedPreviewFaculty.submission_data?.awards_honors || []).length === 0 ? (
+                  <p className="text-gray-400 italic text-[11px]">Nil awards reported.</p>
+                ) : (
+                  selectedPreviewFaculty.submission_data.awards_honors.map((a, i) => (
+                    <div key={i} className={`p-2 bg-rose-50/50 dark:bg-rose-950/20 rounded-lg text-[11px] flex items-center justify-between gap-2 ${a.excluded ? 'opacity-50 bg-gray-50' : ''}`}>
+                      <div>
+                        <div className={`font-bold text-rose-950 dark:text-rose-200 ${a.excluded ? 'line-through text-gray-400' : ''}`}>{a.award_name || a.title}</div>
                         <div className="text-[10px] text-gray-500">By: {a.awarding_agency || a.body} • {a.date}</div>
                       </div>
-                    ))
-                  )}
-                </div>
-
-                {/* Guest Lectures */}
-                <div className="border border-gray-200 dark:border-slate-800 rounded-2xl p-3.5 space-y-2">
-                  <div className="font-bold text-gray-900 dark:text-white flex items-center justify-between border-b pb-1.5">
-                    <span>🎤 Guest Lectures Delivered</span>
-                    <span className="text-[10px] font-bold text-indigo-600">{(selectedPreviewFaculty.submission_data?.guest_lectures || []).length}</span>
-                  </div>
-                  {(selectedPreviewFaculty.submission_data?.guest_lectures || []).length === 0 ? (
-                    <p className="text-gray-400 italic text-[11px]">Nil guest lectures.</p>
-                  ) : (
-                    selectedPreviewFaculty.submission_data.guest_lectures.map((g, i) => (
-                      <div key={i} className="p-2 bg-indigo-50/50 rounded-lg text-[11px]">
-                        <div className="font-bold text-indigo-950">{g.topic || g.title}</div>
-                        <div className="text-[10px] text-gray-500">At: {g.host_institution || g.host} • {g.date}</div>
+                      <div className="flex items-center space-x-1">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleIncludeItem('awards_honors', i)}
+                          className={`px-2 py-0.5 rounded-full text-[9px] font-bold cursor-pointer border ${
+                            a.excluded ? 'bg-gray-100 text-gray-500 border-gray-300' : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                          }`}
+                        >
+                          {a.excluded ? '⚪ Excluded' : '🟢 Included'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSubmissionItem('awards_honors', i)}
+                          className="p-1 text-rose-500 hover:text-rose-700 cursor-pointer"
+                          title="Delete record"
+                        >
+                          <Trash2 size={12} />
+                        </button>
                       </div>
-                    ))
-                  )}
-                </div>
-
+                    </div>
+                  ))
+                )}
               </div>
 
-              {/* 5. Remarks & Verification Notes */}
+              {/* 5. Guest Lectures Delivered */}
+              <div className="border border-gray-200 dark:border-slate-800 rounded-2xl p-3.5 space-y-2">
+                <div className="font-bold text-gray-900 dark:text-white flex items-center justify-between border-b pb-1.5">
+                  <span>🎤 Guest Lectures / Resource Person Sessions</span>
+                  <span className="text-[10px] font-bold text-indigo-600">{(selectedPreviewFaculty.submission_data?.guest_lectures || []).length}</span>
+                </div>
+                {(selectedPreviewFaculty.submission_data?.guest_lectures || []).length === 0 ? (
+                  <p className="text-gray-400 italic text-[11px]">Nil guest lectures reported.</p>
+                ) : (
+                  selectedPreviewFaculty.submission_data.guest_lectures.map((g, i) => (
+                    <div key={i} className={`p-2 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-lg text-[11px] flex items-center justify-between gap-2 ${g.excluded ? 'opacity-50 bg-gray-50' : ''}`}>
+                      <div>
+                        <div className={`font-bold text-indigo-950 dark:text-indigo-200 ${g.excluded ? 'line-through text-gray-400' : ''}`}>{g.topic || g.title}</div>
+                        <div className="text-[10px] text-gray-500">At: {g.host_institution || g.host} • {g.date}</div>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleIncludeItem('guest_lectures', i)}
+                          className={`px-2 py-0.5 rounded-full text-[9px] font-bold cursor-pointer border ${
+                            g.excluded ? 'bg-gray-100 text-gray-500 border-gray-300' : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                          }`}
+                        >
+                          {g.excluded ? '⚪ Excluded' : '🟢 Included'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSubmissionItem('guest_lectures', i)}
+                          className="p-1 text-rose-500 hover:text-rose-700 cursor-pointer"
+                          title="Delete record"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* 6. Online Certifications (NPTEL / Coursera) */}
+              <div className="border border-gray-200 dark:border-slate-800 rounded-2xl p-3.5 space-y-2">
+                <div className="font-bold text-gray-900 dark:text-white flex items-center justify-between border-b pb-1.5">
+                  <span>📜 Online Certifications (NPTEL, Coursera, Oracle)</span>
+                  <span className="text-[10px] font-bold text-teal-600">{(selectedPreviewFaculty.submission_data?.certifications || []).length}</span>
+                </div>
+                {(selectedPreviewFaculty.submission_data?.certifications || []).length === 0 ? (
+                  <p className="text-gray-400 italic text-[11px]">Nil certifications reported.</p>
+                ) : (
+                  selectedPreviewFaculty.submission_data.certifications.map((c, i) => (
+                    <div key={i} className={`p-2 bg-teal-50/50 dark:bg-teal-950/20 rounded-lg text-[11px] flex items-center justify-between gap-2 ${c.excluded ? 'opacity-50 bg-gray-50' : ''}`}>
+                      <div>
+                        <div className={`font-bold text-teal-950 dark:text-teal-200 ${c.excluded ? 'line-through text-gray-400' : ''}`}>{c.cert_name || c.name || c.title}</div>
+                        <div className="text-[10px] text-gray-500">Platform: {c.platform || c.issuing_authority} • {c.completion_date || c.date}</div>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleIncludeItem('certifications', i)}
+                          className={`px-2 py-0.5 rounded-full text-[9px] font-bold cursor-pointer border ${
+                            c.excluded ? 'bg-gray-100 text-gray-500 border-gray-300' : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                          }`}
+                        >
+                          {c.excluded ? '⚪ Excluded' : '🟢 Included'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSubmissionItem('certifications', i)}
+                          className="p-1 text-rose-500 hover:text-rose-700 cursor-pointer"
+                          title="Delete record"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* 7. Student Projects Guided */}
+              <div className="border border-gray-200 dark:border-slate-800 rounded-2xl p-3.5 space-y-2">
+                <div className="font-bold text-gray-900 dark:text-white flex items-center justify-between border-b pb-1.5">
+                  <span>🎓 Student Projects Guided</span>
+                  <span className="text-[10px] font-bold text-amber-600">{(selectedPreviewFaculty.submission_data?.student_projects_guided || []).length}</span>
+                </div>
+                {(selectedPreviewFaculty.submission_data?.student_projects_guided || []).length === 0 ? (
+                  <p className="text-gray-400 italic text-[11px]">Nil student projects recorded.</p>
+                ) : (
+                  selectedPreviewFaculty.submission_data.student_projects_guided.map((sp, i) => (
+                    <div key={i} className={`p-2 bg-amber-50/50 dark:bg-amber-950/20 rounded-lg text-[11px] flex items-center justify-between gap-2 ${sp.excluded ? 'opacity-50 bg-gray-50' : ''}`}>
+                      <div>
+                        <div className={`font-bold text-amber-950 dark:text-amber-200 ${sp.excluded ? 'line-through text-gray-400' : ''}`}>{sp.project_title || sp.title}</div>
+                        <div className="text-[10px] text-gray-500">Students: {sp.student_names || 'UG/PG Team'} • Outcome: {sp.outcome || 'Working Prototype'}</div>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleIncludeItem('student_projects_guided', i)}
+                          className={`px-2 py-0.5 rounded-full text-[9px] font-bold cursor-pointer border ${
+                            sp.excluded ? 'bg-gray-100 text-gray-500 border-gray-300' : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                          }`}
+                        >
+                          {sp.excluded ? '⚪ Excluded' : '🟢 Included'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSubmissionItem('student_projects_guided', i)}
+                          className="p-1 text-rose-500 hover:text-rose-700 cursor-pointer"
+                          title="Delete record"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+              {/* Remarks & Notes */}
               {selectedPreviewFaculty.submission_data?.remarks && (
                 <div className="p-3.5 bg-gray-50 dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700">
                   <span className="font-bold text-gray-800 dark:text-gray-200 block mb-1 text-[11px]">
