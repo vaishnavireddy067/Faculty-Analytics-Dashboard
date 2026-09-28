@@ -51,6 +51,7 @@ const MonthlyReportHub = () => {
   const [consolidating, setConsolidating] = useState(false);
   const [consolidatedData, setConsolidatedData] = useState(null);
   const [consolidatedSuccessMsg, setConsolidatedSuccessMsg] = useState('');
+  const [selectedSubmissionIds, setSelectedSubmissionIds] = useState([]);
   const printRef = useRef();
 
   // Load User Profile on mount
@@ -99,6 +100,47 @@ const MonthlyReportHub = () => {
     }
   };
 
+  // Toggle Selection of faculty submission for consolidation
+  const handleToggleSelectSubmission = (subId) => {
+    if (!subId) return;
+    setSelectedSubmissionIds(prev => 
+      prev.includes(subId) ? prev.filter(id => id !== subId) : [...prev, subId]
+    );
+  };
+
+  // Select all or deselect all submitted faculty
+  const handleSelectAllSubmissions = (e) => {
+    if (e.target.checked) {
+      const allSubIds = (trackerData?.faculties || [])
+        .filter(f => f.submission_id)
+        .map(f => f.submission_id);
+      setSelectedSubmissionIds(allSubIds);
+    } else {
+      setSelectedSubmissionIds([]);
+    }
+  };
+
+  // Batch Approve selected submissions
+  const handleBatchApprove = async () => {
+    if (selectedSubmissionIds.length === 0) {
+      alert("Please select at least one faculty submission checkbox to approve.");
+      return;
+    }
+    try {
+      const res = await fetchAPI('/faculty/monthly-submission/batch-approve/', {
+        method: 'POST',
+        body: JSON.stringify({ submission_ids: selectedSubmissionIds })
+      });
+      if (res && res.success) {
+        alert(res.message);
+        loadTrackerData();
+      }
+    } catch (err) {
+      console.error("Batch approve error:", err);
+      alert("Failed to batch approve submissions.");
+    }
+  };
+
   // Fetch Current Faculty's Monthly Submission
   const loadFacultySubmission = async () => {
     setSubmissionLoading(true);
@@ -131,16 +173,18 @@ const MonthlyReportHub = () => {
     }
   };
 
-  // Fetch or trigger 1-Click Auto-Consolidation (ONLY APPROVED SUBMISSIONS)
-  const handleAutoConsolidate = async () => {
+  // Fetch or trigger Auto-Consolidation (Selective or Approved)
+  const handleAutoConsolidate = async (specificIds = null) => {
     setConsolidating(true);
     setConsolidatedSuccessMsg('');
     try {
+      const targetIds = specificIds || (selectedSubmissionIds.length > 0 ? selectedSubmissionIds : null);
       const payload = {
         department,
         month,
         year,
-        academic_year: academicYear
+        academic_year: academicYear,
+        selected_submission_ids: targetIds
       };
       const res = await fetchAPI('/faculty/monthly-submission/consolidate/', {
         method: 'POST',
@@ -149,9 +193,9 @@ const MonthlyReportHub = () => {
       if (res && res.success) {
         setConsolidatedData(res);
         if (res.total_submissions_merged > 0) {
-          setConsolidatedSuccessMsg(`✅ Successfully merged ${res.total_submissions_merged} APPROVED & LOCKED faculty submissions into the Consolidated Master Report!`);
+          setConsolidatedSuccessMsg(`✅ Successfully consolidated ${res.total_submissions_merged} faculty return(s) into the Official Consolidated Master Report!`);
         } else {
-          setConsolidatedSuccessMsg(`⚠️ Note: 0 Approved submissions merged. Please review and approve faculty submissions in the HOD Review Tracker first!`);
+          setConsolidatedSuccessMsg(`⚠️ Note: 0 faculty submissions merged. Please select faculty checkboxes or approve returns in HOD Review Tracker first!`);
         }
         setActiveTab('consolidated_view');
         // Refresh tracker to show updated counts
@@ -1201,11 +1245,52 @@ const MonthlyReportHub = () => {
               </div>
             </div>
 
+            {/* Batch Action Toolbar when items are selected */}
+            {selectedSubmissionIds.length > 0 && (
+              <div className="p-3 bg-indigo-50/90 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 rounded-2xl flex flex-wrap items-center justify-between gap-3 animate-in fade-in">
+                <div className="flex items-center space-x-2 text-xs font-bold text-indigo-900 dark:text-indigo-200">
+                  <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[11px]">
+                    {selectedSubmissionIds.length}
+                  </span>
+                  <span>Faculty Submissions Selected for Review & Consolidation</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={handleBatchApprove}
+                    className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center space-x-1 cursor-pointer shadow-sm"
+                  >
+                    <CheckCircle2 size={14} />
+                    <span>Approve Selected ({selectedSubmissionIds.length})</span>
+                  </button>
+                  <button
+                    onClick={() => handleAutoConsolidate(selectedSubmissionIds)}
+                    disabled={consolidating}
+                    className="px-4 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-extrabold shadow-md shadow-indigo-500/20 transition-all flex items-center space-x-1 cursor-pointer"
+                  >
+                    <Sparkles size={14} />
+                    <span>{consolidating ? 'Consolidating...' : `⚡ Consolidate Selected into Master (${selectedSubmissionIds.length})`}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Tracker Table */}
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
                 <thead className="bg-gray-50 dark:bg-slate-800/60 text-gray-600 dark:text-gray-400 uppercase text-[10px] font-bold">
                   <tr>
+                    <th className="p-3 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        checked={
+                          selectedSubmissionIds.length > 0 &&
+                          selectedSubmissionIds.length === (trackerData?.faculties || []).filter(f => f.submission_id).length
+                        }
+                        onChange={handleSelectAllSubmissions}
+                        className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        title="Select All Submissions"
+                      />
+                    </th>
                     <th className="p-3">Faculty Name & Designation</th>
                     <th className="p-3">Department</th>
                     <th className="p-3 text-center">Status</th>
@@ -1217,71 +1302,90 @@ const MonthlyReportHub = () => {
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
                   {filteredFaculties.length === 0 ? (
                     <tr>
-                      <td colSpan="6" className="p-8 text-center text-gray-400 text-xs">
+                      <td colSpan="7" className="p-8 text-center text-gray-400 text-xs">
                         No faculty members match the filter criteria.
                       </td>
                     </tr>
                   ) : (
-                    filteredFaculties.map((fac, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50/50 dark:hover:bg-slate-800/40">
-                        <td className="p-3">
-                          <div className="font-bold text-gray-900 dark:text-white text-xs">{fac.faculty_name}</div>
-                          <div className="text-[10px] text-gray-400">{fac.email} • {fac.designation}</div>
-                        </td>
-                        <td className="p-3 text-gray-600 dark:text-gray-300">{fac.department}</td>
-                        <td className="p-3 text-center">
-                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold ${
-                            fac.status === 'APPROVED'
-                              ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300'
-                              : fac.status === 'SUBMITTED'
-                              ? 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-300'
-                              : fac.status === 'REJECTED'
-                              ? 'bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-300'
-                              : fac.status === 'DRAFT'
-                              ? 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-300'
-                              : 'bg-gray-100 dark:bg-slate-800 text-gray-500 border border-gray-300'
-                          }`}>
-                            {fac.status === 'APPROVED' ? '✅ APPROVED' : fac.status === 'SUBMITTED' ? '📩 SUBMITTED' : fac.status === 'REJECTED' ? '⚠️ REVISION' : fac.status}
-                          </span>
-                        </td>
-                        <td className="p-3">
-                          {fac.status === 'SUBMITTED' || fac.status === 'DRAFT' ? (
-                            <div className="flex flex-wrap gap-1">
-                              {fac.counts.fdps > 0 && <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 rounded text-[10px] font-bold">{fac.counts.fdps} FDPs</span>}
-                              {fac.counts.events > 0 && <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 rounded text-[10px] font-bold">{fac.counts.events} Events</span>}
-                              {fac.counts.publications > 0 && <span className="px-1.5 py-0.5 bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300 rounded text-[10px] font-bold">{fac.counts.publications} Pubs</span>}
-                              {fac.counts.patents > 0 && <span className="px-1.5 py-0.5 bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 rounded text-[10px] font-bold">{fac.counts.patents} Patents</span>}
-                              {fac.counts.awards > 0 && <span className="px-1.5 py-0.5 bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300 rounded text-[10px] font-bold">{fac.counts.awards} Awards</span>}
-                            </div>
-                          ) : (
-                            <span className="text-gray-400 italic text-[11px]">No return submitted</span>
-                          )}
-                        </td>
-                        <td className="p-3 text-gray-500 text-xs">
-                          {fac.submitted_at || '—'}
-                        </td>
-                        <td className="p-3 text-center">
-                          {fac.submission_data ? (
-                            <button
-                              type="button"
-                              onClick={() => setSelectedPreviewFaculty(fac)}
-                              className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 rounded-xl text-xs font-bold transition-all flex items-center space-x-1 mx-auto"
-                            >
-                              <Eye size={13} />
-                              <span>View Details</span>
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => alert(`Reminder notification sent to ${fac.faculty_name} (${fac.email})`)}
-                              className="px-2.5 py-1 bg-gray-100 dark:bg-slate-800 text-gray-500 hover:bg-gray-200 rounded-xl text-[11px] font-semibold"
-                            >
-                              Send Reminder
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))
+                    filteredFaculties.map((fac, idx) => {
+                      const isSelected = fac.submission_id && selectedSubmissionIds.includes(fac.submission_id);
+                      return (
+                        <tr 
+                          key={idx} 
+                          className={`transition-colors ${
+                            isSelected 
+                              ? 'bg-indigo-50/40 dark:bg-indigo-950/30' 
+                              : 'hover:bg-gray-50/50 dark:hover:bg-slate-800/40'
+                          }`}
+                        >
+                          <td className="p-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={!!isSelected}
+                              disabled={!fac.submission_id}
+                              onChange={() => handleToggleSelectSubmission(fac.submission_id)}
+                              className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:opacity-30"
+                            />
+                          </td>
+                          <td className="p-3">
+                            <div className="font-bold text-gray-900 dark:text-white text-xs">{fac.faculty_name}</div>
+                            <div className="text-[10px] text-gray-400">{fac.email} • {fac.designation}</div>
+                          </td>
+                          <td className="p-3 text-gray-600 dark:text-gray-300">{fac.department}</td>
+                          <td className="p-3 text-center">
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold ${
+                              fac.status === 'APPROVED'
+                                ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300'
+                                : fac.status === 'SUBMITTED'
+                                ? 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-300'
+                                : fac.status === 'REJECTED'
+                                ? 'bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-300'
+                                : fac.status === 'DRAFT'
+                                ? 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-300'
+                                : 'bg-gray-100 dark:bg-slate-800 text-gray-500 border border-gray-300'
+                            }`}>
+                              {fac.status === 'APPROVED' ? '✅ APPROVED' : fac.status === 'SUBMITTED' ? '📩 SUBMITTED' : fac.status === 'REJECTED' ? '⚠️ REVISION' : fac.status}
+                            </span>
+                          </td>
+                          <td className="p-3">
+                            {fac.status === 'SUBMITTED' || fac.status === 'APPROVED' || fac.status === 'DRAFT' ? (
+                              <div className="flex flex-wrap gap-1">
+                                {fac.counts.fdps > 0 && <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 rounded text-[10px] font-bold">{fac.counts.fdps} FDPs</span>}
+                                {fac.counts.events > 0 && <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 rounded text-[10px] font-bold">{fac.counts.events} Events</span>}
+                                {fac.counts.publications > 0 && <span className="px-1.5 py-0.5 bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300 rounded text-[10px] font-bold">{fac.counts.publications} Pubs</span>}
+                                {fac.counts.patents > 0 && <span className="px-1.5 py-0.5 bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 rounded text-[10px] font-bold">{fac.counts.patents} Patents</span>}
+                                {fac.counts.awards > 0 && <span className="px-1.5 py-0.5 bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300 rounded text-[10px] font-bold">{fac.counts.awards} Awards</span>}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 italic text-[11px]">No return submitted</span>
+                            )}
+                          </td>
+                          <td className="p-3 text-gray-500 text-xs">
+                            {fac.submitted_at || '—'}
+                          </td>
+                          <td className="p-3 text-center">
+                            {fac.submission_data ? (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedPreviewFaculty(fac)}
+                                className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded-xl text-xs font-bold transition-all flex items-center space-x-1 mx-auto cursor-pointer shadow-xs"
+                              >
+                                <Eye size={13} />
+                                <span>👁️ Review Tables</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => alert(`Reminder notification sent to ${fac.faculty_name} (${fac.email})`)}
+                                className="px-2.5 py-1 bg-gray-100 dark:bg-slate-800 text-gray-500 hover:bg-gray-200 rounded-xl text-[11px] font-semibold cursor-pointer"
+                              >
+                                Send Reminder
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -1290,17 +1394,21 @@ const MonthlyReportHub = () => {
             {/* Bottom Actions Bar */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-gray-100 dark:border-slate-800">
               <div className="text-xs text-gray-500">
-                Showing {filteredFaculties.length} faculties. Ready to compile into a single institutional report?
+                {selectedSubmissionIds.length > 0 
+                  ? `${selectedSubmissionIds.length} faculty returns selected for consolidation.`
+                  : `Select faculty checkboxes above or click below to generate master sheet.`}
               </div>
 
-              <button
-                disabled={consolidating}
-                onClick={handleAutoConsolidate}
-                className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-extrabold shadow-md shadow-indigo-500/20 transition-all flex items-center justify-center space-x-2"
-              >
-                <Sparkles size={15} />
-                <span>{consolidating ? 'Compiling all submissions...' : '⚡ Generate 1-Click Consolidated Report'}</span>
-              </button>
+              <div className="flex items-center space-x-2">
+                <button
+                  disabled={consolidating}
+                  onClick={() => handleAutoConsolidate()}
+                  className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-extrabold shadow-md shadow-indigo-500/20 transition-all flex items-center justify-center space-x-2 cursor-pointer"
+                >
+                  <Sparkles size={15} />
+                  <span>{consolidating ? 'Compiling report...' : (selectedSubmissionIds.length > 0 ? `⚡ Consolidate Selected (${selectedSubmissionIds.length})` : '⚡ Auto-Consolidate All Approved Submissions')}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1755,153 +1863,271 @@ const MonthlyReportHub = () => {
       {/* 👁️ INDIVIDUAL FACULTY PREVIEW & AUDIT INSPECTION MODAL (FOR HOD) */}
       {/* ========================================================================= */}
       {selectedPreviewFaculty && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-5 shadow-2xl animate-in fade-in">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
+          <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-3xl max-w-4xl w-full max-h-[92vh] overflow-y-auto p-6 space-y-6 shadow-2xl animate-in fade-in">
             
             {/* Header */}
             <div className="flex items-start justify-between border-b border-gray-100 dark:border-slate-800 pb-4">
               <div>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">
-                  Verified Faculty Record & Audit Inspector
+                  Verified Faculty Return & Table-by-Table Inspector
                 </span>
-                <h3 className="text-lg sm:text-xl font-black text-gray-900 dark:text-white mt-1">
+                <h3 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white mt-1">
                   {selectedPreviewFaculty.faculty_name}
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {selectedPreviewFaculty.email} • {selectedPreviewFaculty.designation || 'Faculty'}
+                  {selectedPreviewFaculty.email} • {selectedPreviewFaculty.designation || 'Faculty'} • {selectedPreviewFaculty.department}
                 </p>
               </div>
               <button
                 onClick={() => setSelectedPreviewFaculty(null)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-white text-xs font-bold px-3 py-1.5 bg-gray-100 dark:bg-slate-800 rounded-xl cursor-pointer"
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-white text-xs font-bold px-3.5 py-1.5 bg-gray-100 dark:bg-slate-800 rounded-xl cursor-pointer hover:bg-gray-200"
               >
-                ✕ Close
+                ✕ Close Inspector
               </button>
             </div>
 
             {/* 📋 Comprehensive Audit & Metadata Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-gray-50 dark:bg-slate-800/60 p-4 rounded-2xl text-[11px] border border-gray-200 dark:border-slate-700">
               <div>
-                <span className="text-gray-400 uppercase font-bold text-[9px] block">Current Status</span>
-                <span className={`inline-block mt-0.5 px-2 py-0.5 rounded-md font-black text-[10px] ${
-                  selectedPreviewFaculty.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' :
-                  selectedPreviewFaculty.status === 'SUBMITTED' ? 'bg-blue-100 text-blue-800' :
-                  selectedPreviewFaculty.status === 'REJECTED' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
+                <span className="text-gray-400 uppercase font-bold text-[9px] block">Current Review Status</span>
+                <span className={`inline-block mt-1 px-2.5 py-0.5 rounded-md font-black text-[10px] ${
+                  selectedPreviewFaculty.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
+                  selectedPreviewFaculty.status === 'SUBMITTED' ? 'bg-blue-100 text-blue-800 border border-blue-300' :
+                  selectedPreviewFaculty.status === 'REJECTED' ? 'bg-rose-100 text-rose-800 border border-rose-300' : 'bg-amber-100 text-amber-800 border border-amber-300'
                 }`}>
-                  {selectedPreviewFaculty.status}
+                  {selectedPreviewFaculty.status === 'APPROVED' ? '✅ APPROVED & LOCKED' : selectedPreviewFaculty.status === 'SUBMITTED' ? '📩 SUBMITTED FOR REVIEW' : selectedPreviewFaculty.status}
                 </span>
               </div>
               <div>
-                <span className="text-gray-400 uppercase font-bold text-[9px] block">Department</span>
-                <span className="font-bold text-gray-800 dark:text-gray-200 mt-0.5 block truncate">
-                  {selectedPreviewFaculty.department}
+                <span className="text-gray-400 uppercase font-bold text-[9px] block">Reporting Month</span>
+                <span className="font-bold text-gray-800 dark:text-gray-200 mt-1 block">
+                  {month} {year}
                 </span>
               </div>
               <div>
-                <span className="text-gray-400 uppercase font-bold text-[9px] block">Created Date & Time</span>
-                <span className="font-semibold text-gray-700 dark:text-gray-300 mt-0.5 block font-mono">
+                <span className="text-gray-400 uppercase font-bold text-[9px] block">Initial Created At</span>
+                <span className="font-semibold text-gray-700 dark:text-gray-300 mt-1 block font-mono text-[10px]">
                   {selectedPreviewFaculty.created_at || selectedPreviewFaculty.submitted_at || '—'}
                 </span>
               </div>
               <div>
-                <span className="text-gray-400 uppercase font-bold text-[9px] block">Last Modified / Submitted</span>
-                <span className="font-semibold text-gray-700 dark:text-gray-300 mt-0.5 block font-mono">
+                <span className="text-gray-400 uppercase font-bold text-[9px] block">Last Submitted Timestamp</span>
+                <span className="font-semibold text-gray-700 dark:text-gray-300 mt-1 block font-mono text-[10px]">
                   {selectedPreviewFaculty.submitted_at || '—'}
                 </span>
               </div>
             </div>
 
-            {/* Detailed Record Data */}
-            <div className="space-y-4 text-xs">
+            {/* Detailed Table-By-Table Sections */}
+            <div className="space-y-6 text-xs">
               
-              {/* 1. FDPs / Workshops */}
-              <div className="border border-gray-100 dark:border-slate-800 rounded-2xl p-3.5 bg-white dark:bg-slate-900 shadow-xs space-y-2">
-                <div className="flex items-center justify-between font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-slate-800 pb-1.5">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-md bg-blue-100 dark:bg-blue-950 text-blue-600 flex items-center justify-center text-[10px]">1</span>
-                    <span>Workshops, FDPs & STTPs Attended ({selectedPreviewFaculty.counts?.fdps || 0})</span>
+              {/* 1. FDPs / Workshops Table */}
+              <div className="border border-gray-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
+                <div className="bg-blue-50 dark:bg-blue-950/40 px-4 py-2.5 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between font-bold text-blue-950 dark:text-blue-200">
+                  <span className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-md bg-blue-600 text-white flex items-center justify-center text-[10px]">1</span>
+                    <span>Workshops, FDPs, STTPs & Seminars Attended</span>
+                  </span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                    {(selectedPreviewFaculty.submission_data?.fdps_workshops_attended || []).length} Records
                   </span>
                 </div>
                 {(selectedPreviewFaculty.submission_data?.fdps_workshops_attended || []).length === 0 ? (
-                  <p className="text-gray-400 italic text-[11px]">No FDP records submitted for this month.</p>
+                  <p className="p-4 text-gray-400 italic text-[11px] text-center">Nil FDP records submitted for this month.</p>
                 ) : (
-                  <div className="space-y-2">
-                    {selectedPreviewFaculty.submission_data.fdps_workshops_attended.map((f, i) => (
-                      <div key={i} className="p-2.5 bg-blue-50/50 dark:bg-blue-950/20 rounded-xl border border-blue-100 dark:border-blue-900/40 text-[11px] space-y-1">
-                        <div className="font-bold text-blue-900 dark:text-blue-300">{f.title || f.program_name || 'FDP Title'}</div>
-                        <div className="text-gray-600 dark:text-gray-400 flex flex-wrap gap-2 text-[10px]">
-                          <span>🏢 Organized by: <b>{f.organization || f.organized_by || '-'}</b></span>
-                          <span>⏱️ Duration: <b>{f.duration || f.start_date || '-'}</b></span>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-[11px]">
+                      <thead className="bg-gray-50 dark:bg-slate-800/80 text-gray-600 uppercase text-[9px]">
+                        <tr>
+                          <th className="p-2.5 w-10 text-center">S.No</th>
+                          <th className="p-2.5">Program Title</th>
+                          <th className="p-2.5">Role</th>
+                          <th className="p-2.5">Organized By</th>
+                          <th className="p-2.5">Dates / Duration</th>
+                          <th className="p-2.5 w-16 text-center">Days</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
+                        {selectedPreviewFaculty.submission_data.fdps_workshops_attended.map((f, i) => (
+                          <tr key={i} className="hover:bg-blue-50/20">
+                            <td className="p-2.5 text-center font-bold text-gray-400">{i + 1}</td>
+                            <td className="p-2.5 font-bold text-gray-900 dark:text-white">{f.title || f.program_name}</td>
+                            <td className="p-2.5 text-gray-600">{f.role || 'Participant'}</td>
+                            <td className="p-2.5 text-gray-600">{f.organization || f.organized_by}</td>
+                            <td className="p-2.5 text-gray-600">{f.start_date ? `${f.start_date} to ${f.end_date || f.start_date}` : (f.duration || '-')}</td>
+                            <td className="p-2.5 text-center font-semibold">{f.duration_days || 1}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
 
-              {/* 2. Events Organized */}
-              <div className="border border-gray-100 dark:border-slate-800 rounded-2xl p-3.5 bg-white dark:bg-slate-900 shadow-xs space-y-2">
-                <div className="flex items-center justify-between font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-slate-800 pb-1.5">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-md bg-indigo-100 dark:bg-indigo-950 text-indigo-600 flex items-center justify-center text-[10px]">2</span>
-                    <span>Programmes & Events Organized ({selectedPreviewFaculty.counts?.events || 0})</span>
+              {/* 2. Events Organized Table */}
+              <div className="border border-gray-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
+                <div className="bg-indigo-50 dark:bg-indigo-950/40 px-4 py-2.5 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between font-bold text-indigo-950 dark:text-indigo-200">
+                  <span className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-md bg-indigo-600 text-white flex items-center justify-center text-[10px]">2</span>
+                    <span>Programmes / Events Organized (Workshops, FDPs, Webinars, Contests)</span>
+                  </span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
+                    {(selectedPreviewFaculty.submission_data?.events_organized || []).length} Records
                   </span>
                 </div>
                 {(selectedPreviewFaculty.submission_data?.events_organized || []).length === 0 ? (
-                  <p className="text-gray-400 italic text-[11px]">No event records submitted for this month.</p>
+                  <p className="p-4 text-gray-400 italic text-[11px] text-center">Nil event records organized during this month.</p>
                 ) : (
-                  <div className="space-y-2">
-                    {selectedPreviewFaculty.submission_data.events_organized.map((e, i) => (
-                      <div key={i} className="p-2.5 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-xl border border-indigo-100 dark:border-indigo-900/40 text-[11px] space-y-1">
-                        <div className="font-bold text-indigo-900 dark:text-indigo-300">{e.title || e.name || 'Event Title'}</div>
-                        <div className="text-gray-600 dark:text-gray-400 flex flex-wrap gap-2 text-[10px]">
-                          <span>🏷️ Type: <b>{e.event_type || e.level || 'Department'}</b></span>
-                          <span>📅 Date: <b>{e.date || e.duration || '-'}</b></span>
-                          <span>👥 Participants: <b>{e.participants || e.target_students || '-'}</b></span>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-[11px]">
+                      <thead className="bg-gray-50 dark:bg-slate-800/80 text-gray-600 uppercase text-[9px]">
+                        <tr>
+                          <th className="p-2.5 w-10 text-center">S.No</th>
+                          <th className="p-2.5">Event Title</th>
+                          <th className="p-2.5">Category</th>
+                          <th className="p-2.5">Level</th>
+                          <th className="p-2.5">Date</th>
+                          <th className="p-2.5 text-center">Participants</th>
+                          <th className="p-2.5">Resource Person</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
+                        {selectedPreviewFaculty.submission_data.events_organized.map((e, i) => (
+                          <tr key={i} className="hover:bg-indigo-50/20">
+                            <td className="p-2.5 text-center font-bold text-gray-400">{i + 1}</td>
+                            <td className="p-2.5 font-bold text-gray-900 dark:text-white">{e.title || e.name}</td>
+                            <td className="p-2.5 text-gray-600">{e.event_type || 'Workshop'}</td>
+                            <td className="p-2.5 text-gray-600">{e.level || 'Department'}</td>
+                            <td className="p-2.5 text-gray-600">{e.date || '-'}</td>
+                            <td className="p-2.5 text-center font-semibold">{e.participants || e.target_students || '-'}</td>
+                            <td className="p-2.5 text-gray-600">{e.resource_person || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
 
-              {/* 3. Publications & Patents */}
-              <div className="border border-gray-100 dark:border-slate-800 rounded-2xl p-3.5 bg-white dark:bg-slate-900 shadow-xs space-y-2">
-                <div className="flex items-center justify-between font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-slate-800 pb-1.5">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-md bg-purple-100 dark:bg-purple-950 text-purple-600 flex items-center justify-center text-[10px]">3</span>
-                    <span>Research Publications & Patents ({selectedPreviewFaculty.counts?.publications || 0} Pubs, {selectedPreviewFaculty.counts?.patents || 0} Patents)</span>
+              {/* 3. Research Publications & Patents Table */}
+              <div className="border border-gray-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
+                <div className="bg-purple-50 dark:bg-purple-950/40 px-4 py-2.5 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between font-bold text-purple-950 dark:text-purple-200">
+                  <span className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-md bg-purple-600 text-white flex items-center justify-center text-[10px]">3</span>
+                    <span>Research Publications (Journals, Conferences) & Patents</span>
+                  </span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800">
+                    {(selectedPreviewFaculty.submission_data?.journal_publications || []).length + (selectedPreviewFaculty.submission_data?.conference_publications || []).length + (selectedPreviewFaculty.submission_data?.patents || []).length} Records
                   </span>
                 </div>
                 {((selectedPreviewFaculty.submission_data?.journal_publications || []).length === 0 && 
                   (selectedPreviewFaculty.submission_data?.conference_publications || []).length === 0 && 
                   (selectedPreviewFaculty.submission_data?.patents || []).length === 0) ? (
-                  <p className="text-gray-400 italic text-[11px]">No research publications or patent records submitted.</p>
+                  <p className="p-4 text-gray-400 italic text-[11px] text-center">Nil research publications or patents submitted.</p>
                 ) : (
-                  <div className="space-y-2">
-                    {(selectedPreviewFaculty.submission_data?.journal_publications || []).map((pub, i) => (
-                      <div key={`pub-${i}`} className="p-2.5 bg-purple-50/50 dark:bg-purple-950/20 rounded-xl border border-purple-100 dark:border-purple-900/40 text-[11px]">
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-200 text-purple-800 mr-2">JOURNAL</span>
-                        <span className="font-bold text-gray-900 dark:text-white">{pub.title}</span>
-                        <div className="text-[10px] text-gray-500 mt-1">
-                          Journal: <b>{pub.journal}</b> • Indexing: <b>{pub.indexing || 'Scopus'}</b> • Vol/Issue: {pub.volume_issue || '-'}
-                        </div>
+                  <div className="p-3 space-y-3">
+                    {(selectedPreviewFaculty.submission_data?.journal_publications || []).length > 0 && (
+                      <div className="overflow-x-auto border border-purple-100 rounded-xl">
+                        <table className="w-full text-left text-[11px]">
+                          <thead className="bg-purple-100/60 text-purple-900 uppercase text-[9px]">
+                            <tr>
+                              <th className="p-2 w-8 text-center">#</th>
+                              <th className="p-2">Journal Paper Title</th>
+                              <th className="p-2">Journal Name</th>
+                              <th className="p-2">Indexing</th>
+                              <th className="p-2">ISSN / Vol</th>
+                              <th className="p-2">DOI</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-purple-50">
+                            {selectedPreviewFaculty.submission_data.journal_publications.map((p, i) => (
+                              <tr key={i}>
+                                <td className="p-2 text-center text-gray-400">{i + 1}</td>
+                                <td className="p-2 font-bold text-gray-900">{p.title}</td>
+                                <td className="p-2 text-gray-600">{p.journal}</td>
+                                <td className="p-2"><span className="px-1.5 py-0.5 bg-purple-200 text-purple-900 rounded font-bold text-[9px]">{p.indexing || 'Scopus'}</span></td>
+                                <td className="p-2 text-gray-600">{p.issn || p.volume_issue || '-'}</td>
+                                <td className="p-2 text-indigo-600 font-mono text-[10px]">{p.doi || '-'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
-                    ))}
-                    {(selectedPreviewFaculty.submission_data?.patents || []).map((pat, i) => (
-                      <div key={`pat-${i}`} className="p-2.5 bg-amber-50/50 dark:bg-amber-950/20 rounded-xl border border-amber-100 dark:border-amber-900/40 text-[11px]">
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-200 text-amber-800 mr-2">PATENT</span>
-                        <span className="font-bold text-gray-900 dark:text-white">{pat.title}</span>
-                        <div className="text-[10px] text-gray-500 mt-1">
-                          Agency: <b>{pat.agency || 'Indian Patent Office'}</b> • App No: <b>{pat.filing_no_year || pat.app_no || '-'}</b> • Status: <b className="text-amber-700">{pat.status || 'Published'}</b>
-                        </div>
+                    )}
+
+                    {(selectedPreviewFaculty.submission_data?.patents || []).length > 0 && (
+                      <div className="overflow-x-auto border border-amber-100 rounded-xl">
+                        <table className="w-full text-left text-[11px]">
+                          <thead className="bg-amber-100/60 text-amber-900 uppercase text-[9px]">
+                            <tr>
+                              <th className="p-2 w-8 text-center">#</th>
+                              <th className="p-2">Patent Title</th>
+                              <th className="p-2">Application / Filing No</th>
+                              <th className="p-2">Agency</th>
+                              <th className="p-2">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-amber-50">
+                            {selectedPreviewFaculty.submission_data.patents.map((pat, i) => (
+                              <tr key={i}>
+                                <td className="p-2 text-center text-gray-400">{i + 1}</td>
+                                <td className="p-2 font-bold text-gray-900">{pat.title}</td>
+                                <td className="p-2 font-mono text-gray-700">{pat.filing_no_year || pat.app_no || '-'}</td>
+                                <td className="p-2 text-gray-600">{pat.agency || 'Indian Patent Office'}</td>
+                                <td className="p-2"><span className="px-1.5 py-0.5 bg-amber-200 text-amber-900 rounded font-bold text-[9px]">{pat.status || 'Published'}</span></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
               </div>
 
-              {/* 4. Remarks & Verification Notes */}
+              {/* 4. Awards, Guest Lectures & Projects */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                {/* Awards */}
+                <div className="border border-gray-200 dark:border-slate-800 rounded-2xl p-3.5 space-y-2">
+                  <div className="font-bold text-gray-900 dark:text-white flex items-center justify-between border-b pb-1.5">
+                    <span>🏆 Awards & Honors</span>
+                    <span className="text-[10px] font-bold text-rose-600">{(selectedPreviewFaculty.submission_data?.awards_honors || []).length}</span>
+                  </div>
+                  {(selectedPreviewFaculty.submission_data?.awards_honors || []).length === 0 ? (
+                    <p className="text-gray-400 italic text-[11px]">Nil awards.</p>
+                  ) : (
+                    selectedPreviewFaculty.submission_data.awards_honors.map((a, i) => (
+                      <div key={i} className="p-2 bg-rose-50/50 rounded-lg text-[11px]">
+                        <div className="font-bold text-rose-950">{a.award_name || a.title}</div>
+                        <div className="text-[10px] text-gray-500">By: {a.awarding_agency || a.body} • {a.date}</div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Guest Lectures */}
+                <div className="border border-gray-200 dark:border-slate-800 rounded-2xl p-3.5 space-y-2">
+                  <div className="font-bold text-gray-900 dark:text-white flex items-center justify-between border-b pb-1.5">
+                    <span>🎤 Guest Lectures Delivered</span>
+                    <span className="text-[10px] font-bold text-indigo-600">{(selectedPreviewFaculty.submission_data?.guest_lectures || []).length}</span>
+                  </div>
+                  {(selectedPreviewFaculty.submission_data?.guest_lectures || []).length === 0 ? (
+                    <p className="text-gray-400 italic text-[11px]">Nil guest lectures.</p>
+                  ) : (
+                    selectedPreviewFaculty.submission_data.guest_lectures.map((g, i) => (
+                      <div key={i} className="p-2 bg-indigo-50/50 rounded-lg text-[11px]">
+                        <div className="font-bold text-indigo-950">{g.topic || g.title}</div>
+                        <div className="text-[10px] text-gray-500">At: {g.host_institution || g.host} • {g.date}</div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+              </div>
+
+              {/* 5. Remarks & Verification Notes */}
               {selectedPreviewFaculty.submission_data?.remarks && (
                 <div className="p-3.5 bg-gray-50 dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700">
                   <span className="font-bold text-gray-800 dark:text-gray-200 block mb-1 text-[11px]">
@@ -1916,16 +2142,28 @@ const MonthlyReportHub = () => {
 
             {/* Action Bar */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-gray-100 dark:border-slate-800">
-              <div className="flex items-center space-x-2 w-full sm:w-auto">
+              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                 {selectedPreviewFaculty.submission_id && (
                   <>
                     <button
                       onClick={() => handleHODAction(selectedPreviewFaculty.submission_id, 'APPROVE')}
-                      className="flex-1 sm:flex-none px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center space-x-1.5 cursor-pointer"
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center space-x-1.5 cursor-pointer"
                     >
                       <CheckCircle2 size={14} />
                       <span>Approve & Lock</span>
                     </button>
+
+                    <button
+                      onClick={() => {
+                        handleAutoConsolidate([selectedPreviewFaculty.submission_id]);
+                        setSelectedPreviewFaculty(null);
+                      }}
+                      className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-extrabold shadow-md shadow-indigo-500/20 transition-all flex items-center space-x-1.5 cursor-pointer"
+                    >
+                      <Sparkles size={14} />
+                      <span>⚡ Consolidate This Return Now</span>
+                    </button>
+
                     <button
                       onClick={() => {
                         const reason = window.prompt("Enter revision instructions for faculty:", "Please double check paper indexing and update student count.");
@@ -1933,14 +2171,15 @@ const MonthlyReportHub = () => {
                           handleHODAction(selectedPreviewFaculty.submission_id, 'REJECT', reason);
                         }
                       }}
-                      className="flex-1 sm:flex-none px-3.5 py-2 bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 hover:bg-amber-100 border border-amber-200 dark:border-amber-800 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1 cursor-pointer"
+                      className="px-3.5 py-2 bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 hover:bg-amber-100 border border-amber-200 dark:border-amber-800 rounded-xl text-xs font-bold transition-all flex items-center space-x-1 cursor-pointer"
                     >
                       <AlertCircle size={14} />
                       <span>Request Revision</span>
                     </button>
+
                     <button
                       onClick={() => handleDeleteSubmissionByHOD(selectedPreviewFaculty.submission_id)}
-                      className="flex-1 sm:flex-none px-3.5 py-2 bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 hover:bg-rose-100 border border-rose-200 dark:border-rose-800 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1 cursor-pointer"
+                      className="px-3.5 py-2 bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 hover:bg-rose-100 border border-rose-200 dark:border-rose-800 rounded-xl text-xs font-bold transition-all flex items-center space-x-1 cursor-pointer"
                       title="Permanently delete this submission"
                     >
                       <Trash2 size={14} />

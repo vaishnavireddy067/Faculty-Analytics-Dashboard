@@ -2525,6 +2525,34 @@ def faculty_monthly_department_tracker(request):
     })
 
 
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def faculty_monthly_batch_approve(request):
+    """
+    HOD / Admin endpoint to batch approve multiple selected faculty submissions.
+    """
+    from .models import FacultyMonthlySubmission, AuditLog
+
+    submission_ids = request.data.get('submission_ids', [])
+    if not submission_ids:
+        return Response({'success': False, 'message': 'No submissions selected for approval.'}, status=400)
+
+    updated_count = FacultyMonthlySubmission.objects.filter(id__in=submission_ids).update(status='APPROVED')
+
+    AuditLog.objects.create(
+        performed_by=request.user,
+        action="MONTHLY_REPORTS_BATCH_APPROVED",
+        target_activity=f"Batch Approved {updated_count} submissions",
+        details=f"HOD {request.user.username} approved {updated_count} faculty monthly reports for consolidation."
+    )
+
+    return Response({
+        'success': True,
+        'message': f"Successfully approved and locked {updated_count} faculty submissions.",
+        'approved_count': updated_count
+    })
+
+
 @api_view(['DELETE', 'POST'])
 @permission_classes([permissions.IsAuthenticated])
 def faculty_monthly_submission_delete(request, pk=None):
@@ -2576,7 +2604,7 @@ def faculty_monthly_submission_delete(request, pk=None):
 def faculty_monthly_consolidate(request):
     """
     HOD / IQAC 1-Click Auto-Consolidation:
-    Aggregates ONLY APPROVED and LOCKED faculty monthly submissions for a given department, month and year
+    Aggregates SELECTED or APPROVED faculty monthly submissions for a given department, month and year
     into a single consolidated institutional IQAC monthly report structure without manual work!
     """
     from .models import FacultyMonthlySubmission, IQACReport, AuditLog
@@ -2586,17 +2614,26 @@ def faculty_monthly_consolidate(request):
     month = (request.data.get('month') or request.query_params.get('month', 'AUGUST')).upper()
     year = str(request.data.get('year') or request.query_params.get('year', '2025'))
     academic_year = request.data.get('academic_year') or request.query_params.get('academic_year', '2025-26')
+    selected_submission_ids = request.data.get('selected_submission_ids')
+    selected_faculty_ids = request.data.get('selected_faculty_ids')
 
-    # Fetch ONLY APPROVED monthly reports for this month and year
-    submissions = FacultyMonthlySubmission.objects.filter(
-        month=month,
-        year=year,
-        status='APPROVED'
-    )
+    base_qs = FacultyMonthlySubmission.objects.filter(month=month, year=year)
 
-    # Check how many pending submissions exist
-    total_submissions_count = FacultyMonthlySubmission.objects.filter(month=month, year=year).count()
-    unapproved_count = total_submissions_count - submissions.count()
+    if selected_submission_ids and len(selected_submission_ids) > 0:
+        # If HOD explicitly selected specific submissions
+        submissions = base_qs.filter(id__in=selected_submission_ids)
+    elif selected_faculty_ids and len(selected_faculty_ids) > 0:
+        # If HOD explicitly selected specific faculties
+        submissions = base_qs.filter(faculty_id__in=selected_faculty_ids)
+    else:
+        # Default: Fetch APPROVED monthly reports for this month and year
+        submissions = base_qs.filter(status='APPROVED')
+        if not submissions.exists():
+            # If none are explicitly approved yet, also fallback to submitted returns
+            submissions = base_qs.filter(status__in=['SUBMITTED', 'APPROVED'])
+
+    # Check how many total submissions exist
+    total_submissions_count = base_qs.count()
 
     # Consolidate arrays
     merged_student_events = []
