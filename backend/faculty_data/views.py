@@ -2525,12 +2525,58 @@ def faculty_monthly_department_tracker(request):
     })
 
 
+@api_view(['DELETE', 'POST'])
+@permission_classes([permissions.IsAuthenticated])
+def faculty_monthly_submission_delete(request, pk=None):
+    """
+    Deletes a faculty monthly submission.
+    - Faculty can delete/withdraw their own submission.
+    - HOD/Admin can delete any submission within their department or by pk.
+    """
+    from .models import FacultyMonthlySubmission, AuditLog
+
+    user = request.user
+    sub = None
+
+    if pk:
+        sub = get_object_or_404(FacultyMonthlySubmission, pk=pk)
+        # Check permissions: must be owner or HOD/Admin
+        if sub.faculty != user and user.role not in ['HOD', 'ADMIN']:
+            return Response({'success': False, 'message': 'Permission denied.'}, status=403)
+    else:
+        month = (request.data.get('month') or request.query_params.get('month', 'AUGUST')).upper()
+        year = str(request.data.get('year') or request.query_params.get('year', '2025'))
+        sub = FacultyMonthlySubmission.objects.filter(faculty=user, month=month, year=year).first()
+        if not sub:
+            return Response({'success': False, 'message': 'No submission found to delete.'}, status=404)
+
+    sub_id = sub.id
+    sub_month = sub.month
+    sub_year = sub.year
+    sub_faculty_name = sub.faculty.get_full_name() or sub.faculty.username
+
+    # Create Audit Log before deletion
+    AuditLog.objects.create(
+        performed_by=user,
+        action="MONTHLY_REPORT_DELETED" if user == sub.faculty else "MONTHLY_REPORT_DELETED_BY_HOD",
+        target_activity=f"Monthly Submission #{sub_id} ({sub_month} {sub_year})",
+        details=f"Monthly submission for {sub_faculty_name} ({sub_month} {sub_year}) was permanently deleted/withdrawn by {user.username}."
+    )
+
+    sub.delete()
+
+    return Response({
+        'success': True,
+        'message': f"Monthly submission for {sub_month} {sub_year} has been deleted successfully."
+    })
+
+
 @api_view(['GET', 'POST'])
 @permission_classes([permissions.IsAuthenticated])
 def faculty_monthly_consolidate(request):
     """
     HOD / IQAC 1-Click Auto-Consolidation:
-    Aggregates all faculty monthly submissions for a given department, month and year
+    Aggregates ONLY APPROVED and LOCKED faculty monthly submissions for a given department, month and year
     into a single consolidated institutional IQAC monthly report structure without manual work!
     """
     from .models import FacultyMonthlySubmission, IQACReport, AuditLog
@@ -2541,12 +2587,16 @@ def faculty_monthly_consolidate(request):
     year = str(request.data.get('year') or request.query_params.get('year', '2025'))
     academic_year = request.data.get('academic_year') or request.query_params.get('academic_year', '2025-26')
 
-    # Fetch all submitted/approved monthly reports for this month and year
+    # Fetch ONLY APPROVED monthly reports for this month and year
     submissions = FacultyMonthlySubmission.objects.filter(
         month=month,
         year=year,
-        status__in=['SUBMITTED', 'APPROVED']
+        status='APPROVED'
     )
+
+    # Check how many pending submissions exist
+    total_submissions_count = FacultyMonthlySubmission.objects.filter(month=month, year=year).count()
+    unapproved_count = total_submissions_count - submissions.count()
 
     # Consolidate arrays
     merged_student_events = []

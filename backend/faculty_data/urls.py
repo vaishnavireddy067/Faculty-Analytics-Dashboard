@@ -22,7 +22,7 @@ from .views import (
     iqac_monthly_report_data, export_iqac_excel,
     iqac_reports_list, iqac_delete_report,
     faculty_monthly_submission_detail, faculty_monthly_department_tracker,
-    faculty_monthly_submission_action,
+    faculty_monthly_submission_action, faculty_monthly_submission_delete,
     faculty_monthly_consolidate, faculty_monthly_export_consolidated_excel
 )
 
@@ -63,6 +63,8 @@ urlpatterns = [
     
     # Faculty Monthly Submission & HOD Consolidation Engine
     path('monthly-submission/detail/', faculty_monthly_submission_detail, name='faculty_monthly_submission_detail'),
+    path('monthly-submission/delete/', faculty_monthly_submission_delete, name='faculty_monthly_submission_delete'),
+    path('monthly-submission/<int:pk>/delete/', faculty_monthly_submission_delete, name='faculty_monthly_submission_delete_by_id'),
     path('monthly-submission/tracker/', faculty_monthly_department_tracker, name='faculty_monthly_department_tracker'),
     path('monthly-submission/<int:pk>/action/', faculty_monthly_submission_action, name='faculty_monthly_submission_action'),
     path('monthly-submission/consolidate/', faculty_monthly_consolidate, name='faculty_monthly_consolidate'),

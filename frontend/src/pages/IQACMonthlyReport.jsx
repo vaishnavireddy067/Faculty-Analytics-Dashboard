@@ -457,8 +457,12 @@ const IQACMonthlyReport = () => {
                   });
                   if (res && res.sections) {
                     setReportData(res);
-                    setSaveSuccess(`⚡ Auto-merged ${res.total_submissions_merged} faculty submissions into this master report without manual work!`);
-                    setTimeout(() => setSaveSuccess(''), 5000);
+                    if (res.total_submissions_merged > 0) {
+                      setSaveSuccess(`⚡ Auto-merged ${res.total_submissions_merged} APPROVED & LOCKED faculty submissions into this master report!`);
+                    } else {
+                      setSaveSuccess(`⚠️ No APPROVED faculty submissions found for ${month} ${year}. Please approve faculty submissions in HOD Review Tracker first.`);
+                    }
+                    setTimeout(() => setSaveSuccess(''), 6000);
                   }
                 } catch (err) {
                   console.error("Auto merge error", err);
@@ -468,7 +472,7 @@ const IQACMonthlyReport = () => {
               }}
               className="inline-flex items-center px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-xs font-extrabold shadow-md shadow-indigo-500/20 transition-all cursor-pointer"
             >
-              <Sparkles size={16} className="mr-1.5" /> ⚡ Auto-Merge Faculty Submissions
+              <Sparkles size={16} className="mr-1.5" /> ⚡ Auto-Merge Approved Submissions
             </button>
 
             <button

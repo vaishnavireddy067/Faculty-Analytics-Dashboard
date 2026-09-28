@@ -131,7 +131,7 @@ const MonthlyReportHub = () => {
     }
   };
 
-  // Fetch or trigger 1-Click Auto-Consolidation
+  // Fetch or trigger 1-Click Auto-Consolidation (ONLY APPROVED SUBMISSIONS)
   const handleAutoConsolidate = async () => {
     setConsolidating(true);
     setConsolidatedSuccessMsg('');
@@ -148,7 +148,11 @@ const MonthlyReportHub = () => {
       });
       if (res && res.success) {
         setConsolidatedData(res);
-        setConsolidatedSuccessMsg(`✅ Successfully merged all ${res.total_submissions_merged} faculty submissions into a Consolidated Master Report!`);
+        if (res.total_submissions_merged > 0) {
+          setConsolidatedSuccessMsg(`✅ Successfully merged ${res.total_submissions_merged} APPROVED & LOCKED faculty submissions into the Consolidated Master Report!`);
+        } else {
+          setConsolidatedSuccessMsg(`⚠️ Note: 0 Approved submissions merged. Please review and approve faculty submissions in the HOD Review Tracker first!`);
+        }
         setActiveTab('consolidated_view');
         // Refresh tracker to show updated counts
         loadTrackerData();
@@ -157,6 +161,70 @@ const MonthlyReportHub = () => {
       console.error("Auto consolidation error:", err);
     } finally {
       setConsolidating(false);
+    }
+  };
+
+  // Faculty Delete / Withdraw Submission
+  const handleDeleteSubmission = async () => {
+    if (!window.confirm(`Are you sure you want to permanently delete/withdraw your monthly report submission for ${month} ${year}? All entered data for this month will be cleared.`)) {
+      return;
+    }
+    try {
+      setSavingSubmission(true);
+      const query = `month=${encodeURIComponent(month)}&year=${encodeURIComponent(year)}`;
+      const res = await fetchAPI(`/faculty/monthly-submission/delete/?${query}`, {
+        method: 'DELETE'
+      });
+      if (res && res.success) {
+        setSubmissionSuccessMsg('🗑️ Your monthly submission has been deleted successfully.');
+        setSubmissionForm({
+          status: 'PENDING',
+          submitted_at: null,
+          data: {
+            fdps_workshops_attended: [],
+            events_organized: [],
+            journal_publications: [],
+            conference_publications: [],
+            patents: [],
+            awards_honors: [],
+            guest_lectures: [],
+            certifications: [],
+            student_projects_guided: [],
+            remarks: ''
+          }
+        });
+        setTimeout(() => setSubmissionSuccessMsg(''), 6000);
+      } else {
+        alert(res?.message || 'Failed to delete submission');
+      }
+    } catch (err) {
+      console.error("Failed to delete submission", err);
+      alert("Error deleting submission. Please try again.");
+    } finally {
+      setSavingSubmission(false);
+    }
+  };
+
+  // HOD Action: Delete / Discard Submission
+  const handleDeleteSubmissionByHOD = async (submissionId) => {
+    if (!submissionId) return;
+    if (!window.confirm("Are you sure you want to permanently delete/discard this faculty monthly submission record?")) {
+      return;
+    }
+    try {
+      const res = await fetchAPI(`/faculty/monthly-submission/${submissionId}/delete/`, {
+        method: 'DELETE'
+      });
+      if (res && res.success) {
+        alert("Faculty monthly submission deleted successfully.");
+        setSelectedPreviewFaculty(null);
+        loadTrackerData();
+      } else {
+        alert(res?.message || 'Failed to delete submission');
+      }
+    } catch (err) {
+      console.error("HOD delete submission failed:", err);
+      alert("Failed to delete submission.");
     }
   };
 
@@ -498,6 +566,19 @@ const MonthlyReportHub = () => {
                 <Sparkles size={14} />
                 <span>⚡ Auto-fill Sample Data</span>
               </button>
+
+              {submissionForm.status !== 'PENDING' && (
+                <button
+                  type="button"
+                  disabled={savingSubmission}
+                  onClick={handleDeleteSubmission}
+                  className="px-3.5 py-2 bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-bold border border-rose-200 dark:border-rose-800 transition-all flex items-center space-x-1"
+                  title="Delete/Withdraw your submitted monthly report"
+                >
+                  <Trash2 size={14} />
+                  <span>Withdraw / Delete Return</span>
+                </button>
+              )}
 
               <button
                 type="button"
@@ -1059,16 +1140,16 @@ const MonthlyReportHub = () => {
 
             <div className="bg-gradient-to-tr from-indigo-600 to-purple-600 text-white rounded-3xl p-5 shadow-md flex flex-col justify-between">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-200">1-Click Action</span>
-                <h3 className="text-sm font-bold mt-0.5">Auto-Consolidate All</h3>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-200">1-Click Consolidation</span>
+                <h3 className="text-sm font-bold mt-0.5">Auto-Merge Approved Submissions</h3>
               </div>
               <button
                 disabled={consolidating}
                 onClick={handleAutoConsolidate}
-                className="mt-3 w-full bg-white text-indigo-700 hover:bg-indigo-50 font-extrabold text-xs py-2 px-3 rounded-xl shadow transition-all flex items-center justify-center space-x-1"
+                className="mt-3 w-full bg-white text-indigo-700 hover:bg-indigo-50 font-extrabold text-xs py-2 px-3 rounded-xl shadow transition-all flex items-center justify-center space-x-1 cursor-pointer"
               >
                 <Sparkles size={14} className="text-purple-600" />
-                <span>{consolidating ? 'Compiling...' : '⚡ Generate Master Sheet'}</span>
+                <span>{consolidating ? 'Compiling Master...' : '⚡ Auto-Merge ONLY Approved'}</span>
               </button>
             </div>
           </div>
@@ -1852,10 +1933,18 @@ const MonthlyReportHub = () => {
                           handleHODAction(selectedPreviewFaculty.submission_id, 'REJECT', reason);
                         }
                       }}
-                      className="flex-1 sm:flex-none px-3.5 py-2 bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 hover:bg-rose-100 border border-rose-200 dark:border-rose-800 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1 cursor-pointer"
+                      className="flex-1 sm:flex-none px-3.5 py-2 bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 hover:bg-amber-100 border border-amber-200 dark:border-amber-800 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1 cursor-pointer"
                     >
                       <AlertCircle size={14} />
                       <span>Request Revision</span>
+                    </button>
+                    <button
+                      onClick={() => handleDeleteSubmissionByHOD(selectedPreviewFaculty.submission_id)}
+                      className="flex-1 sm:flex-none px-3.5 py-2 bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 hover:bg-rose-100 border border-rose-200 dark:border-rose-800 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1 cursor-pointer"
+                      title="Permanently delete this submission"
+                    >
+                      <Trash2 size={14} />
+                      <span>Delete / Discard</span>
                     </button>
                   </>
                 )}
