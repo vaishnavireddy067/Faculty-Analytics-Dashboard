@@ -717,41 +717,6 @@ const Login = () => {
             </div>
           </div>
 
-          {/* Role Mode Quick Selector for Sign In */}
-          {view === 'login' && (
-            <div className="bg-gray-100/80 p-1 rounded-2xl grid grid-cols-2 gap-1 text-center">
-              <button
-                type="button"
-                onClick={() => {
-                  setUsername('faculty1@example.com');
-                  setPassword('faculty123');
-                  setError('');
-                }}
-                className={`py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  username === 'faculty1@example.com' || username === 'faculty1'
-                    ? 'bg-white text-indigo-700 shadow-sm border border-indigo-100'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
-                }`}
-              >
-                👨‍🏫 Faculty Login
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setUsername('hod@example.com');
-                  setPassword('hod123');
-                  setError('');
-                }}
-                className={`py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  username === 'hod@example.com' || username === 'hod_cs'
-                    ? 'bg-white text-indigo-700 shadow-sm border border-indigo-100'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
-                }`}
-              >
-                👔 HOD Portal
-              </button>
-            </div>
-          )}
 
           {/* Success / Error Alerts */}
           {successMsg && (
