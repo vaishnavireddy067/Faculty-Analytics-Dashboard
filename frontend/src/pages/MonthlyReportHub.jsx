@@ -312,6 +312,15 @@ const MonthlyReportHub = () => {
     return matchesSearch && fac.status === filterStatus;
   });
 
+  const isHodOrAdmin = (currentUser?.role || '').toUpperCase() === 'HOD' || (currentUser?.role || '').toUpperCase() === 'ADMIN' || (currentUser?.role || '').toUpperCase() === 'SUPERADMIN';
+
+  // Ensure faculty stays on faculty_submission
+  useEffect(() => {
+    if (!isHodOrAdmin && activeTab !== 'faculty_submission') {
+      setActiveTab('faculty_submission');
+    }
+  }, [isHodOrAdmin, activeTab]);
+
   return (
     <div className="max-w-7xl mx-auto space-y-6 p-4 md:p-6 print:p-0 print:m-0 print:max-w-full">
       
@@ -321,61 +330,65 @@ const MonthlyReportHub = () => {
           <div>
             <div className="flex items-center space-x-2">
               <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                Department Automation Engine
+                {isHodOrAdmin ? 'HOD Department Console' : 'Faculty Activity Portal'}
               </span>
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                Zero Manual Copy-Paste
+                Direct Submission & Tracking
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white mt-1">
-              Faculty Monthly Submission & HOD Consolidation Hub
+              {isHodOrAdmin ? 'HOD Review, Tracking & Consolidation Hub' : 'Faculty Monthly Activity Submission'}
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Faculties submit their monthly activity reports online. HOD tracks submission status and compiles a 1-click consolidated master document.
+              {isHodOrAdmin 
+                ? 'Monitor monthly faculty submissions, review record evidence, and compile the official 1-click consolidated institutional report.' 
+                : 'Submit your monthly academic, research publications, FDPs, student mentorship, and departmental records directly to the Head of Department (HOD).'}
             </p>
           </div>
 
-          {/* Tab Navigation */}
-          <div className="flex flex-wrap items-center bg-gray-100 dark:bg-slate-800 p-1.5 rounded-2xl border border-gray-200 dark:border-slate-700 gap-1">
-            <button
-              onClick={() => setActiveTab('faculty_submission')}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'faculty_submission'
-                  ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-              }`}
-            >
-              <Send size={15} />
-              <span>1. Faculty Submission</span>
-            </button>
+          {/* Tab Navigation (Visible strictly to HOD / Admin) */}
+          {isHodOrAdmin && (
+            <div className="flex flex-wrap items-center bg-gray-100 dark:bg-slate-800 p-1.5 rounded-2xl border border-gray-200 dark:border-slate-700 gap-1">
+              <button
+                onClick={() => setActiveTab('hod_tracker')}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === 'hod_tracker'
+                    ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                }`}
+              >
+                <Users size={15} />
+                <span>1. HOD Tracker & Review</span>
+              </button>
 
-            <button
-              onClick={() => setActiveTab('hod_tracker')}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'hod_tracker'
-                  ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-              }`}
-            >
-              <Users size={15} />
-              <span>2. HOD Tracker & Review</span>
-            </button>
+              <button
+                onClick={() => {
+                  if (!consolidatedData) handleAutoConsolidate();
+                  setActiveTab('consolidated_view');
+                }}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === 'consolidated_view'
+                    ? 'bg-indigo-600 text-white shadow-md'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                }`}
+              >
+                <Sparkles size={15} />
+                <span>2. Consolidated Master Sheet</span>
+              </button>
 
-            <button
-              onClick={() => {
-                if (!consolidatedData) handleAutoConsolidate();
-                setActiveTab('consolidated_view');
-              }}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'consolidated_view'
-                  ? 'bg-indigo-600 text-white shadow-md'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-              }`}
-            >
-              <Sparkles size={15} />
-              <span>3. Consolidated Master Sheet</span>
-            </button>
-          </div>
+              <button
+                onClick={() => setActiveTab('faculty_submission')}
+                className={`flex items-center space-x-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  activeTab === 'faculty_submission'
+                    ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-800'
+                }`}
+              >
+                <Send size={14} />
+                <span>My Own Submission</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Global Selectors */}

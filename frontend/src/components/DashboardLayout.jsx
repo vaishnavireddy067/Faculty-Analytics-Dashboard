@@ -19,6 +19,14 @@ const DashboardLayout = () => {
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [username, setUsername] = useState('Faculty');
+  const [userRole, setUserRole] = useState(() => {
+    try {
+      const u = JSON.parse(localStorage.getItem('current_user_info') || '{}');
+      return (u.role || 'FACULTY').toUpperCase();
+    } catch(e) {
+      return 'FACULTY';
+    }
+  });
 
   const navigate = useNavigate();
 
@@ -54,6 +62,9 @@ const DashboardLayout = () => {
             if (parsed.username || parsed.firstName || parsed.email) {
               setUsername(parsed.firstName || parsed.username || parsed.email.split('@')[0]);
             }
+            if (parsed.role) {
+              setUserRole(parsed.role.toUpperCase());
+            }
           } catch(e) {}
         }
         const userEmail = localStorage.getItem('current_user_email');
@@ -70,6 +81,9 @@ const DashboardLayout = () => {
           if (data && data.username) {
             setUsername(data.username);
           }
+          if (data && data.role) {
+            setUserRole(data.role.toUpperCase());
+          }
         }
       } catch (err) {
         console.warn('Profile load silent fallback:', err);
@@ -85,6 +99,8 @@ const DashboardLayout = () => {
   };
 
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
+
+  const isHodOrAdmin = userRole === 'HOD' || userRole === 'ADMIN' || userRole === 'SUPERADMIN';
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-slate-100 transition-colors">
@@ -119,9 +135,18 @@ const DashboardLayout = () => {
         </div>
 
         <nav className="flex-1 px-4 py-4 space-y-1.5 overflow-y-auto">
-          <span className="px-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Core Workflows</span>
+          <span className="px-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+            {isHodOrAdmin ? 'HOD Workflows' : 'Faculty Workflows'}
+          </span>
           <NavItem to="/dashboard" icon={<LayoutDashboard size={18} />} label="Dashboard" onClick={toggleMobileMenu} />
-          <NavItem to="/monthly-reports" icon={<Send size={18} />} label="Monthly Returns & HOD Hub" onClick={toggleMobileMenu} badge="Auto" />
+          
+          {/* Role-tailored Monthly Submission link */}
+          {isHodOrAdmin ? (
+            <NavItem to="/monthly-reports" icon={<Layers size={18} />} label="HOD Review & Tracker" onClick={toggleMobileMenu} badge="HOD" />
+          ) : (
+            <NavItem to="/monthly-reports" icon={<Send size={18} />} label="My Monthly Submission" onClick={toggleMobileMenu} badge="Active" />
+          )}
+
           <NavItem to="/ai-copilot" icon={<Sparkles size={18} />} label="AI Co-Pilot" onClick={toggleMobileMenu} badge="AI" />
           <NavItem to="/profile" icon={<UserCircle size={18} />} label="My Profile" onClick={toggleMobileMenu} />
           <NavItem to="/cv-generator" icon={<FileText size={18} />} label="CV Generator" onClick={toggleMobileMenu} badge="New" />
@@ -131,10 +156,16 @@ const DashboardLayout = () => {
 
           <div className="pt-3 mt-3 border-t border-gray-100 dark:border-slate-800">
             <span className="px-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Accreditation & Analytics</span>
-            <NavItem to="/monthly-reports" icon={<Layers size={18} />} label="HOD Consolidation" onClick={toggleMobileMenu} badge="1-Click" />
-            <NavItem to="/iqac-report" icon={<FileText size={18} />} label="IQAC Master Report" onClick={toggleMobileMenu} badge="Official" />
-            <NavItem to="/pbas-appraisal" icon={<ClipboardCheck size={18} />} label="PBAS / CAS Appraisal" onClick={toggleMobileMenu} />
+            
+            {/* HOD Consolidation & IQAC Master Report visible ONLY to HOD / Admin */}
+            {isHodOrAdmin && (
+              <>
+                <NavItem to="/monthly-reports" icon={<Layers size={18} />} label="HOD Consolidation" onClick={toggleMobileMenu} badge="1-Click" />
+                <NavItem to="/iqac-report" icon={<FileText size={18} />} label="IQAC Master Report" onClick={toggleMobileMenu} badge="Official" />
+              </>
+            )}
 
+            <NavItem to="/pbas-appraisal" icon={<ClipboardCheck size={18} />} label="PBAS / CAS Appraisal" onClick={toggleMobileMenu} />
             <NavItem to="/department-comparison" icon={<Layers size={18} />} label="Department Radar" onClick={toggleMobileMenu} />
             <NavItem to="/collaboration-network" icon={<Share2 size={18} />} label="Research Network" onClick={toggleMobileMenu} />
             <NavItem to="/accreditation" icon={<BarChart2 size={18} />} label="NAAC / NBA Predictor" onClick={toggleMobileMenu} />
@@ -150,7 +181,9 @@ const DashboardLayout = () => {
             <NavItem to="/grants" icon={<Search size={18} />} label="Grant Matcher" onClick={toggleMobileMenu} />
             <NavItem to="/mentorship" icon={<Users size={18} />} label="Mentorship Bridge" onClick={toggleMobileMenu} />
             <NavItem to="/leaderboard" icon={<Award size={18} />} label="Leaderboard" onClick={toggleMobileMenu} />
-            <NavItem to="/admin-dashboard" icon={<ShieldAlert size={18} />} label="Admin Dashboard" onClick={toggleMobileMenu} />
+            {isHodOrAdmin && (
+              <NavItem to="/admin-dashboard" icon={<ShieldAlert size={18} />} label="Admin Dashboard" onClick={toggleMobileMenu} />
+            )}
           </div>
         </nav>
 
