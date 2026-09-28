@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useContext } from 'react';
 import { 
   Download, Printer, FileText, FileSpreadsheet, RefreshCw, 
   PlusCircle, Trash2, CheckCircle2, Building, Calendar, 
@@ -7,6 +7,63 @@ import {
   Share2, Copy, Check, FolderArchive, PlusSquare, ExternalLink, Search, Sparkles
 } from 'lucide-react';
 import { fetchAPI, API_BASE_URL } from '../services/api';
+
+const ReportEditorContext = React.createContext({
+  isEditing: false,
+  updateNestedCell: () => {}
+});
+
+// Top-level stable EditableCell component (prevents input unmounting & cursor position jump bug)
+const EditableCell = React.memo(({
+  sectionPath,
+  rowIndex,
+  fieldKey,
+  value,
+  className = "",
+  placeholder = "-"
+}) => {
+  const { isEditing, updateNestedCell } = useContext(ReportEditorContext);
+  const [localVal, setLocalVal] = useState(value ?? '');
+  const textareaRef = useRef(null);
+
+  useEffect(() => {
+    setLocalVal(value ?? '');
+  }, [value]);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.max(22, textareaRef.current.scrollHeight)}px`;
+    }
+  }, [localVal, isEditing]);
+
+  if (!isEditing) {
+    return (
+      <span className="whitespace-pre-wrap break-words block min-h-[16px]">
+        {value || placeholder}
+      </span>
+    );
+  }
+
+  const handleChange = (e) => {
+    const newVal = e.target.value;
+    setLocalVal(newVal);
+    if (updateNestedCell) {
+      updateNestedCell(sectionPath, rowIndex, fieldKey, newVal);
+    }
+  };
+
+  return (
+    <textarea
+      ref={textareaRef}
+      rows={1}
+      className={`w-full bg-transparent hover:bg-slate-100/70 focus:bg-white text-gray-900 border-0 focus:ring-1 focus:ring-indigo-500 rounded px-1 py-0.5 text-[11px] outline-none transition-colors resize-none overflow-hidden leading-tight font-sans whitespace-pre-wrap break-words min-h-[22px] block ${className}`}
+      value={localVal}
+      onChange={handleChange}
+      placeholder={placeholder}
+    />
+  );
+});
 
 const IQACMonthlyReport = () => {
   const [department, setDepartment] = useState('Computer Science & Engineering (Data Science) and AI&DS');
@@ -200,35 +257,33 @@ const IQACMonthlyReport = () => {
   };
 
   // Helper to update any cell in any table row
-  const updateNestedCell = (sectionPath, rowIndex, fieldKey, val) => {
+  const updateNestedCell = useCallback((sectionPath, rowIndex, fieldKey, val) => {
     setReportData(prev => {
-      const clone = JSON.parse(JSON.stringify(prev));
+      const clone = JSON.parse(JSON.stringify(prev || {}));
+      if (!clone.sections) clone.sections = {};
       const parts = sectionPath.split('.');
       let target = clone.sections;
       for (let i = 0; i < parts.length; i++) {
         if (!target[parts[i]]) target[parts[i]] = [];
         target = target[parts[i]];
       }
-      if (Array.isArray(target) && target[rowIndex]) {
+      if (Array.isArray(target)) {
+        if (!target[rowIndex]) {
+          target[rowIndex] = { s_no: rowIndex + 1 };
+        }
         target[rowIndex][fieldKey] = val;
       }
       return clone;
     });
-  };
+  }, []);
 
-  const EditableCell = ({ sectionPath, rowIndex, fieldKey, value, className = "", placeholder = "-" }) => {
+  // Helper to ensure any empty table has editable rows when Live Editor is ON
+  const getRows = (list, defaultCount = 2) => {
+    if (Array.isArray(list) && list.length > 0) return list;
     if (isEditing) {
-      return (
-        <input
-          type="text"
-          className={`w-full bg-amber-50/90 text-gray-900 border border-amber-300 rounded px-1.5 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-amber-500 font-normal ${className}`}
-          value={value ?? ''}
-          onChange={(e) => updateNestedCell(sectionPath, rowIndex, fieldKey, e.target.value)}
-          placeholder={placeholder}
-        />
-      );
+      return Array.from({ length: defaultCount }, (_, idx) => ({ s_no: idx + 1 }));
     }
-    return <span>{value || placeholder}</span>;
+    return [];
   };
 
   // Helper to add row to array sections
@@ -372,7 +427,8 @@ const IQACMonthlyReport = () => {
   );
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 p-4 md:p-6 print:p-0 print:m-0 print:max-w-full">
+    <ReportEditorContext.Provider value={{ isEditing, updateNestedCell }}>
+      <div className="max-w-7xl mx-auto space-y-6 p-4 md:p-6 print:p-0 print:m-0 print:max-w-full">
       {/* 🌟 Top Action & Filter Bar (Hidden on Print) */}
       <div className="print:hidden bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -895,8 +951,8 @@ const IQACMonthlyReport = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {s["1_student_events"]?.length > 0 ? (
-                    s["1_student_events"].map((item, i) => (
+                  {getRows(s["1_student_events"]).length > 0 ? (
+                    getRows(s["1_student_events"]).map((item, i) => (
                       <tr key={i} className="border-b border-black">
                         <td className="border border-black p-1.5 text-center font-medium">{item.s_no || i + 1}</td>
                         <td className="border border-black p-1.5 font-medium">
@@ -996,8 +1052,8 @@ const IQACMonthlyReport = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {s["2_faculty_events"]?.length > 0 ? (
-                    s["2_faculty_events"].map((item, i) => (
+                  {getRows(s["2_faculty_events"]).length > 0 ? (
+                    getRows(s["2_faculty_events"]).map((item, i) => (
                       <tr key={i} className="border-b border-black">
                         <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
                         <td className="border border-black p-1.5 font-medium">
@@ -1097,8 +1153,8 @@ const IQACMonthlyReport = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {s["3_value_added_courses"]?.length > 0 ? (
-                    s["3_value_added_courses"].map((item, i) => (
+                  {getRows(s["3_value_added_courses"]).length > 0 ? (
+                    getRows(s["3_value_added_courses"]).map((item, i) => (
                       <tr key={i} className="border-b border-black">
                         <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
                         <td className="border border-black p-1.5 font-medium">
@@ -1198,8 +1254,8 @@ const IQACMonthlyReport = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {s["4_advanced_learners"]?.length > 0 ? (
-                    s["4_advanced_learners"].map((item, i) => (
+                  {getRows(s["4_advanced_learners"]).length > 0 ? (
+                    getRows(s["4_advanced_learners"]).map((item, i) => (
                       <tr key={i} className="border-b border-black">
                         <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
                         <td className="border border-black p-1.5 font-medium">
@@ -1302,39 +1358,55 @@ const IQACMonthlyReport = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {s["5_student_achievements"]?.a_curricular?.map((item, i) => (
-                    <tr key={i} className="border-b border-black">
-                      <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
-                      <td className="border border-black p-1.5 font-mono">
-                        <EditableCell sectionPath="5_student_achievements.a_curricular" rowIndex={i} fieldKey="roll_no" value={item.roll_no} />
-                      </td>
-                      <td className="border border-black p-1.5 font-medium">
-                        <EditableCell sectionPath="5_student_achievements.a_curricular" rowIndex={i} fieldKey="name" value={item.name} />
-                      </td>
-                      <td className="border border-black p-1.5 text-center">
-                        <EditableCell sectionPath="5_student_achievements.a_curricular" rowIndex={i} fieldKey="year_sem" value={item.year_sem} />
-                      </td>
-                      <td className="border border-black p-1.5">
-                        <EditableCell sectionPath="5_student_achievements.a_curricular" rowIndex={i} fieldKey="event_name" value={item.event_name} />
-                      </td>
-                      <td className="border border-black p-1.5">
-                        <EditableCell sectionPath="5_student_achievements.a_curricular" rowIndex={i} fieldKey="organized_by" value={item.organized_by} />
-                      </td>
-                      <td className="border border-black p-1.5">
-                        <EditableCell sectionPath="5_student_achievements.a_curricular" rowIndex={i} fieldKey="duration" value={item.duration} />
-                      </td>
-                      <td className="border border-black p-1.5">
-                        <EditableCell sectionPath="5_student_achievements.a_curricular" rowIndex={i} fieldKey="prizes" value={item.prizes} />
-                      </td>
-                      {isEditing && (
-                        <td className="border border-black p-1.5 print:hidden text-center">
-                          <button onClick={() => handleDeleteRow('5_student_achievements.a_curricular', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
-                            <Trash2 size={12} />
-                          </button>
+                  {getRows(s["5_student_achievements"]?.a_curricular).length > 0 ? (
+                    getRows(s["5_student_achievements"]?.a_curricular).map((item, i) => (
+                      <tr key={i} className="border-b border-black">
+                        <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
+                        <td className="border border-black p-1.5 font-mono">
+                          <EditableCell sectionPath="5_student_achievements.a_curricular" rowIndex={i} fieldKey="roll_no" value={item.roll_no} />
                         </td>
-                      )}
-                    </tr>
-                  ))}
+                        <td className="border border-black p-1.5 font-medium">
+                          <EditableCell sectionPath="5_student_achievements.a_curricular" rowIndex={i} fieldKey="name" value={item.name} />
+                        </td>
+                        <td className="border border-black p-1.5 text-center">
+                          <EditableCell sectionPath="5_student_achievements.a_curricular" rowIndex={i} fieldKey="year_sem" value={item.year_sem} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="5_student_achievements.a_curricular" rowIndex={i} fieldKey="event_name" value={item.event_name} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="5_student_achievements.a_curricular" rowIndex={i} fieldKey="organized_by" value={item.organized_by} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="5_student_achievements.a_curricular" rowIndex={i} fieldKey="duration" value={item.duration} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="5_student_achievements.a_curricular" rowIndex={i} fieldKey="prizes" value={item.prizes} />
+                        </td>
+                        {isEditing && (
+                          <td className="border border-black p-1.5 print:hidden text-center">
+                            <button onClick={() => handleDeleteRow('5_student_achievements.a_curricular', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
+                              <Trash2 size={12} />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))
+                  ) : (
+                    [1, 2].map(n => (
+                      <tr key={n} className="border-b border-black h-7">
+                        <td className="border border-black p-1.5 text-center">{n}</td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1379,8 +1451,8 @@ const IQACMonthlyReport = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {s["5_student_achievements"]?.b_extracurricular?.length > 0 ? (
-                    s["5_student_achievements"].b_extracurricular.map((item, i) => (
+                  {getRows(s["5_student_achievements"]?.b_extracurricular).length > 0 ? (
+                    getRows(s["5_student_achievements"]?.b_extracurricular).map((item, i) => (
                       <tr key={i} className="border-b border-black">
                         <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
                         <td className="border border-black p-1.5 font-mono">
@@ -1472,39 +1544,55 @@ const IQACMonthlyReport = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {s["5_student_achievements"]?.c_online_certifications?.map((item, i) => (
-                    <tr key={i} className="border-b border-black">
-                      <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
-                      <td className="border border-black p-1.5 font-medium">
-                        <EditableCell sectionPath="5_student_achievements.c_online_certifications" rowIndex={i} fieldKey="roll_no" value={item.roll_no} />
-                      </td>
-                      <td className="border border-black p-1.5">
-                        <EditableCell sectionPath="5_student_achievements.c_online_certifications" rowIndex={i} fieldKey="name" value={item.name} />
-                      </td>
-                      <td className="border border-black p-1.5 text-center">
-                        <EditableCell sectionPath="5_student_achievements.c_online_certifications" rowIndex={i} fieldKey="year_sem" value={item.year_sem} />
-                      </td>
-                      <td className="border border-black p-1.5 font-medium">
-                        <EditableCell sectionPath="5_student_achievements.c_online_certifications" rowIndex={i} fieldKey="course_name" value={item.course_name} />
-                      </td>
-                      <td className="border border-black p-1.5">
-                        <EditableCell sectionPath="5_student_achievements.c_online_certifications" rowIndex={i} fieldKey="organized_by" value={item.organized_by} />
-                      </td>
-                      <td className="border border-black p-1.5">
-                        <EditableCell sectionPath="5_student_achievements.c_online_certifications" rowIndex={i} fieldKey="duration" value={item.duration} />
-                      </td>
-                      <td className="border border-black p-1.5">
-                        <EditableCell sectionPath="5_student_achievements.c_online_certifications" rowIndex={i} fieldKey="grade" value={item.grade} />
-                      </td>
-                      {isEditing && (
-                        <td className="border border-black p-1.5 print:hidden text-center">
-                          <button onClick={() => handleDeleteRow('5_student_achievements.c_online_certifications', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
-                            <Trash2 size={12} />
-                          </button>
+                  {getRows(s["5_student_achievements"]?.c_online_certifications).length > 0 ? (
+                    getRows(s["5_student_achievements"]?.c_online_certifications).map((item, i) => (
+                      <tr key={i} className="border-b border-black">
+                        <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
+                        <td className="border border-black p-1.5 font-medium">
+                          <EditableCell sectionPath="5_student_achievements.c_online_certifications" rowIndex={i} fieldKey="roll_no" value={item.roll_no} />
                         </td>
-                      )}
-                    </tr>
-                  ))}
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="5_student_achievements.c_online_certifications" rowIndex={i} fieldKey="name" value={item.name} />
+                        </td>
+                        <td className="border border-black p-1.5 text-center">
+                          <EditableCell sectionPath="5_student_achievements.c_online_certifications" rowIndex={i} fieldKey="year_sem" value={item.year_sem} />
+                        </td>
+                        <td className="border border-black p-1.5 font-medium">
+                          <EditableCell sectionPath="5_student_achievements.c_online_certifications" rowIndex={i} fieldKey="course_name" value={item.course_name} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="5_student_achievements.c_online_certifications" rowIndex={i} fieldKey="organized_by" value={item.organized_by} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="5_student_achievements.c_online_certifications" rowIndex={i} fieldKey="duration" value={item.duration} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="5_student_achievements.c_online_certifications" rowIndex={i} fieldKey="grade" value={item.grade} />
+                        </td>
+                        {isEditing && (
+                          <td className="border border-black p-1.5 print:hidden text-center">
+                            <button onClick={() => handleDeleteRow('5_student_achievements.c_online_certifications', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
+                              <Trash2 size={12} />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))
+                  ) : (
+                    [1, 2].map(n => (
+                      <tr key={n} className="border-b border-black h-7">
+                        <td className="border border-black p-1.5 text-center">{n}</td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        <td className="border border-black p-1.5"></td>
+                        {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1549,27 +1637,39 @@ const IQACMonthlyReport = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {s["5_student_achievements"]?.d_placements?.ds_byd?.map((item, i) => (
-                      <tr key={i} className="border-b border-black">
-                        <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
-                        <td className="border border-black p-1.5 font-medium">
-                          <EditableCell sectionPath="5_student_achievements.d_placements.ds_byd" rowIndex={i} fieldKey="name" value={item.name} />
-                        </td>
-                        <td className="border border-black p-1.5 font-mono">
-                          <EditableCell sectionPath="5_student_achievements.d_placements.ds_byd" rowIndex={i} fieldKey="roll_no" value={item.roll_no} />
-                        </td>
-                        <td className="border border-black p-1.5">
-                          <EditableCell sectionPath="5_student_achievements.d_placements.ds_byd" rowIndex={i} fieldKey="date" value={item.date} />
-                        </td>
-                        {isEditing && (
-                          <td className="border border-black p-1.5 print:hidden text-center">
-                            <button onClick={() => handleDeleteRow('5_student_achievements.d_placements.ds_byd', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
-                              <Trash2 size={12} />
-                            </button>
+                    {getRows(s["5_student_achievements"]?.d_placements?.ds_byd).length > 0 ? (
+                      getRows(s["5_student_achievements"]?.d_placements?.ds_byd).map((item, i) => (
+                        <tr key={i} className="border-b border-black">
+                          <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
+                          <td className="border border-black p-1.5 font-medium">
+                            <EditableCell sectionPath="5_student_achievements.d_placements.ds_byd" rowIndex={i} fieldKey="name" value={item.name} />
                           </td>
-                        )}
-                      </tr>
-                    ))}
+                          <td className="border border-black p-1.5 font-mono">
+                            <EditableCell sectionPath="5_student_achievements.d_placements.ds_byd" rowIndex={i} fieldKey="roll_no" value={item.roll_no} />
+                          </td>
+                          <td className="border border-black p-1.5">
+                            <EditableCell sectionPath="5_student_achievements.d_placements.ds_byd" rowIndex={i} fieldKey="date" value={item.date} />
+                          </td>
+                          {isEditing && (
+                            <td className="border border-black p-1.5 print:hidden text-center">
+                              <button onClick={() => handleDeleteRow('5_student_achievements.d_placements.ds_byd', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
+                                <Trash2 size={12} />
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      ))
+                    ) : (
+                      [1, 2].map(n => (
+                        <tr key={n} className="border-b border-black h-7">
+                          <td className="border border-black p-1.5 text-center">{n}</td>
+                          <td className="border border-black p-1.5"></td>
+                          <td className="border border-black p-1.5"></td>
+                          <td className="border border-black p-1.5"></td>
+                          {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1608,27 +1708,39 @@ const IQACMonthlyReport = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {s["5_student_achievements"]?.d_placements?.aids_byd?.map((item, i) => (
-                      <tr key={i} className="border-b border-black">
-                        <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
-                        <td className="border border-black p-1.5 font-medium">
-                          <EditableCell sectionPath="5_student_achievements.d_placements.aids_byd" rowIndex={i} fieldKey="name" value={item.name} />
-                        </td>
-                        <td className="border border-black p-1.5 font-mono">
-                          <EditableCell sectionPath="5_student_achievements.d_placements.aids_byd" rowIndex={i} fieldKey="roll_no" value={item.roll_no} />
-                        </td>
-                        <td className="border border-black p-1.5">
-                          <EditableCell sectionPath="5_student_achievements.d_placements.aids_byd" rowIndex={i} fieldKey="date" value={item.date} />
-                        </td>
-                        {isEditing && (
-                          <td className="border border-black p-1.5 print:hidden text-center">
-                            <button onClick={() => handleDeleteRow('5_student_achievements.d_placements.aids_byd', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
-                              <Trash2 size={12} />
-                            </button>
+                    {getRows(s["5_student_achievements"]?.d_placements?.aids_byd).length > 0 ? (
+                      getRows(s["5_student_achievements"]?.d_placements?.aids_byd).map((item, i) => (
+                        <tr key={i} className="border-b border-black">
+                          <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
+                          <td className="border border-black p-1.5 font-medium">
+                            <EditableCell sectionPath="5_student_achievements.d_placements.aids_byd" rowIndex={i} fieldKey="name" value={item.name} />
                           </td>
-                        )}
-                      </tr>
-                    ))}
+                          <td className="border border-black p-1.5 font-mono">
+                            <EditableCell sectionPath="5_student_achievements.d_placements.aids_byd" rowIndex={i} fieldKey="roll_no" value={item.roll_no} />
+                          </td>
+                          <td className="border border-black p-1.5">
+                            <EditableCell sectionPath="5_student_achievements.d_placements.aids_byd" rowIndex={i} fieldKey="date" value={item.date} />
+                          </td>
+                          {isEditing && (
+                            <td className="border border-black p-1.5 print:hidden text-center">
+                              <button onClick={() => handleDeleteRow('5_student_achievements.d_placements.aids_byd', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
+                                <Trash2 size={12} />
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      ))
+                    ) : (
+                      [1, 2].map(n => (
+                        <tr key={n} className="border-b border-black h-7">
+                          <td className="border border-black p-1.5 text-center">{n}</td>
+                          <td className="border border-black p-1.5"></td>
+                          <td className="border border-black p-1.5"></td>
+                          <td className="border border-black p-1.5"></td>
+                          {isEditing && <td className="border border-black p-1.5 print:hidden"></td>}
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1679,8 +1791,8 @@ const IQACMonthlyReport = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {s["6_faculty_achievements"]?.a_journal_publications?.length > 0 ? (
-                    s["6_faculty_achievements"].a_journal_publications.map((item, i) => (
+                  {getRows(s["6_faculty_achievements"]?.a_journal_publications).length > 0 ? (
+                    getRows(s["6_faculty_achievements"]?.a_journal_publications).map((item, i) => (
                       <tr key={i} className="border-b border-black">
                         <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
                         <td className="border border-black p-1.5 font-medium">
@@ -1762,8 +1874,8 @@ const IQACMonthlyReport = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {s["6_faculty_achievements"]?.c_patents?.length > 0 ? (
-                    s["6_faculty_achievements"].c_patents.map((item, i) => (
+                  {getRows(s["6_faculty_achievements"]?.c_patents).length > 0 ? (
+                    getRows(s["6_faculty_achievements"]?.c_patents).map((item, i) => (
                       <tr key={i} className="border-b border-black">
                         <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
                         <td className="border border-black p-1.5 font-medium">
@@ -1844,8 +1956,8 @@ const IQACMonthlyReport = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {s["6_faculty_achievements"]?.g_workshops_attended?.length > 0 ? (
-                    s["6_faculty_achievements"].g_workshops_attended.map((item, i) => (
+                  {getRows(s["6_faculty_achievements"]?.g_workshops_attended).length > 0 ? (
+                    getRows(s["6_faculty_achievements"]?.g_workshops_attended).map((item, i) => (
                       <tr key={i} className="border-b border-black">
                         <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
                         <td className="border border-black p-1.5 font-medium">
@@ -1924,8 +2036,8 @@ const IQACMonthlyReport = () => {
                 </tr>
               </thead>
               <tbody>
-                {s["7_non_teaching_training"]?.length > 0 ? (
-                  s["7_non_teaching_training"].map((item, i) => (
+                {getRows(s["7_non_teaching_training"]).length > 0 ? (
+                  getRows(s["7_non_teaching_training"]).map((item, i) => (
                     <tr key={i} className="border-b border-black">
                       <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
                       <td className="border border-black p-1.5 font-medium">
@@ -2008,8 +2120,8 @@ const IQACMonthlyReport = () => {
                 </tr>
               </thead>
               <tbody>
-                {s["8_infrastructure_investment"]?.length > 0 ? (
-                  s["8_infrastructure_investment"].map((item, i) => (
+                {getRows(s["8_infrastructure_investment"]).length > 0 ? (
+                  getRows(s["8_infrastructure_investment"]).map((item, i) => (
                     <tr key={i} className="border-b border-black">
                       <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
                       <td className="border border-black p-1.5 font-medium">
@@ -2095,8 +2207,8 @@ const IQACMonthlyReport = () => {
                 </tr>
               </thead>
               <tbody>
-                {s["9_mous_signed"]?.length > 0 ? (
-                  s["9_mous_signed"].map((item, i) => (
+                {getRows(s["9_mous_signed"]).length > 0 ? (
+                  getRows(s["9_mous_signed"]).map((item, i) => (
                     <tr key={i} className="border-b border-black">
                       <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
                       <td className="border border-black p-1.5 font-medium">
@@ -2189,23 +2301,20 @@ const IQACMonthlyReport = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {customTable.rows?.length > 0 ? (
-                    customTable.rows.map((row, rIdx) => (
+                  {getRows(customTable.rows).length > 0 ? (
+                    getRows(customTable.rows).map((row, rIdx) => (
                       <tr key={rIdx} className="border-b border-black">
                         {customTable.columns?.map((col, cIdx) => (
                           <td key={cIdx} className={`border border-black p-1.5 ${cIdx === 0 ? 'text-center font-medium' : ''}`}>
-                            {isEditing && cIdx !== 0 ? (
-                              <input 
-                                className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" 
-                                value={row[col] || ''} 
-                                onChange={(e) => {
-                                  const updated = [...(s["custom_tables"] || [])];
-                                  updated[tableIdx].rows[rIdx][col] = e.target.value;
-                                  updateSectionField("custom_tables", updated);
-                                }} 
-                              />
+                            {cIdx === 0 ? (
+                              row[col] || rIdx + 1
                             ) : (
-                              row[col] || (cIdx === 0 ? rIdx + 1 : '-')
+                              <EditableCell 
+                                sectionPath={`custom_tables.${tableIdx}.rows`} 
+                                rowIndex={rIdx} 
+                                fieldKey={col} 
+                                value={row[col]} 
+                              />
                             )}
                           </td>
                         ))}
@@ -2250,9 +2359,6 @@ const IQACMonthlyReport = () => {
                 <span className="font-bold text-black text-xs">10. Alumni Activities (if any):</span>
                 {isEditing && (
                   <div className="flex items-center gap-2 print:hidden">
-                    <span className="text-[10px] text-amber-700 font-medium">
-                      (Unlimited lines/bullet points supported)
-                    </span>
                     <button
                       onClick={() => handleDeleteTable('10_alumni_activities', '10. Alumni Activities')}
                       className="text-rose-600 hover:text-rose-800 text-[10px] font-bold flex items-center gap-0.5 cursor-pointer"
@@ -2264,9 +2370,9 @@ const IQACMonthlyReport = () => {
               </div>
               {isEditing ? (
                 <textarea 
-                  rows={5}
+                  rows={4}
                   placeholder="Enter details of Alumni interactions, guest lectures, mentorship sessions, dates, batch, number of beneficiaries, key outcomes..."
-                  className="w-full p-3 border-2 border-amber-400 bg-amber-50/50 text-xs text-black font-sans leading-relaxed rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner resize-y"
+                  className="w-full p-3 border border-slate-300 bg-slate-50/50 hover:bg-slate-50 focus:bg-white text-xs text-black font-sans leading-relaxed rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner resize-y"
                   value={s["10_alumni_activities"] || ""}
                   onChange={(e) => updateSectionField("10_alumni_activities", e.target.value)}
                 />
@@ -2285,9 +2391,6 @@ const IQACMonthlyReport = () => {
                 <span className="font-bold text-black text-xs">11. Parent Teacher meetings (if any):</span>
                 {isEditing && (
                   <div className="flex items-center gap-2 print:hidden">
-                    <span className="text-[10px] text-amber-700 font-medium">
-                      (Unlimited lines/bullet points supported)
-                    </span>
                     <button
                       onClick={() => handleDeleteTable('11_parent_teacher_meetings', '11. Parent Teacher meetings')}
                       className="text-rose-600 hover:text-rose-800 text-[10px] font-bold flex items-center gap-0.5 cursor-pointer"
@@ -2299,9 +2402,9 @@ const IQACMonthlyReport = () => {
               </div>
               {isEditing ? (
                 <textarea 
-                  rows={5}
+                  rows={4}
                   placeholder="Enter details of Parent-Teacher meetings conducted, dates, agendas discussed, number of parents attended, feedback received, action taken..."
-                  className="w-full p-3 border-2 border-amber-400 bg-amber-50/50 text-xs text-black font-sans leading-relaxed rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner resize-y"
+                  className="w-full p-3 border border-slate-300 bg-slate-50/50 hover:bg-slate-50 focus:bg-white text-xs text-black font-sans leading-relaxed rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner resize-y"
                   value={s["11_parent_teacher_meetings"] || ""}
                   onChange={(e) => updateSectionField("11_parent_teacher_meetings", e.target.value)}
                 />
@@ -2320,9 +2423,6 @@ const IQACMonthlyReport = () => {
                 <span className="font-bold text-black text-xs">12. Other Information (if any):</span>
                 {isEditing && (
                   <div className="flex items-center gap-2 print:hidden">
-                    <span className="text-[10px] text-amber-700 font-medium">
-                      (Unlimited lines/bullet points supported)
-                    </span>
                     <button
                       onClick={() => handleDeleteTable('12_other_information', '12. Other Information')}
                       className="text-rose-600 hover:text-rose-800 text-[10px] font-bold flex items-center gap-0.5 cursor-pointer"
@@ -2334,9 +2434,9 @@ const IQACMonthlyReport = () => {
               </div>
               {isEditing ? (
                 <textarea 
-                  rows={5}
+                  rows={4}
                   placeholder="Enter any other departmental highlights, club activities, NSS/NCC initiatives, institutional recognitions, future targets..."
-                  className="w-full p-3 border-2 border-amber-400 bg-amber-50/50 text-xs text-black font-sans leading-relaxed rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner resize-y"
+                  className="w-full p-3 border border-slate-300 bg-slate-50/50 hover:bg-slate-50 focus:bg-white text-xs text-black font-sans leading-relaxed rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner resize-y"
                   value={s["12_other_information"] || ""}
                   onChange={(e) => updateSectionField("12_other_information", e.target.value)}
                 />
@@ -2362,7 +2462,8 @@ const IQACMonthlyReport = () => {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </ReportEditorContext.Provider>
   );
 };
 
