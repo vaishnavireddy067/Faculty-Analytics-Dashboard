@@ -31,20 +31,27 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         if not username_or_email:
             raise serializers.ValidationError({"detail": "Username or email is required."})
 
-        # Try to find user by email or username (case-insensitive)
-        user = User.objects.filter(
+        # Try to find user by email or username (case-insensitive, newest first)
+        matching_users = list(User.objects.filter(
             Q(username__iexact=username_or_email) | Q(email__iexact=username_or_email)
-        ).first()
+        ).order_by('-id'))
 
-        if not user:
+        if not matching_users:
             raise serializers.ValidationError({
                 "detail": "No account found with this email/username. Please click 'Create Account' to register and verify with OTP first."
             })
 
-        # Verify password
-        if not user.check_password(password):
+        user = None
+        # Check if any matching account matches the password
+        for candidate in matching_users:
+            if candidate.check_password(password) or candidate.check_password(password.strip()):
+                user = candidate
+                break
+
+        # Fallback: if only 1 user exists and has usable password
+        if not user:
             raise serializers.ValidationError({
-                "detail": "Incorrect password. Please check your password and try again."
+                "detail": "Incorrect password. Please verify your password and try again."
             })
 
         if not user.is_email_verified:

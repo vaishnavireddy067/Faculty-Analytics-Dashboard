@@ -5,10 +5,11 @@ import {
   UserCircle, Menu, X, PlusSquare, CheckCircle, Sparkles,
   TrendingUp, ShieldAlert, Moon, Sun, Database, BarChart2,
   Award, Briefcase, UploadCloud, ClipboardCheck, Layers, Share2,
-  Command
+  Command, Send
 } from 'lucide-react';
 import CommandPalette from './CommandPalette';
 import NotificationCenter from './NotificationCenter';
+import ErrorBoundary from './ErrorBoundary';
 import { API_BASE_URL } from '../services/api';
 
 const DashboardLayout = () => {
@@ -120,6 +121,7 @@ const DashboardLayout = () => {
         <nav className="flex-1 px-4 py-4 space-y-1.5 overflow-y-auto">
           <span className="px-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Core Workflows</span>
           <NavItem to="/dashboard" icon={<LayoutDashboard size={18} />} label="Dashboard" onClick={toggleMobileMenu} />
+          <NavItem to="/monthly-reports" icon={<Send size={18} />} label="Monthly Returns & HOD Hub" onClick={toggleMobileMenu} badge="Auto" />
           <NavItem to="/ai-copilot" icon={<Sparkles size={18} />} label="AI Co-Pilot" onClick={toggleMobileMenu} badge="AI" />
           <NavItem to="/profile" icon={<UserCircle size={18} />} label="My Profile" onClick={toggleMobileMenu} />
           <NavItem to="/cv-generator" icon={<FileText size={18} />} label="CV Generator" onClick={toggleMobileMenu} badge="New" />
@@ -129,8 +131,10 @@ const DashboardLayout = () => {
 
           <div className="pt-3 mt-3 border-t border-gray-100 dark:border-slate-800">
             <span className="px-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Accreditation & Analytics</span>
-            <NavItem to="/iqac-report" icon={<FileText size={18} />} label="IQAC Monthly Report" onClick={toggleMobileMenu} badge="Official" />
+            <NavItem to="/monthly-reports" icon={<Layers size={18} />} label="HOD Consolidation" onClick={toggleMobileMenu} badge="1-Click" />
+            <NavItem to="/iqac-report" icon={<FileText size={18} />} label="IQAC Master Report" onClick={toggleMobileMenu} badge="Official" />
             <NavItem to="/pbas-appraisal" icon={<ClipboardCheck size={18} />} label="PBAS / CAS Appraisal" onClick={toggleMobileMenu} />
+
             <NavItem to="/department-comparison" icon={<Layers size={18} />} label="Department Radar" onClick={toggleMobileMenu} />
             <NavItem to="/collaboration-network" icon={<Share2 size={18} />} label="Research Network" onClick={toggleMobileMenu} />
             <NavItem to="/accreditation" icon={<BarChart2 size={18} />} label="NAAC / NBA Predictor" onClick={toggleMobileMenu} />
@@ -267,7 +271,9 @@ const DashboardLayout = () => {
 
         {/* Page Content */}
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50/50 dark:bg-slate-950 p-4 sm:p-6 transition-colors">
-          <Outlet />
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
     </div>

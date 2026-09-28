@@ -24,6 +24,7 @@ import CollaborationGraph from './pages/CollaborationGraph';
 import AuditLogs from './pages/AuditLogs';
 import BulkDataManagement from './pages/BulkDataManagement';
 import IQACMonthlyReport from './pages/IQACMonthlyReport';
+import MonthlyReportHub from './pages/MonthlyReportHub';
 
 // A simple Protected Route wrapper
 const ProtectedRoute = ({ children }) => {
@@ -57,9 +58,13 @@ function App() {
             <Route path="/data-entry" element={<DataEntry />} />
             <Route path="/verification" element={<Verification />} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/monthly-reports" element={<MonthlyReportHub />} />
+            <Route path="/monthly-submission" element={<MonthlyReportHub />} />
+            <Route path="/hod-consolidation" element={<MonthlyReportHub />} />
             <Route path="/iqac-report" element={<IQACMonthlyReport />} />
             <Route path="/iqac-monthly-report" element={<IQACMonthlyReport />} />
             <Route path="/settings" element={<Settings />} />
+
             <Route path="/admin-dashboard" element={<AdminDashboard />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/ai-copilot" element={<AICopilot />} />

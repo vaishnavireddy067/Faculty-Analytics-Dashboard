@@ -20,7 +20,10 @@ from .views import (
     calculate_pbas_score, audit_logs_list, department_radar_comparison,
     bulk_import_activities, system_health_check,
     iqac_monthly_report_data, export_iqac_excel,
-    iqac_reports_list, iqac_delete_report
+    iqac_reports_list, iqac_delete_report,
+    faculty_monthly_submission_detail, faculty_monthly_department_tracker,
+    faculty_monthly_submission_action,
+    faculty_monthly_consolidate, faculty_monthly_export_consolidated_excel
 )
 
 router = DefaultRouter()
@@ -57,6 +60,15 @@ urlpatterns = [
     path('reports/iqac-monthly/<int:pk>/delete/', iqac_delete_report, name='iqac_delete_report'),
     path('reports/iqac-monthly/export-excel/', export_iqac_excel, name='export_iqac_excel'),
     path('certificates/download-zip/', download_certificate_bundle, name='download_certificate_bundle'),
+    
+    # Faculty Monthly Submission & HOD Consolidation Engine
+    path('monthly-submission/detail/', faculty_monthly_submission_detail, name='faculty_monthly_submission_detail'),
+    path('monthly-submission/tracker/', faculty_monthly_department_tracker, name='faculty_monthly_department_tracker'),
+    path('monthly-submission/<int:pk>/action/', faculty_monthly_submission_action, name='faculty_monthly_submission_action'),
+    path('monthly-submission/consolidate/', faculty_monthly_consolidate, name='faculty_monthly_consolidate'),
+    path('monthly-submission/export-excel/', faculty_monthly_export_consolidated_excel, name='faculty_monthly_export_consolidated_excel'),
+
+
     
     # Smart Data Entry Helpers
     path('fetch-doi/', fetch_doi_metadata, name='fetch_doi_metadata'),

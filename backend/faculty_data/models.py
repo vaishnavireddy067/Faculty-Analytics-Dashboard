@@ -429,3 +429,28 @@ class IQACReport(models.Model):
         return f"IQAC Report - {self.department} ({self.month} {self.year})"
 
 
+class FacultyMonthlySubmission(models.Model):
+    STATUS_CHOICES = (
+        ('DRAFT', 'Draft'),
+        ('SUBMITTED', 'Submitted'),
+        ('APPROVED', 'Approved'),
+    )
+    faculty = models.ForeignKey(User, on_delete=models.CASCADE, related_name='monthly_submissions')
+    department = models.CharField(max_length=255)
+    month = models.CharField(max_length=50, default="AUGUST")
+    year = models.CharField(max_length=20, default="2025")
+    academic_year = models.CharField(max_length=50, default="2025-26")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='SUBMITTED')
+    submission_data = models.JSONField(default=dict, help_text="Contains structured tables for FDPs, publications, events, etc.")
+    submitted_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-submitted_at']
+        unique_together = ('faculty', 'month', 'year')
+
+    def __str__(self):
+        return f"Monthly Submission - {self.faculty.username} ({self.month} {self.year})"
+
+
+

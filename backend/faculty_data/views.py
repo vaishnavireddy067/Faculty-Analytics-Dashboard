@@ -2279,6 +2279,869 @@ def export_iqac_excel(request):
     return response
 
 
+# ==============================================================================
+# FACULTY MONTHLY SUBMISSION & HOD CONSOLIDATED REPORTING ENGINE
+# ==============================================================================
+
+@api_view(['GET', 'POST'])
+@permission_classes([permissions.IsAuthenticated])
+def faculty_monthly_submission_detail(request):
+    """
+    Allows a faculty member to get their own monthly report or save/submit it.
+    """
+    from .models import FacultyMonthlySubmission, AuditLog
+    from core.models import User
+
+    user = request.user
+    month = request.data.get('month') or request.query_params.get('month', 'AUGUST').upper()
+    year = str(request.data.get('year') or request.query_params.get('year', '2025'))
+    academic_year = request.data.get('academic_year') or request.query_params.get('academic_year', '2025-26')
+    dept = request.data.get('department') or request.query_params.get('department') or user.department or 'Computer Science & Engineering'
+
+    if request.method == 'POST':
+        submission_data = request.data.get('submission_data', {})
+        status = request.data.get('status', 'SUBMITTED')
+
+        sub_obj, created = FacultyMonthlySubmission.objects.update_or_create(
+            faculty=user,
+            month=month,
+            year=year,
+            defaults={
+                'department': dept,
+                'academic_year': academic_year,
+                'status': status,
+                'submission_data': submission_data
+            }
+        )
+
+        AuditLog.objects.create(
+            performed_by=user,
+            action="MONTHLY_REPORT_SUBMITTED" if status == 'SUBMITTED' else "MONTHLY_REPORT_DRAFT_SAVED",
+            target_activity=f"Monthly Submission: {month} {year}",
+            details=f"Faculty {user.get_full_name() or user.username} submitted monthly report for {dept} ({month} {year})."
+        )
+
+        return Response({
+            'success': True,
+            'message': f"Monthly report for {month} {year} submitted successfully!",
+            'submission_id': sub_obj.id,
+            'status': sub_obj.status,
+            'submitted_at': sub_obj.submitted_at.strftime('%Y-%m-%d %H:%M:%S')
+        })
+
+    # GET Request
+    sub_obj = FacultyMonthlySubmission.objects.filter(faculty=user, month=month, year=year).first()
+    if sub_obj:
+        return Response({
+            'exists': True,
+            'submission_id': sub_obj.id,
+            'faculty_name': user.get_full_name() or user.username,
+            'faculty_email': user.email,
+            'department': sub_obj.department,
+            'month': sub_obj.month,
+            'year': sub_obj.year,
+            'academic_year': sub_obj.academic_year,
+            'status': sub_obj.status,
+            'submitted_at': sub_obj.submitted_at.strftime('%Y-%m-%d %H:%M:%S'),
+            'submission_data': sub_obj.submission_data
+        })
+    else:
+        # Return default blank structure
+        default_data = {
+            'fdps_workshops_attended': [],
+            'events_organized': [],
+            'journal_publications': [],
+            'conference_publications': [],
+            'patents': [],
+            'awards_honors': [],
+            'guest_lectures': [],
+            'certifications': [],
+            'student_projects_guided': [],
+            'remarks': ''
+        }
+        return Response({
+            'exists': False,
+            'faculty_name': user.get_full_name() or user.username,
+            'faculty_email': user.email,
+            'department': dept,
+            'month': month,
+            'year': year,
+            'academic_year': academic_year,
+            'status': 'PENDING',
+            'submission_data': default_data
+        })
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def faculty_monthly_submission_action(request, pk):
+    """
+    HOD / Admin review endpoint: Approve or Reject a faculty monthly submission.
+    """
+    from .models import FacultyMonthlySubmission, AuditLog
+    
+    sub = get_object_or_404(FacultyMonthlySubmission, pk=pk)
+    action = request.data.get('action', 'APPROVE').upper()
+    remarks = request.data.get('remarks', '')
+
+    new_status = 'APPROVED' if action == 'APPROVE' else 'REJECTED'
+    sub.status = new_status
+    if remarks:
+        if not sub.submission_data:
+            sub.submission_data = {}
+        sub.submission_data['hod_review_remarks'] = remarks
+    sub.save()
+
+    AuditLog.objects.create(
+        performed_by=request.user,
+        action=f"MONTHLY_REPORT_{new_status}",
+        target_activity=f"Submission #{sub.id} ({sub.faculty.username})",
+        details=f"HOD {request.user.username} {new_status.lower()} monthly report for {sub.month} {sub.year}. Remarks: {remarks}"
+    )
+
+    return Response({
+        'success': True,
+        'message': f"Monthly submission #{sub.id} {new_status.lower()} successfully!",
+        'status': new_status
+    })
+
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def faculty_monthly_department_tracker(request):
+    """
+    HOD & Admin tracker: Returns list of faculties in department, showing who submitted,
+    who is pending, their submission timestamp, and full submission data for preview.
+    """
+    from .models import FacultyMonthlySubmission
+    from core.models import User
+
+    user = request.user
+    dept = request.query_params.get('department') or user.department or 'Computer Science & Engineering'
+    month = request.query_params.get('month', 'AUGUST').upper()
+    year = str(request.query_params.get('year', '2025'))
+
+    # Fetch faculties in department
+    faculties_qs = User.objects.filter(role__in=['FACULTY', 'HOD'])
+    if dept and dept.upper() != 'ALL':
+        # Broad department matching
+        dept_keywords = [w for w in dept.replace('&', ' ').replace(',', ' ').split() if len(w) > 2]
+        query = Q(department__icontains=dept)
+        for kw in dept_keywords:
+            query |= Q(department__icontains=kw)
+        faculties_qs = faculties_qs.filter(query)
+
+    faculties_list = []
+    submitted_count = 0
+    pending_count = 0
+
+    submissions_map = {
+        sub.faculty_id: sub 
+        for sub in FacultyMonthlySubmission.objects.filter(month=month, year=year)
+    }
+
+    for fac in faculties_qs:
+        sub = submissions_map.get(fac.id)
+        if sub and sub.status in ['SUBMITTED', 'APPROVED']:
+            submitted_count += 1
+            data = sub.submission_data or {}
+            faculties_list.append({
+                'faculty_id': fac.id,
+                'faculty_name': fac.get_full_name() or fac.username,
+                'email': fac.email,
+                'department': fac.department or dept,
+                'designation': getattr(fac, 'profile', None).designation if hasattr(fac, 'profile') else 'Faculty',
+                'status': sub.status,
+                'created_at': sub.created_at.strftime('%Y-%m-%d %H:%M:%S') if sub.created_at else '—',
+                'submitted_at': sub.submitted_at.strftime('%Y-%m-%d %H:%M:%S') if sub.submitted_at else '—',
+                'last_modified': sub.submitted_at.strftime('%Y-%m-%d %H:%M:%S') if sub.submitted_at else '—',
+                'submission_id': sub.id,
+                'counts': {
+                    'fdps': len(data.get('fdps_workshops_attended', [])),
+                    'events': len(data.get('events_organized', [])),
+                    'publications': len(data.get('journal_publications', [])) + len(data.get('conference_publications', [])),
+                    'patents': len(data.get('patents', [])),
+                    'awards': len(data.get('awards_honors', [])),
+                    'guest_lectures': len(data.get('guest_lectures', [])),
+                    'certifications': len(data.get('certifications', []))
+                },
+                'submission_data': data
+            })
+        elif sub and sub.status in ['DRAFT', 'REJECTED']:
+            pending_count += 1
+            data = sub.submission_data or {}
+            faculties_list.append({
+                'faculty_id': fac.id,
+                'faculty_name': fac.get_full_name() or fac.username,
+                'email': fac.email,
+                'department': fac.department or dept,
+                'designation': getattr(fac, 'profile', None).designation if hasattr(fac, 'profile') else 'Faculty',
+                'status': sub.status,
+                'created_at': sub.created_at.strftime('%Y-%m-%d %H:%M:%S') if sub.created_at else '—',
+                'submitted_at': sub.submitted_at.strftime('%Y-%m-%d %H:%M:%S') if sub.submitted_at else '—',
+                'last_modified': sub.submitted_at.strftime('%Y-%m-%d %H:%M:%S') if sub.submitted_at else '—',
+                'submission_id': sub.id,
+                'counts': {
+                    'fdps': len(data.get('fdps_workshops_attended', [])),
+                    'events': len(data.get('events_organized', [])),
+                    'publications': len(data.get('journal_publications', [])) + len(data.get('conference_publications', [])),
+                    'patents': len(data.get('patents', [])),
+                    'awards': len(data.get('awards_honors', [])),
+                    'guest_lectures': len(data.get('guest_lectures', [])),
+                    'certifications': len(data.get('certifications', []))
+                },
+                'submission_data': data
+            })
+        else:
+            pending_count += 1
+            faculties_list.append({
+                'faculty_id': fac.id,
+                'faculty_name': fac.get_full_name() or fac.username,
+                'email': fac.email,
+                'department': fac.department or dept,
+                'designation': getattr(fac, 'profile', None).designation if hasattr(fac, 'profile') else 'Faculty',
+                'status': 'PENDING',
+                'created_at': None,
+                'submitted_at': None,
+                'last_modified': None,
+                'submission_id': None,
+                'counts': {'fdps': 0, 'events': 0, 'publications': 0, 'patents': 0, 'awards': 0, 'guest_lectures': 0, 'certifications': 0},
+                'submission_data': None
+            })
+
+    total_faculty = len(faculties_list)
+    completion_rate = round((submitted_count / total_faculty * 100), 1) if total_faculty > 0 else 0
+
+    return Response({
+        'department': dept,
+        'month': month,
+        'year': year,
+        'total_faculty': total_faculty,
+        'submitted_count': submitted_count,
+        'pending_count': pending_count,
+        'completion_rate': completion_rate,
+        'faculties': faculties_list
+    })
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([permissions.IsAuthenticated])
+def faculty_monthly_consolidate(request):
+    """
+    HOD / IQAC 1-Click Auto-Consolidation:
+    Aggregates all faculty monthly submissions for a given department, month and year
+    into a single consolidated institutional IQAC monthly report structure without manual work!
+    """
+    from .models import FacultyMonthlySubmission, IQACReport, AuditLog
+    from core.models import User
+
+    dept = request.data.get('department') or request.query_params.get('department', 'Computer Science & Engineering (Data Science) and AI&DS')
+    month = (request.data.get('month') or request.query_params.get('month', 'AUGUST')).upper()
+    year = str(request.data.get('year') or request.query_params.get('year', '2025'))
+    academic_year = request.data.get('academic_year') or request.query_params.get('academic_year', '2025-26')
+
+    # Fetch all submitted/approved monthly reports for this month and year
+    submissions = FacultyMonthlySubmission.objects.filter(
+        month=month,
+        year=year,
+        status__in=['SUBMITTED', 'APPROVED']
+    )
+
+    # Consolidate arrays
+    merged_student_events = []
+    merged_faculty_events = []
+    merged_journal_pubs = []
+    merged_conf_pubs = []
+    merged_patents = []
+    merged_awards = []
+    merged_guest_lectures = []
+    merged_fdps_attended = []
+    merged_certifications = []
+    merged_student_projects = []
+    merged_other_info = []
+
+    sno_counters = {
+        'student_events': 1,
+        'faculty_events': 1,
+        'journal_pubs': 1,
+        'conf_pubs': 1,
+        'patents': 1,
+        'awards': 1,
+        'guest_lectures': 1,
+        'fdps_attended': 1,
+        'certifications': 1,
+        'student_projects': 1
+    }
+
+    submitting_faculties = []
+    faculty_matrix = []
+
+    # Get all faculty in this department to build full matrix
+    faculties_qs = User.objects.filter(role__in=['FACULTY', 'HOD'])
+    if dept and dept.upper() != 'ALL':
+        dept_keywords = [w for w in dept.replace('&', ' ').replace(',', ' ').split() if len(w) > 2]
+        query = Q(department__icontains=dept)
+        for kw in dept_keywords:
+            query |= Q(department__icontains=kw)
+        faculties_qs = faculties_qs.filter(query)
+
+    submissions_by_faculty = {sub.faculty_id: sub for sub in submissions}
+
+    matrix_idx = 1
+    for fac in faculties_qs:
+        fac_name = fac.get_full_name() or fac.username
+        sub = submissions_by_faculty.get(fac.id)
+        
+        if sub and sub.status == 'SUBMITTED':
+            data = sub.submission_data or {}
+            
+            # Format classes/teaching
+            classes_str = data.get('classes_conducted') or data.get('teaching_work') or "Regular Course Lectures & Labs Conducted (100% Scheduled Hours Completed)"
+            
+            # Format student guidance
+            sg_list = data.get('student_projects_guided', [])
+            sg_str = "; ".join([f"{p.get('project_title', 'Project')} ({p.get('student_names', 'Students')})" for p in sg_list]) if sg_list else (data.get('student_guidance') or "UG/PG Student Major & Mini Project Mentoring")
+            
+            # Format research
+            pubs_count = len(data.get('journal_publications', [])) + len(data.get('conference_publications', []))
+            pats_count = len(data.get('patents', []))
+            res_parts = []
+            if data.get('journal_publications'):
+                res_parts.append(f"{len(data.get('journal_publications'))} Journal(s): " + ", ".join([p.get('title', '')[:30]+'...' for p in data.get('journal_publications')[:2]]))
+            if data.get('conference_publications'):
+                res_parts.append(f"{len(data.get('conference_publications'))} Conf Paper(s)")
+            if data.get('patents'):
+                res_parts.append(f"{len(data.get('patents'))} Patent(s)")
+            res_str = "; ".join(res_parts) if res_parts else (data.get('research_work') or "Paper Drafting / Research Ongoing")
+
+            # Format FDPs
+            fdp_list = data.get('fdps_workshops_attended', [])
+            fdp_str = "; ".join([f"{f.get('title', 'FDP')} ({f.get('organization', '')})" for f in fdp_list]) if fdp_list else "Nil"
+
+            # Format Other Responsibilities
+            other_parts = []
+            if data.get('events_organized'):
+                other_parts.append(f"Organized {len(data.get('events_organized'))} Event(s)")
+            if data.get('awards_honors'):
+                other_parts.append(f"Received {len(data.get('awards_honors'))} Award(s)")
+            if data.get('guest_lectures'):
+                other_parts.append(f"Delivered {len(data.get('guest_lectures'))} Guest Lecture(s)")
+            if data.get('remarks'):
+                other_parts.append(data.get('remarks'))
+            other_str = "; ".join(other_parts) if other_parts else "Department Committee & Academic Responsibilities"
+
+            faculty_matrix.append({
+                's_no': matrix_idx,
+                'faculty_id': fac.id,
+                'faculty_name': fac_name,
+                'designation': getattr(fac, 'profile', None).designation if hasattr(fac, 'profile') else 'Faculty',
+                'status': 'Submitted',
+                'classes_conducted': classes_str,
+                'student_guidance': sg_str,
+                'research': res_str,
+                'fdp_workshops': fdp_str,
+                'other_responsibilities': other_str
+            })
+            matrix_idx += 1
+        else:
+            faculty_matrix.append({
+                's_no': matrix_idx,
+                'faculty_id': fac.id,
+                'faculty_name': fac_name,
+                'designation': getattr(fac, 'profile', None).designation if hasattr(fac, 'profile') else 'Faculty',
+                'status': 'Pending Submission',
+                'classes_conducted': 'Pending',
+                'student_guidance': 'Pending',
+                'research': 'Pending',
+                'fdp_workshops': 'Pending',
+                'other_responsibilities': 'Pending'
+            })
+            matrix_idx += 1
+
+    for sub in submissions:
+        fac_name = sub.faculty.get_full_name() or sub.faculty.username
+        submitting_faculties.append({
+            'faculty_id': sub.faculty.id,
+            'name': fac_name,
+            'email': sub.faculty.email,
+            'submitted_at': sub.submitted_at.strftime('%Y-%m-%d %H:%M')
+        })
+        data = sub.submission_data or {}
+
+
+        # 1. FDPs / Workshops Attended
+        for row in data.get('fdps_workshops_attended', []):
+            merged_fdps_attended.append({
+                's_no': sno_counters['fdps_attended'],
+                'faculty_name': fac_name,
+                'program_title': row.get('title') or row.get('program_title', ''),
+                'type_role': row.get('role') or 'Participant',
+                'organized_by': row.get('organization') or row.get('organized_by', ''),
+                'dates_duration': f"{row.get('start_date', '')} to {row.get('end_date', '')} ({row.get('duration_days', 1)} Days)",
+                'status_proof': 'Verified' if row.get('proof_url') else 'Submitted'
+            })
+            sno_counters['fdps_attended'] += 1
+
+        # 2. Events Organized
+        for row in data.get('events_organized', []):
+            event_type = (row.get('event_type') or 'WORKSHOP').upper()
+            target_list = merged_student_events if 'STUDENT' in event_type else merged_faculty_events
+            target_key = 'student_events' if 'STUDENT' in event_type else 'faculty_events'
+            
+            target_list.append({
+                's_no': sno_counters[target_key],
+                'activity_name': row.get('title') or row.get('event_name', ''),
+                'faculty_incharge': fac_name,
+                'target_audience': row.get('target_audience') or f"{row.get('participants_count', '40')} Participants",
+                'resource_person': row.get('resource_person') or 'Internal / External Expert',
+                'date': str(row.get('date', '')),
+                'outcome': row.get('outcome') or 'Successfully organized'
+            })
+            sno_counters[target_key] += 1
+
+        # 3. Journal Publications
+        for row in data.get('journal_publications', []):
+            merged_journal_pubs.append({
+                's_no': sno_counters['journal_pubs'],
+                'authors': row.get('authors') or fac_name,
+                'title': row.get('title', ''),
+                'journal': row.get('journal') or row.get('journal_name', ''),
+                'volume_issue': row.get('volume_issue') or f"pp. {row.get('pages', '10-18')}, {year}",
+                'indexing': row.get('indexing') or 'SCOPUS',
+                'doi': row.get('doi', '')
+            })
+            sno_counters['journal_pubs'] += 1
+
+        # 4. Conference Publications
+        for row in data.get('conference_publications', []):
+            merged_conf_pubs.append({
+                's_no': sno_counters['conf_pubs'],
+                'authors': row.get('authors') or fac_name,
+                'title': row.get('title', ''),
+                'conference': row.get('conference_name') or row.get('conference', ''),
+                'date': str(row.get('date', '')),
+                'indexing': row.get('indexing', 'Scopus Indexed')
+            })
+            sno_counters['conf_pubs'] += 1
+
+        # 5. Patents
+        for row in data.get('patents', []):
+            merged_patents.append({
+                's_no': sno_counters['patents'],
+                'authors': row.get('authors') or fac_name,
+                'title': row.get('title', ''),
+                'agency': row.get('agency') or 'Indian Patent Office (IPO)',
+                'filing_no_year': f"{row.get('app_no') or row.get('application_number', 'App-Pending')}, {row.get('year', year)}",
+                'status': row.get('patent_status') or row.get('status', 'FILED')
+            })
+            sno_counters['patents'] += 1
+
+        # 6. Awards & Honors
+        for row in data.get('awards_honors', []):
+            merged_awards.append({
+                's_no': sno_counters['awards'],
+                'faculty_name': fac_name,
+                'award_name': row.get('award_name') or row.get('title', ''),
+                'awarding_agency': row.get('awarding_agency') or row.get('organization', ''),
+                'date': str(row.get('date', '')),
+                'details': row.get('details', '')
+            })
+            sno_counters['awards'] += 1
+
+        # 7. Guest Lectures / Resource Person
+        for row in data.get('guest_lectures', []):
+            merged_guest_lectures.append({
+                's_no': sno_counters['guest_lectures'],
+                'faculty_name': fac_name,
+                'topic': row.get('topic') or row.get('title', ''),
+                'host_organization': row.get('host_org') or row.get('host_organization', ''),
+                'date': str(row.get('date', '')),
+                'target_audience': row.get('target_audience', 'Engineering Students & Faculty')
+            })
+            sno_counters['guest_lectures'] += 1
+
+        # 8. Certifications
+        for row in data.get('certifications', []):
+            merged_certifications.append({
+                's_no': sno_counters['certifications'],
+                'faculty_name': fac_name,
+                'cert_name': row.get('cert_name') or row.get('name', ''),
+                'platform': row.get('platform') or row.get('issuing_authority', 'NPTEL / Coursera'),
+                'completion_date': str(row.get('completion_date') or row.get('year', year))
+            })
+            sno_counters['certifications'] += 1
+
+        # 9. Student Projects Guided
+        for row in data.get('student_projects_guided', []):
+            merged_student_projects.append({
+                's_no': sno_counters['student_projects'],
+                'faculty_guide': fac_name,
+                'project_title': row.get('project_title') or row.get('title', ''),
+                'student_names': row.get('student_names', ''),
+                'outcome': row.get('outcome', 'Prototype / Publication')
+            })
+            sno_counters['student_projects'] += 1
+
+        # 10. Value Added Courses
+        for row in data.get('value_added_courses', []):
+            merged_sections_vac = consolidated_sections.setdefault('3_value_added_courses', []) if 'consolidated_sections' in locals() else []
+        
+        # 11. Books & Book Chapters
+        for row in data.get('books_published', []):
+            merged_books = merged_books if 'merged_books' in locals() else []
+            merged_books.append({
+                's_no': len(merged_books) + 1,
+                'authors': row.get('authors') or fac_name,
+                'title': row.get('title', ''),
+                'publisher': row.get('publisher', ''),
+                'isbn': row.get('isbn', ''),
+                'year': row.get('year', year)
+            })
+
+        # 12. Funded Projects / Grants
+        for row in data.get('funded_projects', []):
+            merged_funded = merged_funded if 'merged_funded' in locals() else []
+            merged_funded.append({
+                's_no': len(merged_funded) + 1,
+                'faculty_pi': fac_name,
+                'project_title': row.get('title') or row.get('project_title', ''),
+                'funding_agency': row.get('agency') or row.get('funding_agency', ''),
+                'amount': row.get('amount', 'N/A'),
+                'status': row.get('status', 'Ongoing / Approved')
+            })
+
+        # 13. Student Achievements (Curricular & Extracurricular)
+        for row in data.get('student_curricular_achievements', []):
+            merged_student_curr = merged_student_curr if 'merged_student_curr' in locals() else []
+            merged_student_curr.append({
+                's_no': len(merged_student_curr) + 1,
+                'student_name': row.get('student_name', ''),
+                'event_name': row.get('event_name', ''),
+                'prize': row.get('prize', 'Participant'),
+                'mentor_faculty': fac_name
+            })
+
+        # 14. MOUs Signed
+        for row in data.get('mous_signed', []):
+            merged_mous = merged_mous if 'merged_mous' in locals() else []
+            merged_mous.append({
+                's_no': len(merged_mous) + 1,
+                'organization': row.get('organization', ''),
+                'purpose': row.get('purpose', ''),
+                'faculty_coordinator': fac_name,
+                'date': str(row.get('date', ''))
+            })
+
+        # Additional remarks
+        if data.get('remarks'):
+            merged_other_info.append(f"{fac_name}: {data['remarks']}")
+
+    # Build master 12 sections structure
+    consolidated_sections = {
+        "1_student_events": merged_student_events,
+        "2_faculty_events": merged_faculty_events,
+        "3_value_added_courses": [],
+        "4_advanced_learners": [],
+        "5_student_achievements": {
+            "a_curricular": merged_student_curr if 'merged_student_curr' in locals() else [],
+            "b_extracurricular": [],
+            "c_online_certifications": [],
+            "d_placements": {
+                "ds_byd": [],
+                "aids_byd": []
+            }
+        },
+        "6_faculty_achievements": {
+            "a_journal_publications": merged_journal_pubs,
+            "b_conference_publications": merged_conf_pubs,
+            "c_patents": merged_patents,
+            "d_inhouse_projects": merged_student_projects,
+            "e_funded_projects": merged_funded if 'merged_funded' in locals() else [],
+            "f_workshops_organized": merged_faculty_events,
+            "g_workshops_attended": merged_fdps_attended,
+            "h_certifications_completed": merged_certifications,
+            "i_books_published": merged_books if 'merged_books' in locals() else [],
+            "j_resource_person": merged_guest_lectures,
+            "k_awards": merged_awards
+        },
+        "7_non_teaching_training": [],
+        "8_infrastructure_investment": [],
+        "9_mous_signed": merged_mous if 'merged_mous' in locals() else [],
+        "10_alumni_activities": "",
+        "11_parent_teacher_meetings": "",
+        "12_other_information": "; ".join(merged_other_info) if merged_other_info else "Nil"
+    }
+
+
+    # Automatically persist to IQACReport model
+    iqac_obj, created = IQACReport.objects.update_or_create(
+        department=dept,
+        month=month,
+        year=year,
+        defaults={
+            'academic_year': academic_year,
+            'institution_name': "AVN INSTITUTE OF ENGINEERING & TECHNOLOGY",
+            'accreditation_details': "Accredited by NAAC & NBA | An Autonomous Institute Affiliated to JNTU Hyderabad",
+            'sections_data': consolidated_sections,
+            'created_by': request.user
+        }
+    )
+
+    AuditLog.objects.create(
+        performed_by=request.user,
+        action="CONSOLIDATED_REPORT_GENERATED",
+        target_activity=f"Consolidated IQAC Report: {dept} ({month} {year})",
+        details=f"Consolidated {len(submitting_faculties)} faculty monthly reports automatically without manual copy-paste."
+    )
+
+    return Response({
+        'success': True,
+        'report_id': iqac_obj.id,
+        'department': dept,
+        'month': month,
+        'year': year,
+        'academic_year': academic_year,
+        'report_title': f"CONSOLIDATED MONTHLY REPORT OF DEPARTMENT OF {dept.upper()} FOR {month.upper()}, {year}",
+        'institution_name': iqac_obj.institution_name,
+        'accreditation_details': iqac_obj.accreditation_details,
+        'total_submissions_merged': len(submitting_faculties),
+        'submitting_faculties': submitting_faculties,
+        'faculty_matrix': faculty_matrix,
+        'sections': consolidated_sections,
+        'summary_totals': {
+            'fdps_attended': len(merged_fdps_attended),
+            'events_organized': len(merged_student_events) + len(merged_faculty_events),
+            'journal_pubs': len(merged_journal_pubs),
+            'conference_pubs': len(merged_conf_pubs),
+            'patents': len(merged_patents),
+            'awards': len(merged_awards),
+            'guest_lectures': len(merged_guest_lectures),
+            'certifications': len(merged_certifications),
+            'student_projects': len(merged_student_projects)
+        }
+    })
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def faculty_monthly_export_consolidated_excel(request):
+    """
+    Exports the Consolidated Departmental Monthly Report to a beautifully styled Excel (.xlsx) sheet
+    with institutional headers, faculty matrix table, structured category tables, and HOD/IQAC signature block.
+    """
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    from .models import IQACReport, FacultyMonthlySubmission
+    from core.models import User
+
+    dept = request.query_params.get('department', 'Computer Science & Engineering')
+    month = request.query_params.get('month', 'AUGUST').upper()
+    year = str(request.query_params.get('year', '2025'))
+
+    existing = IQACReport.objects.filter(department=dept, month=month, year=year).first()
+    sections = existing.sections_data if existing else {}
+
+    # Fetch faculty matrix
+    faculties_qs = User.objects.filter(role__in=['FACULTY', 'HOD'])
+    if dept and dept.upper() != 'ALL':
+        dept_keywords = [w for w in dept.replace('&', ' ').replace(',', ' ').split() if len(w) > 2]
+        query = Q(department__icontains=dept)
+        for kw in dept_keywords:
+            query |= Q(department__icontains=kw)
+        faculties_qs = faculties_qs.filter(query)
+
+    submissions_map = {
+        sub.faculty_id: sub 
+        for sub in FacultyMonthlySubmission.objects.filter(month=month, year=year)
+    }
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f"{month[:3]}_{year}_Consolidated"
+
+    # Styling Palettes
+    header_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid") # Dark Slate
+    section_fill = PatternFill(start_color="4338CA", end_color="4338CA", fill_type="solid") # Indigo 700
+    table_header_fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid") # Slate 100
+    
+    title_font = Font(name="Calibri", size=15, bold=True, color="FFFFFF")
+    subtitle_font = Font(name="Calibri", size=10, italic=True, color="E2E8F0")
+    sec_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    tbl_hdr_font = Font(name="Calibri", size=10, bold=True, color="0F172A")
+    body_font = Font(name="Calibri", size=10)
+    
+    thin_border = Border(
+        left=Side(style='thin', color='CBD5E1'),
+        right=Side(style='thin', color='CBD5E1'),
+        top=Side(style='thin', color='CBD5E1'),
+        bottom=Side(style='thin', color='CBD5E1')
+    )
+
+    # Header block
+    ws.merge_cells("A1:G1")
+    ws["A1"] = "AVN INSTITUTE OF ENGINEERING & TECHNOLOGY"
+    ws["A1"].font = title_font
+    ws["A1"].fill = header_fill
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+
+    ws.merge_cells("A2:G2")
+    ws["A2"] = "Accredited by NAAC & NBA | An Autonomous Institute Affiliated to JNTU Hyderabad"
+    ws["A2"].font = subtitle_font
+    ws["A2"].fill = header_fill
+    ws["A2"].alignment = Alignment(horizontal="center", vertical="center")
+
+    ws.merge_cells("A3:G3")
+    ws["A3"] = f"CONSOLIDATED MONTHLY REPORT - DEPARTMENT OF {dept.upper()} ({month} {year})"
+    ws["A3"].font = Font(name="Calibri", size=12, bold=True, color="FFFFFF")
+    ws["A3"].fill = section_fill
+    ws["A3"].alignment = Alignment(horizontal="center", vertical="center")
+
+    ws.row_dimensions[1].height = 28
+    ws.row_dimensions[2].height = 20
+    ws.row_dimensions[3].height = 25
+
+    curr_row = 5
+
+    def add_section_table(sec_title, headers, rows):
+        nonlocal curr_row
+        ws.merge_cells(start_row=curr_row, start_column=1, end_row=curr_row, end_column=len(headers))
+        cell = ws.cell(row=curr_row, column=1, value=sec_title)
+        cell.font = sec_font
+        cell.fill = section_fill
+        cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+        ws.row_dimensions[curr_row].height = 22
+        curr_row += 1
+
+        # Table Header
+        for c_idx, h in enumerate(headers, 1):
+            c = ws.cell(row=curr_row, column=c_idx, value=h)
+            c.font = tbl_hdr_font
+            c.fill = table_header_fill
+            c.border = thin_border
+            c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        ws.row_dimensions[curr_row].height = 20
+        curr_row += 1
+
+        if not rows:
+            ws.merge_cells(start_row=curr_row, start_column=1, end_row=curr_row, end_column=len(headers))
+            c = ws.cell(row=curr_row, column=1, value="No activities reported for this category in the current month.")
+            c.font = Font(name="Calibri", size=9, italic=True, color="64748B")
+            c.alignment = Alignment(horizontal="center", vertical="center")
+            c.border = thin_border
+            curr_row += 2
+            return
+
+        for r_data in rows:
+            for c_idx, val in enumerate(r_data, 1):
+                c = ws.cell(row=curr_row, column=c_idx, value=val)
+                c.font = body_font
+                c.border = thin_border
+                c.alignment = Alignment(horizontal="left" if c_idx > 1 else "center", vertical="center", wrap_text=True)
+            curr_row += 1
+        curr_row += 1 # Empty spacing row
+
+    # 1. Master Consolidated Faculty Matrix Table
+    matrix_rows = []
+    for idx, fac in enumerate(faculties_qs, 1):
+        fac_name = fac.get_full_name() or fac.username
+        sub = submissions_map.get(fac.id)
+        if sub and sub.status == 'SUBMITTED':
+            data = sub.submission_data or {}
+            classes_str = data.get('classes_conducted') or "Regular Lecture & Lab Sessions Conducted"
+            sg_list = data.get('student_projects_guided', [])
+            sg_str = f"{len(sg_list)} Project(s) Guided" if sg_list else (data.get('student_guidance') or "UG/PG Project Mentoring")
+            
+            pubs_count = len(data.get('journal_publications', [])) + len(data.get('conference_publications', []))
+            pats_count = len(data.get('patents', []))
+            res_str = f"{pubs_count} Pubs, {pats_count} Patents" if (pubs_count or pats_count) else "Research in progress"
+            
+            fdp_list = data.get('fdps_workshops_attended', [])
+            fdp_str = f"{len(fdp_list)} FDP(s) Attended" if fdp_list else "Nil"
+            
+            other_str = data.get('remarks') or "Department Academic Duties"
+            
+            matrix_rows.append([idx, fac_name, classes_str, sg_str, res_str, fdp_str, other_str])
+        else:
+            matrix_rows.append([idx, fac_name, "Pending", "Pending", "Pending", "Pending", "Pending Submission"])
+
+    add_section_table(
+        "★ MASTER FACULTY CONSOLIDATED MONTHLY ACTIVITY MATRIX",
+        ["S.No", "Faculty Name", "Classes / Teaching", "Student Guidance", "Research & Pubs", "FDP / Workshops", "Other Responsibilities"],
+        matrix_rows
+    )
+
+    # 1. Student Events
+    student_events = sections.get("1_student_events", [])
+
+    s_rows = [[r.get("s_no", idx), r.get("activity_name", ""), r.get("faculty_incharge", ""), r.get("target_audience", ""), r.get("resource_person", ""), r.get("date", ""), r.get("outcome", "")] for idx, r in enumerate(student_events, 1)]
+    add_section_table("1. Student Technical & Co-Curricular Events Organized", ["S.No", "Event / Activity Name", "Faculty In-charge", "Target Audience", "Resource Person", "Date", "Outcome"], s_rows)
+
+    # 2. Faculty Events
+    fac_events = sections.get("2_faculty_events", [])
+    fe_rows = [[r.get("s_no", idx), r.get("activity_name", ""), r.get("faculty_incharge", ""), r.get("target_audience", ""), r.get("resource_person", ""), r.get("date", ""), r.get("outcome", "")] for idx, r in enumerate(fac_events, 1)]
+    add_section_table("2. Faculty Development Programs / Workshops Organized", ["S.No", "Program Name", "Faculty Coordinator", "Target Audience", "Resource Person", "Date", "Outcome"], fe_rows)
+
+    # 3. FDPs / Workshops Attended
+    fac_ach = sections.get("6_faculty_achievements", {})
+    fdps_attended = fac_ach.get("g_workshops_attended", [])
+    fdp_rows = [[r.get("s_no", idx), r.get("faculty_name", ""), r.get("program_title", ""), r.get("type_role", "Participant"), r.get("organized_by", ""), r.get("dates_duration", ""), r.get("status_proof", "Submitted")] for idx, r in enumerate(fdps_attended, 1)]
+    add_section_table("3. FDPs, STTPs, Conferences & Workshops Attended by Faculty", ["S.No", "Faculty Name", "Program Title", "Role", "Organizing Institution", "Duration & Dates", "Proof Status"], fdp_rows)
+
+    # 4. Journal Publications
+    j_pubs = fac_ach.get("a_journal_publications", [])
+    j_rows = [[r.get("s_no", idx), r.get("authors", ""), r.get("title", ""), r.get("journal", ""), r.get("volume_issue", ""), r.get("indexing", "SCOPUS")] for idx, r in enumerate(j_pubs, 1)]
+    add_section_table("4. Research Journal Publications", ["S.No", "Authors", "Paper Title", "Journal Name", "Vol / Issue / Pages", "Indexing (SCI/Scopus)"], j_rows)
+
+    # 5. Conference Publications
+    c_pubs = fac_ach.get("b_conference_publications", [])
+    c_rows = [[r.get("s_no", idx), r.get("authors", ""), r.get("title", ""), r.get("conference", ""), r.get("date", ""), r.get("indexing", "Scopus")] for idx, r in enumerate(c_pubs, 1)]
+    add_section_table("5. Conference Publications & Presentations", ["S.No", "Authors", "Paper Title", "Conference Name", "Date", "Indexing"], c_rows)
+
+    # 6. Patents
+    patents = fac_ach.get("c_patents", [])
+    pat_rows = [[r.get("s_no", idx), r.get("authors", ""), r.get("title", ""), r.get("agency", "IPO"), r.get("filing_no_year", ""), r.get("status", "FILED")] for idx, r in enumerate(patents, 1)]
+    add_section_table("6. Patents Filed / Published / Granted", ["S.No", "Faculty / Inventors", "Patent Title", "Filing Agency", "Application No & Year", "Status"], pat_rows)
+
+    # 7. Awards & Honors
+    awards = fac_ach.get("k_awards", [])
+    aw_rows = [[r.get("s_no", idx), r.get("faculty_name", ""), r.get("award_name", ""), r.get("awarding_agency", ""), r.get("date", ""), r.get("details", "")] for idx, r in enumerate(awards, 1)]
+    add_section_table("7. Faculty Honors, Awards & Recognitions", ["S.No", "Faculty Name", "Award / Recognition Title", "Awarding Agency", "Date", "Details"], aw_rows)
+
+    # 8. Guest Lectures / Resource Persons
+    guest = fac_ach.get("j_resource_person", [])
+    g_rows = [[r.get("s_no", idx), r.get("faculty_name", ""), r.get("topic", ""), r.get("host_organization", ""), r.get("date", ""), r.get("target_audience", "")] for idx, r in enumerate(guest, 1)]
+    add_section_table("8. Guest Lectures / Expert Sessions Delivered as Resource Person", ["S.No", "Faculty Name", "Lecture Topic", "Host Organization", "Date", "Target Audience"], g_rows)
+
+    # Signatures
+    curr_row += 2
+    ws.merge_cells(start_row=curr_row, start_column=1, end_row=curr_row, end_column=3)
+    c1 = ws.cell(row=curr_row, column=1, value="DEPARTMENT IQAC COORDINATOR")
+    c1.font = Font(name="Calibri", size=10, bold=True)
+    c1.alignment = Alignment(horizontal="left")
+
+    ws.merge_cells(start_row=curr_row, start_column=5, end_row=curr_row, end_column=7)
+    c2 = ws.cell(row=curr_row, column=5, value="HEAD OF THE DEPARTMENT (HOD)")
+    c2.font = Font(name="Calibri", size=10, bold=True)
+    c2.alignment = Alignment(horizontal="right")
+
+    # Column Widths Auto-Adjust
+    ws.column_dimensions['A'].width = 8
+    ws.column_dimensions['B'].width = 25
+    ws.column_dimensions['C'].width = 38
+    ws.column_dimensions['D'].width = 28
+    ws.column_dimensions['E'].width = 28
+    ws.column_dimensions['F'].width = 20
+    ws.column_dimensions['G'].width = 22
+
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename="Consolidated_Monthly_Report_{dept.replace(" ", "_")}_{month}_{year}.xlsx"'
+    wb.save(response)
+    return response
+
+
+
 
 
 

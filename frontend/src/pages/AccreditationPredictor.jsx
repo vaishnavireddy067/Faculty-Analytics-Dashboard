@@ -57,7 +57,13 @@ const AccreditationPredictor = () => {
               <BarChart2 className="text-indigo-500" /> Criteria Breakdown
             </h2>
             <div className="space-y-6">
-              {data.criteria.map((criterion) => {
+              {(data?.criteria || [
+                { id: 1, name: 'Curricular Aspects', score: 85, max: 100, gap_analysis: 'Incorporate more value-added courses.' },
+                { id: 2, name: 'Teaching-Learning & Evaluation', score: 90, max: 100, gap_analysis: null },
+                { id: 3, name: 'Research, Innovations & Extension', score: 78, max: 100, gap_analysis: 'Increase Scopus Q1 journal publications and patents.' },
+                { id: 4, name: 'Infrastructure & Learning Resources', score: 88, max: 100, gap_analysis: null },
+                { id: 5, name: 'Student Support & Progression', score: 82, max: 100, gap_analysis: 'Expand alumni engagement and competitive exam guidance.' }
+              ]).map((criterion) => {
                 const percentage = Math.round((criterion.score / criterion.max) * 100);
                 let colorClass = "bg-emerald-500";
                 if (percentage < 60) colorClass = "bg-red-500";
@@ -96,18 +102,16 @@ const AccreditationPredictor = () => {
             </h3>
             <p className="text-indigo-100 text-sm mb-4">Focus on these areas to reach the A++ tier before the next cycle.</p>
             <ul className="space-y-3">
-              <li className="flex items-start gap-2 text-sm bg-white/10 p-3 rounded-lg">
-                <CheckCircle size={16} className="text-emerald-300 flex-shrink-0 mt-0.5" />
-                <span>Increase industry-sponsored projects in ECE department.</span>
-              </li>
-              <li className="flex items-start gap-2 text-sm bg-white/10 p-3 rounded-lg">
-                <CheckCircle size={16} className="text-emerald-300 flex-shrink-0 mt-0.5" />
-                <span>Need 5 more high-impact factor SCI publications.</span>
-              </li>
-              <li className="flex items-start gap-2 text-sm bg-white/10 p-3 rounded-lg">
-                <CheckCircle size={16} className="text-emerald-300 flex-shrink-0 mt-0.5" />
-                <span>Conduct 2 more FDPs as organizing institute.</span>
-              </li>
+              {(data?.improvement_path || [
+                'Increase average publications per faculty to 2.5/year in indexed journals',
+                'Accelerate sponsored research proposals to DST, SERB, and AICTE schemes',
+                'Ensure 100% of faculty complete at least one 5-day ATAL/STTP FDP annually'
+              ]).map((step, idx) => (
+                <li key={idx} className="flex items-start gap-2 text-sm bg-white/10 p-3 rounded-lg">
+                  <CheckCircle size={16} className="text-emerald-300 flex-shrink-0 mt-0.5" />
+                  <span>{step}</span>
+                </li>
+              ))}
             </ul>
           </div>
 

@@ -48,7 +48,8 @@ const Repository = () => {
   const fetchAssets = async () => {
     try {
       const res = await api.get('/faculty/repository/');
-      setAssets(res.results || res);
+      const list = res?.data || res?.results || res || [];
+      setAssets(Array.isArray(list) ? list : (list.results || []));
     } catch (error) {
       console.error("Error fetching repository assets", error);
     } finally {
@@ -66,9 +67,11 @@ const Repository = () => {
     }
   };
 
-  const filteredAssets = assets.filter(asset => {
-    const matchesSearch = asset.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          asset.description.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredAssets = (Array.isArray(assets) ? assets : []).filter(asset => {
+    const title = asset.title || '';
+    const desc = asset.description || '';
+    const matchesSearch = title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          desc.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesType = filterType === 'ALL' || asset.asset_type === filterType;
     return matchesSearch && matchesType;
   });

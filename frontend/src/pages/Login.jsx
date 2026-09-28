@@ -261,7 +261,7 @@ const Login = () => {
     const inputPass = password.trim();
 
     if (!inputUser) {
-      setError('Please enter your email or username.');
+      setError('Please enter your official institutional email address.');
       setLoading(false);
       return;
     }
@@ -388,6 +388,8 @@ const Login = () => {
     }
   };
 
+  const [registeredPassword, setRegisteredPassword] = useState('');
+
   // Step 1: Request Email Verification OTP for New Registration
   const handleInitiateRegistration = async (e) => {
     e.preventDefault();
@@ -395,7 +397,7 @@ const Login = () => {
     setSuccessMsg('');
     setLoading(true);
 
-    const regEmail = (email.trim() || username.trim()).toLowerCase();
+    const regEmail = email.trim().toLowerCase();
     const regUsername = (username.trim() || regEmail.split('@')[0]).toLowerCase();
     const regPass = password.trim();
 
@@ -404,6 +406,10 @@ const Login = () => {
       setLoading(false);
       return;
     }
+
+    setEmail(regEmail);
+    setUsername(regUsername);
+    setRegisteredPassword(regPass);
 
     if (!regPass || regPass.length < 6) {
       setError('Password must be at least 6 characters long.');
@@ -422,7 +428,7 @@ const Login = () => {
 
       if (response && response.ok) {
         const data = await response.json().catch(() => ({}));
-        setSuccessMsg(data.message || `A 6-digit verification code has been dispatched to ${regEmail}.`);
+        setSuccessMsg(data.message || `Verification OTP sent to ${regEmail}.`);
         setView('otp-verify');
         setOtpTimer(60);
         setOtp('');
@@ -439,6 +445,7 @@ const Login = () => {
       setLoading(false);
     }
   };
+
 
   // Step 2: Resend Verification Code
   const handleResendOtp = async () => {
@@ -482,7 +489,7 @@ const Login = () => {
 
     const regEmail = (email.trim() || username.trim()).toLowerCase();
     const regUsername = (username.trim() || regEmail.split('@')[0]).toLowerCase();
-    const regPass = password.trim();
+    const regPass = (registeredPassword || password || '').trim();
     const cleanOtp = otp.trim();
 
     if (!cleanOtp || cleanOtp.length < 6) {
@@ -491,7 +498,9 @@ const Login = () => {
       return;
     }
 
-    let backendSuccess = false;
+    let authSuccess = false;
+    let authData = null;
+
     try {
       const response = await fetch(`${API_BASE_URL}/auth/verify-otp/`, {
         method: 'POST',
@@ -520,25 +529,25 @@ const Login = () => {
           if (data.user) {
             localStorage.setItem('current_user_info', JSON.stringify(data.user));
           }
-          backendSuccess = true;
+          authSuccess = true;
+          authData = data;
         }
       } else if (response) {
         const errData = await response.json().catch(() => ({}));
-        // If debugOtp matches in local mode fallback
         if (debugOtp && cleanOtp === debugOtp) {
-          backendSuccess = true;
+          authSuccess = true;
         } else {
           setError(errData.error || 'Invalid or expired OTP code. Please try again.');
           setLoading(false);
           return;
         }
       } else if (debugOtp && cleanOtp === debugOtp) {
-        backendSuccess = true;
+        authSuccess = true;
       }
     } catch (err) {
       console.warn('Backend verification error:', err);
       if (debugOtp && cleanOtp === debugOtp) {
-        backendSuccess = true;
+        authSuccess = true;
       }
     }
 
@@ -604,14 +613,26 @@ const Login = () => {
       }));
     }
 
-    if (!localStorage.getItem('access_token')) {
-      localStorage.setItem('access_token', 'fad_auth_token_' + Date.now());
-      localStorage.setItem('refresh_token', 'fad_auth_refresh_' + Date.now());
-      localStorage.setItem('current_user_email', regEmail);
-      localStorage.setItem('current_user_info', JSON.stringify(newUser));
+    // Direct Instant Login on Verification Success!
+    if (authSuccess || localStorage.getItem('access_token')) {
+      if (!localStorage.getItem('access_token')) {
+        localStorage.setItem('access_token', 'fad_auth_token_' + Date.now());
+        localStorage.setItem('refresh_token', 'fad_auth_refresh_' + Date.now());
+        localStorage.setItem('current_user_email', regEmail);
+        localStorage.setItem('current_user_info', JSON.stringify(newUser));
+      }
+      window.location.href = '/dashboard';
+      return;
     }
 
-    window.location.href = '/dashboard';
+    // Fallback: If no auto-token, return to Sign In with pre-filled credentials
+    setUsername(regEmail);
+    setPassword(regPass);
+    setOtp('');
+    setError('');
+    setSuccessMsg('Email verified successfully! Please click Sign In to continue.');
+    setView('login');
+    setLoading(false);
   };
 
 
@@ -677,24 +698,60 @@ const Login = () => {
             <div>
               <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight">
                 {view === 'login' 
-                  ? 'Sign In' 
+                  ? 'Institutional Sign In' 
                   : view === 'register' 
-                  ? 'Create Account' 
+                  ? 'Faculty Account Registration' 
                   : view === 'otp-verify' 
-                  ? 'Verify Email OTP' 
+                  ? 'Verify Official Email OTP' 
                   : 'Reset Password'}
               </h2>
               <p className="text-sm text-gray-500 mt-1">
                 {view === 'login'
-                  ? 'Access your faculty dashboard securely'
+                  ? 'Select your role and enter credentials to access your dashboard'
                   : view === 'register'
-                  ? 'Enter details to register as a new faculty member'
+                  ? 'Official self-registration for faculty members (requires OTP verification)'
                   : view === 'otp-verify'
-                  ? `Enter the 6-digit verification code sent to your email`
+                  ? `Enter the 6-digit verification code sent to your official email`
                   : 'Enter email to receive reset instructions'}
               </p>
             </div>
           </div>
+
+          {/* Role Mode Quick Selector for Sign In */}
+          {view === 'login' && (
+            <div className="bg-gray-100/80 p-1 rounded-2xl grid grid-cols-2 gap-1 text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setUsername('faculty1@example.com');
+                  setPassword('faculty123');
+                  setError('');
+                }}
+                className={`py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  username === 'faculty1@example.com' || username === 'faculty1'
+                    ? 'bg-white text-indigo-700 shadow-sm border border-indigo-100'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
+                }`}
+              >
+                👨‍🏫 Faculty Login
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setUsername('hod@example.com');
+                  setPassword('hod123');
+                  setError('');
+                }}
+                className={`py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  username === 'hod@example.com' || username === 'hod_cs'
+                    ? 'bg-white text-indigo-700 shadow-sm border border-indigo-100'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
+                }`}
+              >
+                👔 HOD Portal
+              </button>
+            </div>
+          )}
 
           {/* Success / Error Alerts */}
           {successMsg && (
@@ -717,19 +774,20 @@ const Login = () => {
               <form className="space-y-4" onSubmit={handleLogin} autoComplete="off">
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                    Faculty Email / Username
+                    Official Institutional Email
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
                       <Mail size={18} />
                     </div>
                     <input 
-                      type="text" 
+                      type="email" 
+                      id="login-email-input"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
                       className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm transition-all shadow-sm" 
-                      placeholder="faculty@avn.edu.in"
-                      autoComplete="off"
+                      placeholder="faculty@institution.edu"
+                      autoComplete="email"
                       required
                     />
                   </div>
@@ -785,7 +843,15 @@ const Login = () => {
                   New faculty member?{' '}
                   <button 
                     type="button"
-                    onClick={() => { setView('register'); setError(''); setSuccessMsg(''); setPassword(''); }}
+                    onClick={() => { 
+                      if (username && username.includes('@')) {
+                        setEmail(username);
+                      }
+                      setView('register'); 
+                      setError(''); 
+                      setSuccessMsg(''); 
+                      setPassword(''); 
+                    }}
                     className="font-semibold text-indigo-600 hover:text-indigo-700 bg-transparent border-none p-0 cursor-pointer"
                   >
                     Create Account
@@ -795,6 +861,15 @@ const Login = () => {
             </>
           ) : view === 'register' ? (
             <>
+              {/* Institutional Registration Scope Notice */}
+              <div className="bg-indigo-50/80 border border-indigo-100 p-3.5 rounded-2xl text-xs text-indigo-900 flex items-start gap-2.5">
+                <ShieldCheck size={18} className="text-indigo-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold block">Faculty Portal Registration</span>
+                  <span className="text-indigo-700 text-[11px]">This registration is strictly for Faculty members with email OTP verification. HOD and Administrator accounts are provisioned directly by Institutional IT.</span>
+                </div>
+              </div>
+
               {/* --- STEP 1: REGISTRATION FORM WITH OTP DISPATCH --- */}
               <form className="space-y-3.5" onSubmit={handleInitiateRegistration}>
                 <div className="grid grid-cols-2 gap-3">
@@ -910,7 +985,7 @@ const Login = () => {
               <div className="text-center pt-2">
                 <p className="text-sm text-gray-600">
                   Already have an account?{' '}
-                  <button type="button" onClick={() => { setView('login'); setError(''); }} className="font-semibold text-indigo-600 hover:text-indigo-700 bg-transparent border-none p-0 cursor-pointer">
+                  <button type="button" onClick={() => { if (email) setUsername(email); setView('login'); setError(''); }} className="font-semibold text-indigo-600 hover:text-indigo-700 bg-transparent border-none p-0 cursor-pointer">
                     Sign In
                   </button>
                 </p>
@@ -927,16 +1002,17 @@ const Login = () => {
                   </div>
                   <button 
                     type="button" 
-                    onClick={() => { setView('register'); setError(''); }}
+                    onClick={() => { setView('register'); setError(''); setSuccessMsg(''); }}
                     className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold underline bg-transparent border-none cursor-pointer"
                   >
                     Edit Email
                   </button>
                 </div>
                 <div className="bg-white px-3 py-2 rounded-xl border border-indigo-100 font-mono text-xs text-indigo-950 font-bold truncate">
-                  {email || username}
+                  {email}
                 </div>
               </div>
+
 
               {debugOtp && (
                 <div className="bg-amber-50 border border-amber-200 text-amber-900 p-3 rounded-xl text-xs flex items-center justify-between">

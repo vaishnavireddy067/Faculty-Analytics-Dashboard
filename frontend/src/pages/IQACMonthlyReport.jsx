@@ -4,7 +4,7 @@ import {
   PlusCircle, Trash2, CheckCircle2, Building, Calendar, 
   Layers, Award, BookOpen, Users, Briefcase, ChevronDown, 
   ChevronRight, Edit3, Save, Database, History, AlertCircle, Plus, X,
-  Share2, Copy, Check, FolderArchive, PlusSquare, ExternalLink, Search
+  Share2, Copy, Check, FolderArchive, PlusSquare, ExternalLink, Search, Sparkles
 } from 'lucide-react';
 import { fetchAPI, API_BASE_URL } from '../services/api';
 
@@ -197,6 +197,38 @@ const IQACMonthlyReport = () => {
       curr[keys[keys.length - 1]] = value;
       return clone;
     });
+  };
+
+  // Helper to update any cell in any table row
+  const updateNestedCell = (sectionPath, rowIndex, fieldKey, val) => {
+    setReportData(prev => {
+      const clone = JSON.parse(JSON.stringify(prev));
+      const parts = sectionPath.split('.');
+      let target = clone.sections;
+      for (let i = 0; i < parts.length; i++) {
+        if (!target[parts[i]]) target[parts[i]] = [];
+        target = target[parts[i]];
+      }
+      if (Array.isArray(target) && target[rowIndex]) {
+        target[rowIndex][fieldKey] = val;
+      }
+      return clone;
+    });
+  };
+
+  const EditableCell = ({ sectionPath, rowIndex, fieldKey, value, className = "", placeholder = "-" }) => {
+    if (isEditing) {
+      return (
+        <input
+          type="text"
+          className={`w-full bg-amber-50/90 text-gray-900 border border-amber-300 rounded px-1.5 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-amber-500 font-normal ${className}`}
+          value={value ?? ''}
+          onChange={(e) => updateNestedCell(sectionPath, rowIndex, fieldKey, e.target.value)}
+          placeholder={placeholder}
+        />
+      );
+    }
+    return <span>{value || placeholder}</span>;
   };
 
   // Helper to add row to array sections
@@ -416,6 +448,30 @@ const IQACMonthlyReport = () => {
             </button>
 
             <button
+              onClick={async () => {
+                setLoading(true);
+                try {
+                  const res = await fetchAPI('/faculty/monthly-submission/consolidate/', {
+                    method: 'POST',
+                    body: JSON.stringify({ department, month, year, academic_year: academicYear })
+                  });
+                  if (res && res.sections) {
+                    setReportData(res);
+                    setSaveSuccess(`⚡ Auto-merged ${res.total_submissions_merged} faculty submissions into this master report without manual work!`);
+                    setTimeout(() => setSaveSuccess(''), 5000);
+                  }
+                } catch (err) {
+                  console.error("Auto merge error", err);
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              className="inline-flex items-center px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-xs font-extrabold shadow-md shadow-indigo-500/20 transition-all cursor-pointer"
+            >
+              <Sparkles size={16} className="mr-1.5" /> ⚡ Auto-Merge Faculty Submissions
+            </button>
+
+            <button
               onClick={() => setIsEditing(!isEditing)}
               className={`inline-flex items-center px-3.5 py-2.5 rounded-xl text-xs font-bold border transition ${
                 isEditing ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-200 border-gray-300 dark:border-slate-700'
@@ -425,6 +481,7 @@ const IQACMonthlyReport = () => {
               {isEditing ? 'Exit Edit Mode' : 'Live Table Editor'}
             </button>
           </div>
+
 
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -839,21 +896,29 @@ const IQACMonthlyReport = () => {
                       <tr key={i} className="border-b border-black">
                         <td className="border border-black p-1.5 text-center font-medium">{item.s_no || i + 1}</td>
                         <td className="border border-black p-1.5 font-medium">
-                          {isEditing ? (
-                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.name} onChange={(e) => {
-                              const updated = [...s["1_student_events"]];
-                              updated[i].name = e.target.value;
-                              updateSectionField('1_student_events', updated);
-                            }} />
-                          ) : item.name}
+                          <EditableCell sectionPath="1_student_events" rowIndex={i} fieldKey="name" value={item.name} />
                         </td>
-                        <td className="border border-black p-1.5 text-center">{item.association || '-'}</td>
-                        <td className="border border-black p-1.5">{item.level}</td>
-                        <td className="border border-black p-1.5">{item.duration}</td>
-                        <td className="border border-black p-1.5">{item.chief_guest}</td>
-                        <td className="border border-black p-1.5 text-center">{item.honorarium || '-'}</td>
-                        <td className="border border-black p-1.5 text-center">{item.misc_expenses || '-'}</td>
-                        <td className="border border-black p-1.5">{item.target_students}</td>
+                        <td className="border border-black p-1.5 text-center">
+                          <EditableCell sectionPath="1_student_events" rowIndex={i} fieldKey="association" value={item.association} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="1_student_events" rowIndex={i} fieldKey="level" value={item.level} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="1_student_events" rowIndex={i} fieldKey="duration" value={item.duration} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="1_student_events" rowIndex={i} fieldKey="chief_guest" value={item.chief_guest} />
+                        </td>
+                        <td className="border border-black p-1.5 text-center">
+                          <EditableCell sectionPath="1_student_events" rowIndex={i} fieldKey="honorarium" value={item.honorarium} />
+                        </td>
+                        <td className="border border-black p-1.5 text-center">
+                          <EditableCell sectionPath="1_student_events" rowIndex={i} fieldKey="misc_expenses" value={item.misc_expenses} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="1_student_events" rowIndex={i} fieldKey="target_students" value={item.target_students} />
+                        </td>
                         {isEditing && (
                           <td className="border border-black p-1.5 print:hidden text-center">
                             <button onClick={() => handleDeleteRow('1_student_events', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
@@ -931,14 +996,30 @@ const IQACMonthlyReport = () => {
                     s["2_faculty_events"].map((item, i) => (
                       <tr key={i} className="border-b border-black">
                         <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
-                        <td className="border border-black p-1.5 font-medium">{item.name}</td>
-                        <td className="border border-black p-1.5 text-center">{item.association || '-'}</td>
-                        <td className="border border-black p-1.5">{item.level}</td>
-                        <td className="border border-black p-1.5">{item.duration}</td>
-                        <td className="border border-black p-1.5">{item.chief_guest}</td>
-                        <td className="border border-black p-1.5 text-center">{item.faculty_count || '-'}</td>
-                        <td className="border border-black p-1.5 text-center">{item.honorarium || '-'}</td>
-                        <td className="border border-black p-1.5 text-center">{item.misc_expenses || '-'}</td>
+                        <td className="border border-black p-1.5 font-medium">
+                          <EditableCell sectionPath="2_faculty_events" rowIndex={i} fieldKey="name" value={item.name} />
+                        </td>
+                        <td className="border border-black p-1.5 text-center">
+                          <EditableCell sectionPath="2_faculty_events" rowIndex={i} fieldKey="association" value={item.association} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="2_faculty_events" rowIndex={i} fieldKey="level" value={item.level} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="2_faculty_events" rowIndex={i} fieldKey="duration" value={item.duration} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="2_faculty_events" rowIndex={i} fieldKey="chief_guest" value={item.chief_guest} />
+                        </td>
+                        <td className="border border-black p-1.5 text-center">
+                          <EditableCell sectionPath="2_faculty_events" rowIndex={i} fieldKey="faculty_count" value={item.faculty_count} />
+                        </td>
+                        <td className="border border-black p-1.5 text-center">
+                          <EditableCell sectionPath="2_faculty_events" rowIndex={i} fieldKey="honorarium" value={item.honorarium} />
+                        </td>
+                        <td className="border border-black p-1.5 text-center">
+                          <EditableCell sectionPath="2_faculty_events" rowIndex={i} fieldKey="misc_expenses" value={item.misc_expenses} />
+                        </td>
                         {isEditing && (
                           <td className="border border-black p-1.5 print:hidden text-center">
                             <button onClick={() => handleDeleteRow('2_faculty_events', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
@@ -1016,14 +1097,30 @@ const IQACMonthlyReport = () => {
                     s["3_value_added_courses"].map((item, i) => (
                       <tr key={i} className="border-b border-black">
                         <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
-                        <td className="border border-black p-1.5 font-medium">{item.name}</td>
-                        <td className="border border-black p-1.5">{item.resource_person}</td>
-                        <td className="border border-black p-1.5">{item.level}</td>
-                        <td className="border border-black p-1.5">{item.duration}</td>
-                        <td className="border border-black p-1.5 text-center">{item.contact_periods}</td>
-                        <td className="border border-black p-1.5 text-center">{item.students_registered}</td>
-                        <td className="border border-black p-1.5 text-center">{item.remuneration || '-'}</td>
-                        <td className="border border-black p-1.5">{item.target_students}</td>
+                        <td className="border border-black p-1.5 font-medium">
+                          <EditableCell sectionPath="3_value_added_courses" rowIndex={i} fieldKey="name" value={item.name} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="3_value_added_courses" rowIndex={i} fieldKey="resource_person" value={item.resource_person} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="3_value_added_courses" rowIndex={i} fieldKey="level" value={item.level} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="3_value_added_courses" rowIndex={i} fieldKey="duration" value={item.duration} />
+                        </td>
+                        <td className="border border-black p-1.5 text-center">
+                          <EditableCell sectionPath="3_value_added_courses" rowIndex={i} fieldKey="contact_periods" value={item.contact_periods} />
+                        </td>
+                        <td className="border border-black p-1.5 text-center">
+                          <EditableCell sectionPath="3_value_added_courses" rowIndex={i} fieldKey="students_registered" value={item.students_registered} />
+                        </td>
+                        <td className="border border-black p-1.5 text-center">
+                          <EditableCell sectionPath="3_value_added_courses" rowIndex={i} fieldKey="remuneration" value={item.remuneration} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="3_value_added_courses" rowIndex={i} fieldKey="target_students" value={item.target_students} />
+                        </td>
                         {isEditing && (
                           <td className="border border-black p-1.5 print:hidden text-center">
                             <button onClick={() => handleDeleteRow('3_value_added_courses', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
@@ -1102,21 +1199,29 @@ const IQACMonthlyReport = () => {
                       <tr key={i} className="border-b border-black">
                         <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
                         <td className="border border-black p-1.5 font-medium">
-                          {isEditing ? (
-                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.name} onChange={(e) => {
-                              const updated = [...s["4_advanced_learners"]];
-                              updated[i].name = e.target.value;
-                              updateSectionField('4_advanced_learners', updated);
-                            }} />
-                          ) : item.name}
+                          <EditableCell sectionPath="4_advanced_learners" rowIndex={i} fieldKey="name" value={item.name} />
                         </td>
-                        <td className="border border-black p-1.5">{item.level}</td>
-                        <td className="border border-black p-1.5">{item.duration}</td>
-                        <td className="border border-black p-1.5 text-center">{item.contact_periods}</td>
-                        <td className="border border-black p-1.5">{item.chief_guest}</td>
-                        <td className="border border-black p-1.5 text-center">{item.honorarium || '-'}</td>
-                        <td className="border border-black p-1.5 text-center">{item.misc_expenses || '-'}</td>
-                        <td className="border border-black p-1.5">{item.target_students}</td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="4_advanced_learners" rowIndex={i} fieldKey="level" value={item.level} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="4_advanced_learners" rowIndex={i} fieldKey="duration" value={item.duration} />
+                        </td>
+                        <td className="border border-black p-1.5 text-center">
+                          <EditableCell sectionPath="4_advanced_learners" rowIndex={i} fieldKey="contact_periods" value={item.contact_periods} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="4_advanced_learners" rowIndex={i} fieldKey="chief_guest" value={item.chief_guest} />
+                        </td>
+                        <td className="border border-black p-1.5 text-center">
+                          <EditableCell sectionPath="4_advanced_learners" rowIndex={i} fieldKey="honorarium" value={item.honorarium} />
+                        </td>
+                        <td className="border border-black p-1.5 text-center">
+                          <EditableCell sectionPath="4_advanced_learners" rowIndex={i} fieldKey="misc_expenses" value={item.misc_expenses} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="4_advanced_learners" rowIndex={i} fieldKey="target_students" value={item.target_students} />
+                        </td>
                         {isEditing && (
                           <td className="border border-black p-1.5 print:hidden text-center">
                             <button onClick={() => handleDeleteRow('4_advanced_learners', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
@@ -1196,13 +1301,27 @@ const IQACMonthlyReport = () => {
                   {s["5_student_achievements"]?.a_curricular?.map((item, i) => (
                     <tr key={i} className="border-b border-black">
                       <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
-                      <td className="border border-black p-1.5 font-mono">{item.roll_no}</td>
-                      <td className="border border-black p-1.5 font-medium">{item.name}</td>
-                      <td className="border border-black p-1.5 text-center">{item.year_sem}</td>
-                      <td className="border border-black p-1.5">{item.event_name}</td>
-                      <td className="border border-black p-1.5">{item.organized_by}</td>
-                      <td className="border border-black p-1.5">{item.duration}</td>
-                      <td className="border border-black p-1.5">{item.prizes || '-'}</td>
+                      <td className="border border-black p-1.5 font-mono">
+                        <EditableCell sectionPath="5_student_achievements.a_curricular" rowIndex={i} fieldKey="roll_no" value={item.roll_no} />
+                      </td>
+                      <td className="border border-black p-1.5 font-medium">
+                        <EditableCell sectionPath="5_student_achievements.a_curricular" rowIndex={i} fieldKey="name" value={item.name} />
+                      </td>
+                      <td className="border border-black p-1.5 text-center">
+                        <EditableCell sectionPath="5_student_achievements.a_curricular" rowIndex={i} fieldKey="year_sem" value={item.year_sem} />
+                      </td>
+                      <td className="border border-black p-1.5">
+                        <EditableCell sectionPath="5_student_achievements.a_curricular" rowIndex={i} fieldKey="event_name" value={item.event_name} />
+                      </td>
+                      <td className="border border-black p-1.5">
+                        <EditableCell sectionPath="5_student_achievements.a_curricular" rowIndex={i} fieldKey="organized_by" value={item.organized_by} />
+                      </td>
+                      <td className="border border-black p-1.5">
+                        <EditableCell sectionPath="5_student_achievements.a_curricular" rowIndex={i} fieldKey="duration" value={item.duration} />
+                      </td>
+                      <td className="border border-black p-1.5">
+                        <EditableCell sectionPath="5_student_achievements.a_curricular" rowIndex={i} fieldKey="prizes" value={item.prizes} />
+                      </td>
                       {isEditing && (
                         <td className="border border-black p-1.5 print:hidden text-center">
                           <button onClick={() => handleDeleteRow('5_student_achievements.a_curricular', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
@@ -1260,13 +1379,27 @@ const IQACMonthlyReport = () => {
                     s["5_student_achievements"].b_extracurricular.map((item, i) => (
                       <tr key={i} className="border-b border-black">
                         <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
-                        <td className="border border-black p-1.5 font-mono">{item.roll_no}</td>
-                        <td className="border border-black p-1.5 font-medium">{item.name}</td>
-                        <td className="border border-black p-1.5 text-center">{item.year_sem}</td>
-                        <td className="border border-black p-1.5">{item.event_name}</td>
-                        <td className="border border-black p-1.5">{item.organized_by}</td>
-                        <td className="border border-black p-1.5">{item.duration}</td>
-                        <td className="border border-black p-1.5">{item.prizes || '-'}</td>
+                        <td className="border border-black p-1.5 font-mono">
+                          <EditableCell sectionPath="5_student_achievements.b_extracurricular" rowIndex={i} fieldKey="roll_no" value={item.roll_no} />
+                        </td>
+                        <td className="border border-black p-1.5 font-medium">
+                          <EditableCell sectionPath="5_student_achievements.b_extracurricular" rowIndex={i} fieldKey="name" value={item.name} />
+                        </td>
+                        <td className="border border-black p-1.5 text-center">
+                          <EditableCell sectionPath="5_student_achievements.b_extracurricular" rowIndex={i} fieldKey="year_sem" value={item.year_sem} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="5_student_achievements.b_extracurricular" rowIndex={i} fieldKey="event_name" value={item.event_name} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="5_student_achievements.b_extracurricular" rowIndex={i} fieldKey="organized_by" value={item.organized_by} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="5_student_achievements.b_extracurricular" rowIndex={i} fieldKey="duration" value={item.duration} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="5_student_achievements.b_extracurricular" rowIndex={i} fieldKey="prizes" value={item.prizes} />
+                        </td>
                         {isEditing && (
                           <td className="border border-black p-1.5 print:hidden text-center">
                             <button onClick={() => handleDeleteRow('5_student_achievements.b_extracurricular', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
@@ -1338,13 +1471,27 @@ const IQACMonthlyReport = () => {
                   {s["5_student_achievements"]?.c_online_certifications?.map((item, i) => (
                     <tr key={i} className="border-b border-black">
                       <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
-                      <td className="border border-black p-1.5 font-medium">{item.roll_no}</td>
-                      <td className="border border-black p-1.5">{item.name || '-'}</td>
-                      <td className="border border-black p-1.5 text-center">{item.year_sem}</td>
-                      <td className="border border-black p-1.5 font-medium">{item.course_name}</td>
-                      <td className="border border-black p-1.5">{item.organized_by}</td>
-                      <td className="border border-black p-1.5">{item.duration}</td>
-                      <td className="border border-black p-1.5">{item.grade}</td>
+                      <td className="border border-black p-1.5 font-medium">
+                        <EditableCell sectionPath="5_student_achievements.c_online_certifications" rowIndex={i} fieldKey="roll_no" value={item.roll_no} />
+                      </td>
+                      <td className="border border-black p-1.5">
+                        <EditableCell sectionPath="5_student_achievements.c_online_certifications" rowIndex={i} fieldKey="name" value={item.name} />
+                      </td>
+                      <td className="border border-black p-1.5 text-center">
+                        <EditableCell sectionPath="5_student_achievements.c_online_certifications" rowIndex={i} fieldKey="year_sem" value={item.year_sem} />
+                      </td>
+                      <td className="border border-black p-1.5 font-medium">
+                        <EditableCell sectionPath="5_student_achievements.c_online_certifications" rowIndex={i} fieldKey="course_name" value={item.course_name} />
+                      </td>
+                      <td className="border border-black p-1.5">
+                        <EditableCell sectionPath="5_student_achievements.c_online_certifications" rowIndex={i} fieldKey="organized_by" value={item.organized_by} />
+                      </td>
+                      <td className="border border-black p-1.5">
+                        <EditableCell sectionPath="5_student_achievements.c_online_certifications" rowIndex={i} fieldKey="duration" value={item.duration} />
+                      </td>
+                      <td className="border border-black p-1.5">
+                        <EditableCell sectionPath="5_student_achievements.c_online_certifications" rowIndex={i} fieldKey="grade" value={item.grade} />
+                      </td>
                       {isEditing && (
                         <td className="border border-black p-1.5 print:hidden text-center">
                           <button onClick={() => handleDeleteRow('5_student_achievements.c_online_certifications', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
@@ -1401,9 +1548,15 @@ const IQACMonthlyReport = () => {
                     {s["5_student_achievements"]?.d_placements?.ds_byd?.map((item, i) => (
                       <tr key={i} className="border-b border-black">
                         <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
-                        <td className="border border-black p-1.5 font-medium">{item.name}</td>
-                        <td className="border border-black p-1.5 font-mono">{item.roll_no}</td>
-                        <td className="border border-black p-1.5">{item.date}</td>
+                        <td className="border border-black p-1.5 font-medium">
+                          <EditableCell sectionPath="5_student_achievements.d_placements.ds_byd" rowIndex={i} fieldKey="name" value={item.name} />
+                        </td>
+                        <td className="border border-black p-1.5 font-mono">
+                          <EditableCell sectionPath="5_student_achievements.d_placements.ds_byd" rowIndex={i} fieldKey="roll_no" value={item.roll_no} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="5_student_achievements.d_placements.ds_byd" rowIndex={i} fieldKey="date" value={item.date} />
+                        </td>
                         {isEditing && (
                           <td className="border border-black p-1.5 print:hidden text-center">
                             <button onClick={() => handleDeleteRow('5_student_achievements.d_placements.ds_byd', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
@@ -1454,9 +1607,15 @@ const IQACMonthlyReport = () => {
                     {s["5_student_achievements"]?.d_placements?.aids_byd?.map((item, i) => (
                       <tr key={i} className="border-b border-black">
                         <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
-                        <td className="border border-black p-1.5 font-medium">{item.name}</td>
-                        <td className="border border-black p-1.5 font-mono">{item.roll_no}</td>
-                        <td className="border border-black p-1.5">{item.date}</td>
+                        <td className="border border-black p-1.5 font-medium">
+                          <EditableCell sectionPath="5_student_achievements.d_placements.aids_byd" rowIndex={i} fieldKey="name" value={item.name} />
+                        </td>
+                        <td className="border border-black p-1.5 font-mono">
+                          <EditableCell sectionPath="5_student_achievements.d_placements.aids_byd" rowIndex={i} fieldKey="roll_no" value={item.roll_no} />
+                        </td>
+                        <td className="border border-black p-1.5">
+                          <EditableCell sectionPath="5_student_achievements.d_placements.aids_byd" rowIndex={i} fieldKey="date" value={item.date} />
+                        </td>
                         {isEditing && (
                           <td className="border border-black p-1.5 print:hidden text-center">
                             <button onClick={() => handleDeleteRow('5_student_achievements.d_placements.aids_byd', i)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
@@ -1521,49 +1680,19 @@ const IQACMonthlyReport = () => {
                       <tr key={i} className="border-b border-black">
                         <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
                         <td className="border border-black p-1.5 font-medium">
-                          {isEditing ? (
-                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.authors || ''} onChange={(e) => {
-                              const updated = [...s["6_faculty_achievements"].a_journal_publications];
-                              updated[i].authors = e.target.value;
-                              updateSectionField('6_faculty_achievements.a_journal_publications', updated);
-                            }} />
-                          ) : item.authors}
+                          <EditableCell sectionPath="6_faculty_achievements.a_journal_publications" rowIndex={i} fieldKey="authors" value={item.authors} />
                         </td>
                         <td className="border border-black p-1.5">
-                          {isEditing ? (
-                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.title || ''} onChange={(e) => {
-                              const updated = [...s["6_faculty_achievements"].a_journal_publications];
-                              updated[i].title = e.target.value;
-                              updateSectionField('6_faculty_achievements.a_journal_publications', updated);
-                            }} />
-                          ) : item.title}
+                          <EditableCell sectionPath="6_faculty_achievements.a_journal_publications" rowIndex={i} fieldKey="title" value={item.title} />
                         </td>
                         <td className="border border-black p-1.5">
-                          {isEditing ? (
-                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.journal || ''} onChange={(e) => {
-                              const updated = [...s["6_faculty_achievements"].a_journal_publications];
-                              updated[i].journal = e.target.value;
-                              updateSectionField('6_faculty_achievements.a_journal_publications', updated);
-                            }} />
-                          ) : item.journal}
+                          <EditableCell sectionPath="6_faculty_achievements.a_journal_publications" rowIndex={i} fieldKey="journal" value={item.journal} />
                         </td>
                         <td className="border border-black p-1.5">
-                          {isEditing ? (
-                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.volume_issue || ''} onChange={(e) => {
-                              const updated = [...s["6_faculty_achievements"].a_journal_publications];
-                              updated[i].volume_issue = e.target.value;
-                              updateSectionField('6_faculty_achievements.a_journal_publications', updated);
-                            }} />
-                          ) : item.volume_issue}
+                          <EditableCell sectionPath="6_faculty_achievements.a_journal_publications" rowIndex={i} fieldKey="volume_issue" value={item.volume_issue} />
                         </td>
                         <td className="border border-black p-1.5">
-                          {isEditing ? (
-                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.indexing || ''} onChange={(e) => {
-                              const updated = [...s["6_faculty_achievements"].a_journal_publications];
-                              updated[i].indexing = e.target.value;
-                              updateSectionField('6_faculty_achievements.a_journal_publications', updated);
-                            }} />
-                          ) : item.indexing}
+                          <EditableCell sectionPath="6_faculty_achievements.a_journal_publications" rowIndex={i} fieldKey="indexing" value={item.indexing} />
                         </td>
                         {isEditing && (
                           <td className="border border-black p-1.5 print:hidden text-center">
@@ -1634,53 +1763,19 @@ const IQACMonthlyReport = () => {
                       <tr key={i} className="border-b border-black">
                         <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
                         <td className="border border-black p-1.5 font-medium">
-                          {isEditing ? (
-                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.authors || ''} onChange={(e) => {
-                              const updated = [...s["6_faculty_achievements"].c_patents];
-                              updated[i].authors = e.target.value;
-                              updateSectionField('6_faculty_achievements.c_patents', updated);
-                            }} />
-                          ) : item.authors}
+                          <EditableCell sectionPath="6_faculty_achievements.c_patents" rowIndex={i} fieldKey="authors" value={item.authors} />
                         </td>
                         <td className="border border-black p-1.5">
-                          {isEditing ? (
-                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.title || ''} onChange={(e) => {
-                              const updated = [...s["6_faculty_achievements"].c_patents];
-                              updated[i].title = e.target.value;
-                              updateSectionField('6_faculty_achievements.c_patents', updated);
-                            }} />
-                          ) : item.title}
+                          <EditableCell sectionPath="6_faculty_achievements.c_patents" rowIndex={i} fieldKey="title" value={item.title} />
                         </td>
                         <td className="border border-black p-1.5">
-                          {isEditing ? (
-                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.agency || ''} onChange={(e) => {
-                              const updated = [...s["6_faculty_achievements"].c_patents];
-                              updated[i].agency = e.target.value;
-                              updateSectionField('6_faculty_achievements.c_patents', updated);
-                            }} />
-                          ) : item.agency}
+                          <EditableCell sectionPath="6_faculty_achievements.c_patents" rowIndex={i} fieldKey="agency" value={item.agency} />
                         </td>
                         <td className="border border-black p-1.5">
-                          {isEditing ? (
-                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.filing_no_year || ''} onChange={(e) => {
-                              const updated = [...s["6_faculty_achievements"].c_patents];
-                              updated[i].filing_no_year = e.target.value;
-                              updateSectionField('6_faculty_achievements.c_patents', updated);
-                            }} />
-                          ) : item.filing_no_year}
+                          <EditableCell sectionPath="6_faculty_achievements.c_patents" rowIndex={i} fieldKey="filing_no_year" value={item.filing_no_year} />
                         </td>
                         <td className="border border-black p-1.5 text-center font-bold">
-                          {isEditing ? (
-                            <select className="bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.status || 'Published'} onChange={(e) => {
-                              const updated = [...s["6_faculty_achievements"].c_patents];
-                              updated[i].status = e.target.value;
-                              updateSectionField('6_faculty_achievements.c_patents', updated);
-                            }}>
-                              <option value="Published">Published</option>
-                              <option value="Granted">Granted</option>
-                              <option value="Filed">Filed</option>
-                            </select>
-                          ) : item.status}
+                          <EditableCell sectionPath="6_faculty_achievements.c_patents" rowIndex={i} fieldKey="status" value={item.status} />
                         </td>
                         {isEditing && (
                           <td className="border border-black p-1.5 print:hidden text-center">
@@ -1750,40 +1845,16 @@ const IQACMonthlyReport = () => {
                       <tr key={i} className="border-b border-black">
                         <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
                         <td className="border border-black p-1.5 font-medium">
-                          {isEditing ? (
-                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.faculty_name || ''} onChange={(e) => {
-                              const updated = [...s["6_faculty_achievements"].g_workshops_attended];
-                              updated[i].faculty_name = e.target.value;
-                              updateSectionField('6_faculty_achievements.g_workshops_attended', updated);
-                            }} />
-                          ) : item.faculty_name}
+                          <EditableCell sectionPath="6_faculty_achievements.g_workshops_attended" rowIndex={i} fieldKey="faculty_name" value={item.faculty_name} />
                         </td>
                         <td className="border border-black p-1.5">
-                          {isEditing ? (
-                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.program_name || ''} onChange={(e) => {
-                              const updated = [...s["6_faculty_achievements"].g_workshops_attended];
-                              updated[i].program_name = e.target.value;
-                              updateSectionField('6_faculty_achievements.g_workshops_attended', updated);
-                            }} />
-                          ) : item.program_name}
+                          <EditableCell sectionPath="6_faculty_achievements.g_workshops_attended" rowIndex={i} fieldKey="program_name" value={item.program_name} />
                         </td>
                         <td className="border border-black p-1.5">
-                          {isEditing ? (
-                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.organized_by || ''} onChange={(e) => {
-                              const updated = [...s["6_faculty_achievements"].g_workshops_attended];
-                              updated[i].organized_by = e.target.value;
-                              updateSectionField('6_faculty_achievements.g_workshops_attended', updated);
-                            }} />
-                          ) : item.organized_by}
+                          <EditableCell sectionPath="6_faculty_achievements.g_workshops_attended" rowIndex={i} fieldKey="organized_by" value={item.organized_by} />
                         </td>
                         <td className="border border-black p-1.5">
-                          {isEditing ? (
-                            <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.duration || ''} onChange={(e) => {
-                              const updated = [...s["6_faculty_achievements"].g_workshops_attended];
-                              updated[i].duration = e.target.value;
-                              updateSectionField('6_faculty_achievements.g_workshops_attended', updated);
-                            }} />
-                          ) : item.duration}
+                          <EditableCell sectionPath="6_faculty_achievements.g_workshops_attended" rowIndex={i} fieldKey="duration" value={item.duration} />
                         </td>
                         {isEditing && (
                           <td className="border border-black p-1.5 print:hidden text-center">
@@ -1854,49 +1925,19 @@ const IQACMonthlyReport = () => {
                     <tr key={i} className="border-b border-black">
                       <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
                       <td className="border border-black p-1.5 font-medium">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.program_name || ''} onChange={(e) => {
-                            const updated = [...(s["7_non_teaching_training"] || [])];
-                            updated[i].program_name = e.target.value;
-                            updateSectionField('7_non_teaching_training', updated);
-                          }} />
-                        ) : item.program_name}
+                        <EditableCell sectionPath="7_non_teaching_training" rowIndex={i} fieldKey="program_name" value={item.program_name} />
                       </td>
                       <td className="border border-black p-1.5">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.target_staff || ''} onChange={(e) => {
-                            const updated = [...(s["7_non_teaching_training"] || [])];
-                            updated[i].target_staff = e.target.value;
-                            updateSectionField('7_non_teaching_training', updated);
-                          }} />
-                        ) : item.target_staff}
+                        <EditableCell sectionPath="7_non_teaching_training" rowIndex={i} fieldKey="target_staff" value={item.target_staff} />
                       </td>
                       <td className="border border-black p-1.5">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.resource_person || ''} onChange={(e) => {
-                            const updated = [...(s["7_non_teaching_training"] || [])];
-                            updated[i].resource_person = e.target.value;
-                            updateSectionField('7_non_teaching_training', updated);
-                          }} />
-                        ) : item.resource_person}
+                        <EditableCell sectionPath="7_non_teaching_training" rowIndex={i} fieldKey="resource_person" value={item.resource_person} />
                       </td>
                       <td className="border border-black p-1.5">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.duration || ''} onChange={(e) => {
-                            const updated = [...(s["7_non_teaching_training"] || [])];
-                            updated[i].duration = e.target.value;
-                            updateSectionField('7_non_teaching_training', updated);
-                          }} />
-                        ) : item.duration}
+                        <EditableCell sectionPath="7_non_teaching_training" rowIndex={i} fieldKey="duration" value={item.duration} />
                       </td>
                       <td className="border border-black p-1.5 text-center font-bold">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs text-center" value={item.participants || ''} onChange={(e) => {
-                            const updated = [...(s["7_non_teaching_training"] || [])];
-                            updated[i].participants = e.target.value;
-                            updateSectionField('7_non_teaching_training', updated);
-                          }} />
-                        ) : item.participants}
+                        <EditableCell sectionPath="7_non_teaching_training" rowIndex={i} fieldKey="participants" value={item.participants} />
                       </td>
                       {isEditing && (
                         <td className="border border-black p-1.5 print:hidden text-center">
@@ -1968,58 +2009,22 @@ const IQACMonthlyReport = () => {
                     <tr key={i} className="border-b border-black">
                       <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
                       <td className="border border-black p-1.5 font-medium">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.name || ''} onChange={(e) => {
-                            const updated = [...s["8_infrastructure_investment"]];
-                            updated[i].name = e.target.value;
-                            updateSectionField('8_infrastructure_investment', updated);
-                          }} />
-                        ) : item.name}
+                        <EditableCell sectionPath="8_infrastructure_investment" rowIndex={i} fieldKey="name" value={item.name} />
                       </td>
                       <td className="border border-black p-1.5">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.specs || ''} onChange={(e) => {
-                            const updated = [...s["8_infrastructure_investment"]];
-                            updated[i].specs = e.target.value;
-                            updateSectionField('8_infrastructure_investment', updated);
-                          }} />
-                        ) : item.specs}
+                        <EditableCell sectionPath="8_infrastructure_investment" rowIndex={i} fieldKey="specs" value={item.specs} />
                       </td>
                       <td className="border border-black p-1.5 text-center">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs text-center" value={item.quantity || ''} onChange={(e) => {
-                            const updated = [...s["8_infrastructure_investment"]];
-                            updated[i].quantity = e.target.value;
-                            updateSectionField('8_infrastructure_investment', updated);
-                          }} />
-                        ) : item.quantity}
+                        <EditableCell sectionPath="8_infrastructure_investment" rowIndex={i} fieldKey="quantity" value={item.quantity} />
                       </td>
                       <td className="border border-black p-1.5">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.date || ''} onChange={(e) => {
-                            const updated = [...s["8_infrastructure_investment"]];
-                            updated[i].date = e.target.value;
-                            updateSectionField('8_infrastructure_investment', updated);
-                          }} />
-                        ) : item.date}
+                        <EditableCell sectionPath="8_infrastructure_investment" rowIndex={i} fieldKey="date" value={item.date} />
                       </td>
                       <td className="border border-black p-1.5">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.supplier || ''} onChange={(e) => {
-                            const updated = [...s["8_infrastructure_investment"]];
-                            updated[i].supplier = e.target.value;
-                            updateSectionField('8_infrastructure_investment', updated);
-                          }} />
-                        ) : item.supplier}
+                        <EditableCell sectionPath="8_infrastructure_investment" rowIndex={i} fieldKey="supplier" value={item.supplier} />
                       </td>
                       <td className="border border-black p-1.5 text-center font-bold">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs text-center font-bold" value={item.amount || ''} onChange={(e) => {
-                            const updated = [...s["8_infrastructure_investment"]];
-                            updated[i].amount = e.target.value;
-                            updateSectionField('8_infrastructure_investment', updated);
-                          }} />
-                        ) : item.amount}
+                        <EditableCell sectionPath="8_infrastructure_investment" rowIndex={i} fieldKey="amount" value={item.amount} />
                       </td>
                       {isEditing && (
                         <td className="border border-black p-1.5 print:hidden text-center">
@@ -2091,49 +2096,19 @@ const IQACMonthlyReport = () => {
                     <tr key={i} className="border-b border-black">
                       <td className="border border-black p-1.5 text-center">{item.s_no || i + 1}</td>
                       <td className="border border-black p-1.5 font-medium">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.company || ''} onChange={(e) => {
-                            const updated = [...(s["9_mous_signed"] || [])];
-                            updated[i].company = e.target.value;
-                            updateSectionField('9_mous_signed', updated);
-                          }} />
-                        ) : item.company}
+                        <EditableCell sectionPath="9_mous_signed" rowIndex={i} fieldKey="company" value={item.company} />
                       </td>
                       <td className="border border-black p-1.5">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.purpose || ''} onChange={(e) => {
-                            const updated = [...(s["9_mous_signed"] || [])];
-                            updated[i].purpose = e.target.value;
-                            updateSectionField('9_mous_signed', updated);
-                          }} />
-                        ) : item.purpose}
+                        <EditableCell sectionPath="9_mous_signed" rowIndex={i} fieldKey="purpose" value={item.purpose} />
                       </td>
                       <td className="border border-black p-1.5">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.date || ''} onChange={(e) => {
-                            const updated = [...(s["9_mous_signed"] || [])];
-                            updated[i].date = e.target.value;
-                            updateSectionField('9_mous_signed', updated);
-                          }} />
-                        ) : item.date}
+                        <EditableCell sectionPath="9_mous_signed" rowIndex={i} fieldKey="date" value={item.date} />
                       </td>
                       <td className="border border-black p-1.5">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.validity || ''} onChange={(e) => {
-                            const updated = [...(s["9_mous_signed"] || [])];
-                            updated[i].validity = e.target.value;
-                            updateSectionField('9_mous_signed', updated);
-                          }} />
-                        ) : item.validity}
+                        <EditableCell sectionPath="9_mous_signed" rowIndex={i} fieldKey="validity" value={item.validity} />
                       </td>
                       <td className="border border-black p-1.5">
-                        {isEditing ? (
-                          <input className="w-full bg-amber-50/60 p-0.5 border border-amber-300 text-xs" value={item.activities || ''} onChange={(e) => {
-                            const updated = [...(s["9_mous_signed"] || [])];
-                            updated[i].activities = e.target.value;
-                            updateSectionField('9_mous_signed', updated);
-                          }} />
-                        ) : item.activities}
+                        <EditableCell sectionPath="9_mous_signed" rowIndex={i} fieldKey="activities" value={item.activities} />
                       </td>
                       {isEditing && (
                         <td className="border border-black p-1.5 print:hidden text-center">

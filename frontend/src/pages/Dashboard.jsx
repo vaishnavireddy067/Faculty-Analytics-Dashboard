@@ -42,11 +42,11 @@ const Dashboard = () => {
       try {
         const stats = await fetchAPI('/analytics/stats/');
         setData(stats);
-        if (stats.role === 'FACULTY') {
-            const ai = await fetchAPI('/analytics/ai-insights/');
-            setAiData(ai);
-            const funding = await fetchAPI('/faculty/funding-finder/');
-            setFundingData(funding);
+        if (stats && stats.role === 'FACULTY') {
+            const ai = await fetchAPI('/analytics/ai-insights/').catch(() => null);
+            if (ai) setAiData(ai);
+            const funding = await fetchAPI('/faculty/funding-finder/').catch(() => null);
+            if (funding) setFundingData(funding);
         }
       } catch (error) {
         console.error("Failed to load dashboard stats", error);
