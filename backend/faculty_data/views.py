@@ -2593,7 +2593,7 @@ def faculty_monthly_consolidate(request):
         fac_name = fac.get_full_name() or fac.username
         sub = submissions_by_faculty.get(fac.id)
         
-        if sub and sub.status == 'SUBMITTED':
+        if sub and sub.status in ['SUBMITTED', 'APPROVED']:
             data = sub.submission_data or {}
             
             # Format classes/teaching
@@ -2636,7 +2636,7 @@ def faculty_monthly_consolidate(request):
                 'faculty_id': fac.id,
                 'faculty_name': fac_name,
                 'designation': getattr(fac, 'profile', None).designation if hasattr(fac, 'profile') else 'Faculty',
-                'status': 'Submitted',
+                'status': 'Submitted' if sub.status == 'SUBMITTED' else 'Approved',
                 'classes_conducted': classes_str,
                 'student_guidance': sg_str,
                 'research': res_str,
@@ -2675,10 +2675,10 @@ def faculty_monthly_consolidate(request):
             merged_fdps_attended.append({
                 's_no': sno_counters['fdps_attended'],
                 'faculty_name': fac_name,
-                'program_title': row.get('title') or row.get('program_title', ''),
+                'program_name': row.get('title') or row.get('program_name') or row.get('program_title', ''),
                 'type_role': row.get('role') or 'Participant',
                 'organized_by': row.get('organization') or row.get('organized_by', ''),
-                'dates_duration': f"{row.get('start_date', '')} to {row.get('end_date', '')} ({row.get('duration_days', 1)} Days)",
+                'duration': f"{row.get('duration_days', 5)} Days ({row.get('start_date', '')})",
                 'status_proof': 'Verified' if row.get('proof_url') else 'Submitted'
             })
             sno_counters['fdps_attended'] += 1
@@ -2691,11 +2691,17 @@ def faculty_monthly_consolidate(request):
             
             target_list.append({
                 's_no': sno_counters[target_key],
-                'activity_name': row.get('title') or row.get('event_name', ''),
+                'name': row.get('title') or row.get('name') or row.get('event_name', ''),
+                'activity_name': row.get('title') or row.get('name') or row.get('event_name', ''),
+                'association': row.get('association') or 'Department / CSI / IEEE',
+                'level': row.get('level') or 'Department level',
+                'duration': str(row.get('duration') or '1 day'),
+                'chief_guest': row.get('resource_person') or row.get('chief_guest') or 'Internal / External Expert',
+                'honorarium': row.get('honorarium') or '-',
+                'misc_expenses': row.get('misc_expenses') or '-',
+                'target_students': row.get('target_audience') or f"{row.get('participants_count', '40')} Students",
+                'faculty_count': str(row.get('participants_count', '25')),
                 'faculty_incharge': fac_name,
-                'target_audience': row.get('target_audience') or f"{row.get('participants_count', '40')} Participants",
-                'resource_person': row.get('resource_person') or 'Internal / External Expert',
-                'date': str(row.get('date', '')),
                 'outcome': row.get('outcome') or 'Successfully organized'
             })
             sno_counters[target_key] += 1
