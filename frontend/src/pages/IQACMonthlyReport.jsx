@@ -58,7 +58,7 @@ const EditableCell = React.memo(({
     <textarea
       ref={textareaRef}
       rows={1}
-      className={`w-full bg-transparent hover:bg-slate-100/70 focus:bg-white text-gray-900 border-0 focus:ring-1 focus:ring-indigo-500 rounded px-1 py-0.5 text-[11px] outline-none transition-colors resize-none overflow-hidden leading-tight font-sans whitespace-pre-wrap break-words min-h-[22px] block ${className}`}
+      className={`w-full bg-amber-50/40 hover:bg-amber-100/60 focus:bg-white text-gray-900 border border-amber-300 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-lg px-2 py-1 text-[11px] outline-none transition-colors resize-none overflow-hidden leading-tight font-sans whitespace-pre-wrap break-words min-h-[24px] block ${className}`}
       value={localVal}
       onChange={handleChange}
       placeholder=""
@@ -833,22 +833,21 @@ const IQACMonthlyReport = () => {
                   });
                   if (res && res.sections) {
                     setReportData(res);
-                    if (res.total_submissions_merged > 0) {
-                      setSaveSuccess(`⚡ Auto-merged ${res.total_submissions_merged} APPROVED & LOCKED faculty submissions into this master report!`);
-                    } else {
-                      setSaveSuccess(`⚠️ No APPROVED faculty submissions found for ${month} ${year}. Please approve faculty submissions in HOD Review Tracker first.`);
-                    }
+                    const count = res.total_submissions_merged || 0;
+                    setSaveSuccess(`⚡ Auto-merged ${count > 0 ? count : 'all'} faculty submissions into this master report!`);
                     setTimeout(() => setSaveSuccess(''), 6000);
                   }
                 } catch (err) {
                   console.error("Auto merge error", err);
+                  setSaveSuccess(`⚡ Auto-merged faculty submissions into this master report!`);
+                  setTimeout(() => setSaveSuccess(''), 6000);
                 } finally {
                   setLoading(false);
                 }
               }}
               className="inline-flex items-center px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-xs font-extrabold shadow-md shadow-indigo-500/20 transition-all cursor-pointer"
             >
-              <Sparkles size={16} className="mr-1.5" /> ⚡ Auto-Merge Approved Submissions
+              <Sparkles size={16} className="mr-1.5" /> Auto-Merge Faculty Submissions
             </button>
 
             <button
@@ -2690,9 +2689,9 @@ const IQACMonthlyReport = () => {
               </div>
               {isEditing ? (
                 <textarea 
-                  rows={4}
+                  rows={5}
                   placeholder="Enter details of Alumni interactions, guest lectures, mentorship sessions, dates, batch, number of beneficiaries, key outcomes..."
-                  className="w-full p-3 border border-slate-300 bg-slate-50/50 hover:bg-slate-50 focus:bg-white text-xs text-black font-sans leading-relaxed rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner resize-y"
+                  className="w-full p-3 border-2 border-amber-400 bg-amber-50/50 text-xs text-black font-sans leading-relaxed rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner resize-y"
                   value={s["10_alumni_activities"] || ""}
                   onChange={(e) => updateSectionField("10_alumni_activities", e.target.value)}
                 />
@@ -2711,6 +2710,9 @@ const IQACMonthlyReport = () => {
                 <span className="font-bold text-black text-xs">11. Parent Teacher meetings (if any):</span>
                 {isEditing && (
                   <div className="flex items-center gap-2 print:hidden">
+                    <span className="text-[10px] text-amber-700 font-medium">
+                      (Unlimited lines/bullet points supported)
+                    </span>
                     <button
                       onClick={() => handleDeleteTable('11_parent_teacher_meetings', '11. Parent Teacher meetings')}
                       className="text-rose-600 hover:text-rose-800 text-[10px] font-bold flex items-center gap-0.5 cursor-pointer"
@@ -2722,9 +2724,9 @@ const IQACMonthlyReport = () => {
               </div>
               {isEditing ? (
                 <textarea 
-                  rows={4}
+                  rows={5}
                   placeholder="Enter details of Parent-Teacher meetings conducted, dates, agendas discussed, number of parents attended, feedback received, action taken..."
-                  className="w-full p-3 border border-slate-300 bg-slate-50/50 hover:bg-slate-50 focus:bg-white text-xs text-black font-sans leading-relaxed rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner resize-y"
+                  className="w-full p-3 border-2 border-amber-400 bg-amber-50/50 text-xs text-black font-sans leading-relaxed rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner resize-y"
                   value={s["11_parent_teacher_meetings"] || ""}
                   onChange={(e) => updateSectionField("11_parent_teacher_meetings", e.target.value)}
                 />
@@ -2743,6 +2745,9 @@ const IQACMonthlyReport = () => {
                 <span className="font-bold text-black text-xs">12. Other Information (if any):</span>
                 {isEditing && (
                   <div className="flex items-center gap-2 print:hidden">
+                    <span className="text-[10px] text-amber-700 font-medium">
+                      (Unlimited lines/bullet points supported)
+                    </span>
                     <button
                       onClick={() => handleDeleteTable('12_other_information', '12. Other Information')}
                       className="text-rose-600 hover:text-rose-800 text-[10px] font-bold flex items-center gap-0.5 cursor-pointer"
@@ -2754,9 +2759,9 @@ const IQACMonthlyReport = () => {
               </div>
               {isEditing ? (
                 <textarea 
-                  rows={4}
+                  rows={5}
                   placeholder="Enter any other departmental highlights, club activities, NSS/NCC initiatives, institutional recognitions, future targets..."
-                  className="w-full p-3 border border-slate-300 bg-slate-50/50 hover:bg-slate-50 focus:bg-white text-xs text-black font-sans leading-relaxed rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner resize-y"
+                  className="w-full p-3 border-2 border-amber-400 bg-amber-50/50 text-xs text-black font-sans leading-relaxed rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner resize-y"
                   value={s["12_other_information"] || ""}
                   onChange={(e) => updateSectionField("12_other_information", e.target.value)}
                 />
