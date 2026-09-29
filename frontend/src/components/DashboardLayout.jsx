@@ -21,6 +21,8 @@ const DashboardLayout = () => {
   const [username, setUsername] = useState('Faculty');
   const [userRole, setUserRole] = useState(() => {
     try {
+      const storedRole = localStorage.getItem('user_role');
+      if (storedRole) return storedRole.toUpperCase();
       const u = JSON.parse(localStorage.getItem('current_user_info') || '{}');
       return (u.role || 'FACULTY').toUpperCase();
     } catch(e) {
@@ -55,6 +57,10 @@ const DashboardLayout = () => {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
+        const storedRole = localStorage.getItem('user_role');
+        if (storedRole) {
+          setUserRole(storedRole.toUpperCase());
+        }
         const userInfoStr = localStorage.getItem('current_user_info');
         if (userInfoStr) {
           try {
@@ -62,7 +68,7 @@ const DashboardLayout = () => {
             if (parsed.username || parsed.firstName || parsed.email) {
               setUsername(parsed.firstName || parsed.username || parsed.email.split('@')[0]);
             }
-            if (parsed.role) {
+            if (parsed.role && !storedRole) {
               setUserRole(parsed.role.toUpperCase());
             }
           } catch(e) {}

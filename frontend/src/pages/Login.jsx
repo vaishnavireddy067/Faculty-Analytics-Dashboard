@@ -23,6 +23,7 @@ const Login = () => {
   const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [selectedRole, setSelectedRole] = useState(() => localStorage.getItem('user_role') || 'FACULTY');
   const [view, setView] = useState('login'); // 'login' | 'forgot' | 'register' | 'otp-verify' | 'google-setup'
   const [resetSent, setResetSent] = useState(false);
 
@@ -294,8 +295,12 @@ const Login = () => {
             localStorage.setItem('access_token', data.access);
             localStorage.setItem('refresh_token', data.refresh || '');
             localStorage.setItem('current_user_email', inputUser);
+            localStorage.setItem('user_role', selectedRole);
             if (data.user) {
+              data.user.role = selectedRole;
               localStorage.setItem('current_user_info', JSON.stringify(data.user));
+            } else {
+              localStorage.setItem('current_user_info', JSON.stringify({ email: inputUser, role: selectedRole }));
             }
             window.location.href = '/dashboard';
             return;
@@ -383,9 +388,11 @@ const Login = () => {
         localStorage.setItem(userDatastoreKey, JSON.stringify(initialStore));
       }
 
+      existingUser.role = selectedRole;
       localStorage.setItem('access_token', 'fad_auth_token_' + Date.now());
       localStorage.setItem('refresh_token', 'fad_auth_refresh_' + Date.now());
       localStorage.setItem('current_user_email', userEmail);
+      localStorage.setItem('user_role', selectedRole);
       localStorage.setItem('current_user_info', JSON.stringify(existingUser));
 
       window.location.href = '/dashboard';
@@ -549,7 +556,7 @@ const Login = () => {
           lastName: lastName || 'Member',
           department: department || 'Computer Science & Engineering',
           phone_number: phone,
-          role: 'FACULTY'
+          role: selectedRole || 'FACULTY'
         }),
       }).catch(() => null);
 
@@ -559,8 +566,12 @@ const Login = () => {
           localStorage.setItem('access_token', data.access);
           localStorage.setItem('refresh_token', data.refresh || '');
           localStorage.setItem('current_user_email', data.user?.email || regEmail);
+          localStorage.setItem('user_role', selectedRole || 'FACULTY');
           if (data.user) {
+            data.user.role = selectedRole || 'FACULTY';
             localStorage.setItem('current_user_info', JSON.stringify(data.user));
+          } else {
+            localStorage.setItem('current_user_info', JSON.stringify({ email: regEmail, role: selectedRole || 'FACULTY' }));
           }
           authSuccess = true;
           authData = data;
@@ -598,6 +609,7 @@ const Login = () => {
       lastName: lastName || 'Member',
       phone,
       department: department || 'Computer Science & Engineering',
+      role: selectedRole || 'FACULTY',
       is_email_verified: true
     };
 
@@ -618,7 +630,8 @@ const Login = () => {
           first_name: firstName || 'Faculty',
           last_name: lastName || 'Member',
           department: department || 'Computer Science & Engineering',
-          designation: 'Faculty / Researcher',
+          designation: selectedRole === 'HOD' ? 'Head of Department (HOD)' : 'Faculty / Researcher',
+          role: selectedRole || 'FACULTY',
           phone_number: phone || '',
           total_citations: 0,
           h_index: 0,
@@ -647,11 +660,12 @@ const Login = () => {
 
     // Direct Instant Login on Verification Success!
     if (authSuccess || localStorage.getItem('access_token')) {
+      localStorage.setItem('user_role', selectedRole || 'FACULTY');
       if (!localStorage.getItem('access_token')) {
         localStorage.setItem('access_token', 'fad_auth_token_' + Date.now());
         localStorage.setItem('refresh_token', 'fad_auth_refresh_' + Date.now());
         localStorage.setItem('current_user_email', regEmail);
-        localStorage.setItem('current_user_info', JSON.stringify(newUser));
+        localStorage.setItem('current_user_info', JSON.stringify({ ...newUser, role: selectedRole || 'FACULTY' }));
       }
       window.location.href = '/dashboard';
       return;
@@ -767,11 +781,48 @@ const Login = () => {
 
           {view === 'login' ? (
             <>
+              {/* Role Selection Buttons: Faculty vs HOD */}
+              <div className="bg-gray-100 p-1.5 rounded-2xl flex gap-2 border border-gray-200/80 shadow-inner">
+                <button
+                  type="button"
+                  id="role-btn-faculty"
+                  onClick={() => setSelectedRole('FACULTY')}
+                  className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                    selectedRole === 'FACULTY'
+                      ? 'bg-white text-indigo-600 shadow-md shadow-indigo-100 border border-indigo-100/70 ring-2 ring-indigo-500/20 scale-[1.01]'
+                      : 'text-gray-600 hover:text-gray-900 bg-transparent border-none'
+                  }`}
+                >
+                  <User size={17} className={selectedRole === 'FACULTY' ? 'text-indigo-600' : 'text-gray-400'} />
+                  <div className="text-left">
+                    <span className="block font-bold leading-tight text-[13px]">Faculty</span>
+                    <span className="text-[10px] font-normal text-gray-500 block">Submissions & Profile</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  id="role-btn-hod"
+                  onClick={() => setSelectedRole('HOD')}
+                  className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                    selectedRole === 'HOD'
+                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-200 scale-[1.01]'
+                      : 'text-gray-600 hover:text-gray-900 bg-transparent border-none'
+                  }`}
+                >
+                  <ShieldCheck size={17} className={selectedRole === 'HOD' ? 'text-white' : 'text-gray-400'} />
+                  <div className="text-left">
+                    <span className="block font-bold leading-tight text-[13px]">Head of Dept (HOD)</span>
+                    <span className={`text-[10px] font-normal block ${selectedRole === 'HOD' ? 'text-indigo-100' : 'text-gray-500'}`}>Review & Consolidation</span>
+                  </div>
+                </button>
+              </div>
+
               {/* --- STANDARD CREDENTIALS FORM --- */}
               <form className="space-y-4" onSubmit={handleLogin} autoComplete="off">
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                    Official Institutional Email
+                    {selectedRole === 'HOD' ? 'HOD Official Email' : 'Faculty Official Email'}
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
@@ -783,7 +834,7 @@ const Login = () => {
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
                       className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm transition-all shadow-sm" 
-                      placeholder="faculty@institution.edu"
+                      placeholder={selectedRole === 'HOD' ? "hod.cse@institution.edu" : "faculty@institution.edu"}
                       autoComplete="email"
                       required
                     />
@@ -829,9 +880,9 @@ const Login = () => {
                 <button 
                   type="submit" 
                   disabled={loading} 
-                  className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-xl shadow-md text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all disabled:opacity-50"
+                  className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-xl shadow-md text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all disabled:opacity-50 cursor-pointer"
                 >
-                  {loading ? 'Authenticating...' : 'Sign In to Dashboard'} <ChevronRight size={18} />
+                  {loading ? 'Authenticating...' : `Sign In as ${selectedRole === 'HOD' ? 'HOD' : 'Faculty'}`} <ChevronRight size={18} />
                 </button>
               </form>
 
@@ -858,12 +909,34 @@ const Login = () => {
             </>
           ) : view === 'register' ? (
             <>
-              {/* Institutional Registration Scope Notice */}
-              <div className="bg-indigo-50/80 border border-indigo-100 p-3.5 rounded-2xl text-xs text-indigo-900 flex items-start gap-2.5">
-                <ShieldCheck size={18} className="text-indigo-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-bold block">Faculty Portal Registration</span>
-                  <span className="text-indigo-700 text-[11px]">This registration is strictly for Faculty members with email OTP verification. HOD and Administrator accounts are provisioned directly by Institutional IT.</span>
+              {/* Role Selection for Registration */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                  Registering As
+                </label>
+                <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 rounded-xl border border-gray-200/80">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRole('FACULTY')}
+                    className={`py-2 px-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      selectedRole === 'FACULTY'
+                        ? 'bg-white text-indigo-600 shadow-sm border border-gray-200/60 ring-1 ring-indigo-500/20'
+                        : 'text-gray-600 hover:text-gray-900 bg-transparent border-none'
+                    }`}
+                  >
+                    <User size={15} /> Faculty Member
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRole('HOD')}
+                    className={`py-2 px-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      selectedRole === 'HOD'
+                        ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900 bg-transparent border-none'
+                    }`}
+                  >
+                    <ShieldCheck size={15} /> Head of Dept (HOD)
+                  </button>
                 </div>
               </div>
 

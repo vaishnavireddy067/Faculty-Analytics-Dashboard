@@ -58,12 +58,15 @@ const MonthlyReportHub = () => {
   useEffect(() => {
     const loadProfile = async () => {
       try {
+        const storedRole = localStorage.getItem('user_role');
         const userInfoStr = localStorage.getItem('current_user_info');
-        if (userInfoStr) {
-          const parsed = JSON.parse(userInfoStr);
+        if (userInfoStr || storedRole) {
+          const parsed = userInfoStr ? JSON.parse(userInfoStr) : {};
+          const effRole = (storedRole || parsed.role || 'FACULTY').toUpperCase();
+          parsed.role = effRole;
           setCurrentUser(parsed);
           if (parsed.department) setDepartment(parsed.department);
-          if (parsed.role === 'FACULTY') {
+          if (effRole === 'FACULTY') {
             setActiveTab('faculty_submission');
           } else {
             setActiveTab('hod_tracker');
@@ -71,6 +74,7 @@ const MonthlyReportHub = () => {
         }
         const profile = await fetchAPI('/faculty/profile/');
         if (profile) {
+          if (storedRole) profile.role = storedRole.toUpperCase();
           setCurrentUser(profile);
           if (profile.department) setDepartment(profile.department);
           if (profile.role === 'FACULTY') {
