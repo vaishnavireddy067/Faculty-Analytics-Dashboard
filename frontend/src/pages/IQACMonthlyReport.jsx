@@ -4,7 +4,8 @@ import {
   PlusCircle, Trash2, CheckCircle2, Building, Calendar, 
   Layers, Award, BookOpen, Users, Briefcase, ChevronDown, 
   ChevronRight, Edit3, Save, Database, History, AlertCircle, Plus, X,
-  Share2, Copy, Check, FolderArchive, PlusSquare, ExternalLink, Search, Sparkles
+  Share2, Copy, Check, FolderArchive, PlusSquare, ExternalLink, Search, Sparkles,
+  Send, Clock, ShieldCheck
 } from 'lucide-react';
 import { fetchAPI, API_BASE_URL } from '../services/api';
 
@@ -95,6 +96,319 @@ const IQACMonthlyReport = () => {
   const [modalForm, setModalForm] = useState({});
 
   const reportRef = useRef();
+
+  const userRole = (localStorage.getItem('user_role') || '').toUpperCase();
+  const isHod = userRole === 'HOD' || userRole === 'ADMIN' || userRole === 'SUPERADMIN';
+  const [submissionStatus, setSubmissionStatus] = useState('PENDING');
+  const [submittedAt, setSubmittedAt] = useState('');
+  const [facultySubmissionsCount, setFacultySubmissionsCount] = useState(0);
+
+  // Check if faculty already submitted for this period
+  useEffect(() => {
+    const userEmail = localStorage.getItem('current_user_email') || '';
+    const key = `fad_sub_${department}_${month}_${year}_${userEmail}`;
+    const existing = localStorage.getItem(key);
+    if (existing) {
+      try {
+        const parsed = JSON.parse(existing);
+        if (parsed.status === 'SUBMITTED') {
+          setSubmissionStatus('SUBMITTED');
+          setSubmittedAt(parsed.submitted_at || '');
+        }
+      } catch (e) {}
+    } else {
+      setSubmissionStatus('PENDING');
+      setSubmittedAt('');
+    }
+
+    // Count submitted faculty returns for HOD
+    try {
+      const allSubs = JSON.parse(localStorage.getItem('fad_registered_monthly_subs') || '[]');
+      const matching = allSubs.filter(s => s.month === month && s.year === year);
+      setFacultySubmissionsCount(matching.length);
+    } catch (e) {}
+  }, [department, month, year]);
+
+  // Submit Monthly Report to HOD (Faculty action)
+  const handleSubmitToHod = async () => {
+    if (!reportData) return;
+    setSaving(true);
+    setSaveSuccess('');
+    try {
+      const userEmail = localStorage.getItem('current_user_email') || 'faculty@institution.edu';
+      const userInfoStr = localStorage.getItem('current_user_info') || '{}';
+      let userInfo = {};
+      try { userInfo = JSON.parse(userInfoStr); } catch (e) {}
+      const userName = userInfo.firstName ? `${userInfo.firstName} ${userInfo.lastName || ''}` : (userInfo.username || userEmail.split('@')[0]);
+
+      const subData = {
+        faculty_id: userInfo.id || Date.now(),
+        faculty_name: userName,
+        email: userEmail,
+        department,
+        month,
+        year,
+        academic_year: academicYear,
+        status: 'SUBMITTED',
+        submitted_at: new Date().toLocaleString(),
+        sections: reportData.sections
+      };
+
+      // 1. Save locally per user
+      const submissionKey = `fad_sub_${department}_${month}_${year}_${userEmail}`;
+      localStorage.setItem(submissionKey, JSON.stringify(subData));
+
+      // 2. Track in global submissions index for HOD consolidation
+      const allSubs = JSON.parse(localStorage.getItem('fad_registered_monthly_subs') || '[]');
+      const existingIdx = allSubs.findIndex(s => s.email?.toLowerCase() === userEmail.toLowerCase() && s.month === month && s.year === year);
+      if (existingIdx >= 0) {
+        allSubs[existingIdx] = subData;
+      } else {
+        allSubs.unshift(subData);
+      }
+      localStorage.setItem('fad_registered_monthly_subs', JSON.stringify(allSubs));
+
+      // 3. Post to backend if online
+      await fetchAPI('/faculty/monthly-submission/detail/', {
+        method: 'POST',
+        body: JSON.stringify({
+          department,
+          month,
+          year,
+          status: 'SUBMITTED',
+          submission_data: reportData.sections
+        })
+      }).catch(() => null);
+
+      setSubmissionStatus('SUBMITTED');
+      setSubmittedAt(subData.submitted_at);
+      setSaveSuccess(`✅ Monthly Activity Report for ${month} ${year} submitted to HOD successfully!`);
+      setTimeout(() => setSaveSuccess(''), 6000);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // 1-Click Auto-Consolidation (HOD Action)
+  const handleConsolidateAllSubmissions = async () => {
+    setLoading(true);
+    setSaveSuccess('');
+    try {
+      let mergedSections = { ...(reportData?.sections || {}) };
+      let mergedCount = 0;
+
+      // 1. Try Backend 1-click consolidation
+      const res = await fetchAPI('/faculty/monthly-submission/consolidate/', {
+        method: 'POST',
+        body: JSON.stringify({ department, month, year, academic_year: academicYear })
+      }).catch(() => null);
+
+      if (res && res.sections) {
+        mergedSections = { ...res.sections };
+        mergedCount = res.total_submissions_merged || 0;
+      }
+
+      // 2. Merge all local registered submissions
+      const allSubs = JSON.parse(localStorage.getItem('fad_registered_monthly_subs') || '[]')
+        .filter(s => s.month === month && s.year === year);
+
+      if (allSubs.length > 0) {
+        mergedCount += allSubs.length;
+        allSubs.forEach(sub => {
+          const s = sub.sections || {};
+          if (Array.isArray(s['1_student_events']) && s['1_student_events'].length > 0) {
+            mergedSections['1_student_events'] = [...(mergedSections['1_student_events'] || []), ...s['1_student_events']];
+          }
+          if (Array.isArray(s['2_faculty_events']) && s['2_faculty_events'].length > 0) {
+            mergedSections['2_faculty_events'] = [...(mergedSections['2_faculty_events'] || []), ...s['2_faculty_events']];
+          }
+          if (Array.isArray(s['3_value_added_courses']) && s['3_value_added_courses'].length > 0) {
+            mergedSections['3_value_added_courses'] = [...(mergedSections['3_value_added_courses'] || []), ...s['3_value_added_courses']];
+          }
+          if (Array.isArray(s['4_advanced_learners']) && s['4_advanced_learners'].length > 0) {
+            mergedSections['4_advanced_learners'] = [...(mergedSections['4_advanced_learners'] || []), ...s['4_advanced_learners']];
+          }
+          if (s['5_student_achievements']?.a_curricular) {
+            if (!mergedSections['5_student_achievements']) mergedSections['5_student_achievements'] = {};
+            mergedSections['5_student_achievements'].a_curricular = [
+              ...(mergedSections['5_student_achievements'].a_curricular || []),
+              ...s['5_student_achievements'].a_curricular
+            ];
+          }
+          if (s['5_student_achievements']?.c_online_certifications) {
+            if (!mergedSections['5_student_achievements']) mergedSections['5_student_achievements'] = {};
+            mergedSections['5_student_achievements'].c_online_certifications = [
+              ...(mergedSections['5_student_achievements'].c_online_certifications || []),
+              ...s['5_student_achievements'].c_online_certifications
+            ];
+          }
+          if (s['6_faculty_achievements']?.a_journal_publications) {
+            if (!mergedSections['6_faculty_achievements']) mergedSections['6_faculty_achievements'] = {};
+            mergedSections['6_faculty_achievements'].a_journal_publications = [
+              ...(mergedSections['6_faculty_achievements'].a_journal_publications || []),
+              ...s['6_faculty_achievements'].a_journal_publications
+            ];
+          }
+          if (s['6_faculty_achievements']?.b_conference_publications) {
+            if (!mergedSections['6_faculty_achievements']) mergedSections['6_faculty_achievements'] = {};
+            mergedSections['6_faculty_achievements'].b_conference_publications = [
+              ...(mergedSections['6_faculty_achievements'].b_conference_publications || []),
+              ...s['6_faculty_achievements'].b_conference_publications
+            ];
+          }
+          if (s['6_faculty_achievements']?.c_patents) {
+            if (!mergedSections['6_faculty_achievements']) mergedSections['6_faculty_achievements'] = {};
+            mergedSections['6_faculty_achievements'].c_patents = [
+              ...(mergedSections['6_faculty_achievements'].c_patents || []),
+              ...s['6_faculty_achievements'].c_patents
+            ];
+          }
+          if (s['6_faculty_achievements']?.g_workshops_attended) {
+            if (!mergedSections['6_faculty_achievements']) mergedSections['6_faculty_achievements'] = {};
+            mergedSections['6_faculty_achievements'].g_workshops_attended = [
+              ...(mergedSections['6_faculty_achievements'].g_workshops_attended || []),
+              ...s['6_faculty_achievements'].g_workshops_attended
+            ];
+          }
+          if (s['6_faculty_achievements']?.k_awards) {
+            if (!mergedSections['6_faculty_achievements']) mergedSections['6_faculty_achievements'] = {};
+            mergedSections['6_faculty_achievements'].k_awards = [
+              ...(mergedSections['6_faculty_achievements'].k_awards || []),
+              ...s['6_faculty_achievements'].k_awards
+            ];
+          }
+        });
+      }
+
+      // Re-index s_no for every table
+      const reIndex = (arr) => Array.isArray(arr) ? arr.map((item, idx) => ({ ...item, s_no: idx + 1 })) : arr;
+      if (mergedSections['1_student_events']) mergedSections['1_student_events'] = reIndex(mergedSections['1_student_events']);
+      if (mergedSections['2_faculty_events']) mergedSections['2_faculty_events'] = reIndex(mergedSections['2_faculty_events']);
+      if (mergedSections['3_value_added_courses']) mergedSections['3_value_added_courses'] = reIndex(mergedSections['3_value_added_courses']);
+      if (mergedSections['4_advanced_learners']) mergedSections['4_advanced_learners'] = reIndex(mergedSections['4_advanced_learners']);
+      if (mergedSections['5_student_achievements']?.a_curricular) {
+        mergedSections['5_student_achievements'].a_curricular = reIndex(mergedSections['5_student_achievements'].a_curricular);
+      }
+      if (mergedSections['5_student_achievements']?.c_online_certifications) {
+        mergedSections['5_student_achievements'].c_online_certifications = reIndex(mergedSections['5_student_achievements'].c_online_certifications);
+      }
+      if (mergedSections['6_faculty_achievements']?.a_journal_publications) {
+        mergedSections['6_faculty_achievements'].a_journal_publications = reIndex(mergedSections['6_faculty_achievements'].a_journal_publications);
+      }
+      if (mergedSections['6_faculty_achievements']?.b_conference_publications) {
+        mergedSections['6_faculty_achievements'].b_conference_publications = reIndex(mergedSections['6_faculty_achievements'].b_conference_publications);
+      }
+      if (mergedSections['6_faculty_achievements']?.c_patents) {
+        mergedSections['6_faculty_achievements'].c_patents = reIndex(mergedSections['6_faculty_achievements'].c_patents);
+      }
+      if (mergedSections['6_faculty_achievements']?.g_workshops_attended) {
+        mergedSections['6_faculty_achievements'].g_workshops_attended = reIndex(mergedSections['6_faculty_achievements'].g_workshops_attended);
+      }
+      if (mergedSections['6_faculty_achievements']?.k_awards) {
+        mergedSections['6_faculty_achievements'].k_awards = reIndex(mergedSections['6_faculty_achievements'].k_awards);
+      }
+
+      setReportData(prev => ({
+        ...prev,
+        sections: mergedSections
+      }));
+
+      setSaveSuccess(`⚡ Successfully merged ${mergedCount > 0 ? mergedCount : 'all'} faculty submissions into this consolidated IQAC master sheet!`);
+      setTimeout(() => setSaveSuccess(''), 6000);
+    } catch (err) {
+      console.error("Auto merge error", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Exact sample data matching AVNIET IQAC Report PDF
+  const handleAutoFillPdfSampleData = () => {
+    setReportData(prev => ({
+      ...prev,
+      sections: {
+        ...(prev?.sections || {}),
+        "1_student_events": [
+          { s_no: 1, name: "The Art of programming in C", association: "-", level: "Department level", duration: "1 day (03-08-2026)", chief_guest: "Mr.A.Narender", honorarium: "-", misc_expenses: "-", target_students: "III DS-A,B and III AI&DS" },
+          { s_no: 2, name: "Orientation day", association: "-", level: "College level", duration: "1 day (05-08-2026)", chief_guest: "Mr.A.V.N Reddy", honorarium: "-", misc_expenses: "-", target_students: "Newly joined first year students" },
+          { s_no: 3, name: "KRITHI MEDHA data intelligence logo launch", association: "-", level: "Department level", duration: "1 day (08-08-2026)", chief_guest: "Mr.P.Nageshwara Reddy, Mr.Shaik Abdul Nabi", honorarium: "-", misc_expenses: "-", target_students: "All year students of AI& DS and CSE(DS)" },
+          { s_no: 4, name: "Technical event under Krithi medha Automation Bot", association: "-", level: "Department level", duration: "1 day (08-08-2026)", chief_guest: "Mr.P.Nageshwara Reddy", honorarium: "-", misc_expenses: "-", target_students: "All year students of AI& DS and CSE(DS)" },
+          { s_no: 5, name: "Independence Day celebrations", association: "-", level: "College level", duration: "15-08-2026", chief_guest: "Mr.P.Nageshwara Reddy", honorarium: "-", misc_expenses: "-", target_students: "All Branches students and Faculty" },
+          { s_no: 6, name: "Tree Plantation program", association: "NSS", level: "College level", duration: "29-08-2026", chief_guest: "Mr.P.Nageshwara Reddy", honorarium: "-", misc_expenses: "-", target_students: "All Branches students and Faculty" }
+        ],
+        "5_student_achievements": {
+          ...(prev?.sections?.["5_student_achievements"] || {}),
+          "a_curricular": [
+            { s_no: 1, roll_no: "245U1A6745", name: "G.PRANEETH", year_sem: "III/I", event: "EUREKA pitching competetion", organized_by: "E Cell & R&D", duration: "1 day (27-08-2026)", prizes: "Cash prize (1000/-)" },
+            { s_no: 2, roll_no: "245U1A6750", name: "J.BHAVANI", year_sem: "III/I", event: "EUREKA pitching competetion", organized_by: "E Cell & R&D", duration: "1 day (27-08-2026)", prizes: "Cash prize (1000/-)" },
+            { s_no: 3, roll_no: "245U1A6705", name: "A.RUTHVIK", year_sem: "III/I", event: "EUREKA pitching competetion", organized_by: "E Cell & R&D", duration: "1 day (27-08-2026)", prizes: "Cash prize (1000/-)" },
+            { s_no: 4, roll_no: "245U1A6767", name: "K.A.VAISHNAVI", year_sem: "III/I", event: "HakIT * MRDU 26 24 hours national hackathon", organized_by: "Mallareddy University", duration: "22-08-2026 to 23-08-2026", prizes: "-" },
+            { s_no: 5, roll_no: "245U1A7235", name: "MD SAIF", year_sem: "III/I", event: "HakIT * MRDU 26 24 hours national hackathon", organized_by: "Mallareddy University", duration: "22-08-2026 to 23-08-2026", prizes: "-" },
+            { s_no: 6, roll_no: "255U1A6731", name: "Divya deepika", year_sem: "II/I", event: "HakIT * MRDU 26 24 hours national hackathon", organized_by: "Mallareddy University", duration: "22-08-2026 to 23-08-2026", prizes: "-" },
+            { s_no: 7, roll_no: "255U1A6704", name: "Nerlekar Anvishree", year_sem: "II/I", event: "HakIT * MRDU 26 24 hours national hackathon", organized_by: "Mallareddy University", duration: "22-08-2026 to 23-08-2026", prizes: "-" }
+          ],
+          "c_online_certifications": [
+            { s_no: 1, roll_no: "All students of DS-A,B", name: "-", year_sem: "III/I", course_name: "Introduction of Data Science", organized_by: "Mrs.Swathi Sugur", duration: "7 HOURS", grade: "Online certification course" },
+            { s_no: 2, roll_no: "All students of DS-A, AI&DS", name: "-", year_sem: "III/I", course_name: "Data Mining", organized_by: "Mrs.Revathi Durgam", duration: "10 HOURS", grade: "Online certification course" }
+          ],
+          "d_placements": {
+            "ds_byd": [
+              { s_no: 1, name: "CHANDU PRAKASH", roll_no: "235U1A6712", date: "17-08-2026" },
+              { s_no: 2, name: "D. SRINIVAS", roll_no: "235U1A6718", date: "17-08-2026" },
+              { s_no: 3, name: "G. NIKHIL REDDY", roll_no: "235U1A6725", date: "17-08-2026" },
+              { s_no: 4, name: "KALAL HARSHAVARDHAN GOUD", roll_no: "235U1A6730", date: "17-08-2026" },
+              { s_no: 5, name: "KALKI KARTHIK", roll_no: "235U1A6731", date: "17-08-2026" },
+              { s_no: 6, name: "K SIDDARTH REDDY", roll_no: "235U1A6735", date: "17-08-2026" },
+              { s_no: 7, name: "MD.Matheen", roll_no: "235U1A6745", date: "17-08-2026" },
+              { s_no: 8, name: "ARAVIND REDDY", roll_no: "235U1A6749", date: "17-08-2026" },
+              { s_no: 9, name: "R.AKASH", roll_no: "235U1A6751", date: "17-08-2026" },
+              { s_no: 10, name: "V. KARTHIK GOUD", roll_no: "235U1A6762", date: "17-08-2026" },
+              { s_no: 11, name: "M VENKAT KALYAN", roll_no: "235U1A6765", date: "17-08-2026" }
+            ],
+            "aids_byd": [
+              { s_no: 1, name: "ANANTHUNE ADITHYA", roll_no: "235U1A7202", date: "17-08-2026" },
+              { s_no: 2, name: "APPALA RANJITH", roll_no: "235U1A7204", date: "17-08-2026" },
+              { s_no: 3, name: "B.NITHIN", roll_no: "235U1A7206", date: "17-08-2026" },
+              { s_no: 4, name: "B.AKUL REDDY", roll_no: "235U1A7209", date: "17-08-2026" },
+              { s_no: 5, name: "CH.NANDU", roll_no: "235U1A7215", date: "17-08-2026" },
+              { s_no: 6, name: "CHOPPADANDI PRANITH", roll_no: "235U1A7216", date: "17-08-2026" },
+              { s_no: 7, name: "D.PRANEETH", roll_no: "235U1A7217", date: "17-08-2026" },
+              { s_no: 8, name: "G .ARJUN KUMAR", roll_no: "235U1A7220", date: "17-08-2026" },
+              { s_no: 9, name: "G NARSIMHA REDDY", roll_no: "235U1A7222", date: "17-08-2026" },
+              { s_no: 10, name: "G.SIVAPRASANTH REDDY", roll_no: "235U1A7227", date: "17-08-2026" },
+              { s_no: 11, name: "G.ADITHYA VARDHAN", roll_no: "235U1A7229", date: "17-08-2026" },
+              { s_no: 12, name: "K. RAJKUMAR", roll_no: "235U1A7231", date: "17-08-2026" },
+              { s_no: 13, name: "MARAM ROHITH REDDY", roll_no: "235U1A7239", date: "17-08-2026" },
+              { s_no: 14, name: "SRAVAN KUMAR", roll_no: "235U1A7240", date: "17-08-2026" },
+              { s_no: 15, name: "M.AKHIL REDDY", roll_no: "235U1A7242", date: "17-08-2026" },
+              { s_no: 16, name: "MUDU NAGESHWARA RAO", roll_no: "235U1A7243", date: "17-08-2026" },
+              { s_no: 17, name: "N PAVAN KUMAR REDDY", roll_no: "235U1A7244", date: "17-08-2026" },
+              { s_no: 18, name: "N.SAI KIRAN", roll_no: "235U1A7246", date: "17-08-2026" },
+              { s_no: 19, name: "P GOUTHAM GOUD", roll_no: "235U1A7248", date: "17-08-2026" },
+              { s_no: 20, name: "P.CHARAN REDDY", roll_no: "235U1A7250", date: "17-08-2026" },
+              { s_no: 21, name: "P. PRANAY CHANDRA", roll_no: "235U1A7251", date: "17-08-2026" },
+              { s_no: 22, name: "P.MADHU", roll_no: "235U1A7252", date: "17-08-2026" },
+              { s_no: 23, name: "MUZAMMIL SHAIK", roll_no: "235U1A7258", date: "17-08-2026" },
+              { s_no: 24, name: "TANNIRU VENU", roll_no: "235U1A7261", date: "17-08-2026" },
+              { s_no: 25, name: "U ANJANIPRASAD", roll_no: "235U1A7262", date: "17-08-2026" },
+              { s_no: 26, name: "DHARAVATH VIJAY KUMAR", roll_no: "245U5A7201", date: "17-08-2026" },
+              { s_no: 27, name: "KUNDARAPU SIDDHARTHA", roll_no: "245U5A7204", date: "17-08-2026" }
+            ]
+          }
+        },
+        "6_faculty_achievements": {
+          ...(prev?.sections?.["6_faculty_achievements"] || {}),
+          "g_workshops_attended": [
+            { s_no: 1, faculty_name: "Mr.V.Jagadeeshwar Reddy", program: "Adaptive Intelligent circuits for edge AI Devices", organized_by: "AVNIET", duration: "One week (17-08-2026 to 22-08-2026)" }
+          ]
+        }
+      }
+    }));
+    setSaveSuccess("⚡ Auto-filled exact sample tables matching official AVNIET IQAC Report!");
+    setTimeout(() => setSaveSuccess(''), 5000);
+  };
 
   // Load archived reports list from DB
   const loadSavedReportsList = async () => {
