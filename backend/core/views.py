@@ -267,6 +267,13 @@ def verify_registration_otp(request):
         user.is_email_verified = True
         user.save()
 
+        # Ensure FacultyProfile exists
+        try:
+            from faculty_data.models import FacultyProfile
+            FacultyProfile.objects.get_or_create(faculty=user)
+        except Exception:
+            pass
+
         # Generate JWT tokens for instant login
         refresh = RefreshToken.for_user(user)
         refresh['username'] = user.username
