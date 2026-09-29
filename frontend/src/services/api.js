@@ -622,9 +622,9 @@ const handleMockFallback = (endpoint, options = {}) => {
 };
 
 export const fetchAPI = async (endpoint, options = {}) => {
+  const token = localStorage.getItem('access_token');
   const headers = {
-    ...getAuthHeaders(),
-    'Bypass-Tunnel-Reminder': 'true',
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
     ...options.headers,
   };
 
@@ -634,7 +634,7 @@ export const fetchAPI = async (endpoint, options = {}) => {
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s for cloud cold boot
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
@@ -645,11 +645,44 @@ export const fetchAPI = async (endpoint, options = {}) => {
 
     if (!response.ok) {
       if (response.status === 401) {
-        console.warn(`[FAD Auth Notice] 401 on ${endpoint}, serving offline/client store fallback.`);
-        return handleMockFallback(endpoint, options);
+        // Attempt Token Refresh
+        const refreshToken = localStorage.getItem('refresh_token');
+        if (refreshToken && !refreshToken.startsWith('fad_')) {
+          try {
+            const refreshRes = await fetch(`${API_BASE_URL}/token/refresh/`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ refresh: refreshToken }),
+            });
+            if (refreshRes.ok) {
+              const refreshData = await refreshRes.json();
+              if (refreshData.access) {
+                localStorage.setItem('access_token', refreshData.access);
+                if (refreshData.refresh) {
+                  localStorage.setItem('refresh_token', refreshData.refresh);
+                }
+                // Retry original request with new token
+                const retryHeaders = {
+                  ...headers,
+                  'Authorization': `Bearer ${refreshData.access}`,
+                };
+                const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
+                  ...options,
+                  headers: retryHeaders,
+                });
+                if (retryResponse.ok) {
+                  return retryResponse.status === 204 ? null : await retryResponse.json();
+                }
+              }
+            }
+          } catch (refreshErr) {
+            console.warn('[FAD Auth] Token refresh failed:', refreshErr);
+          }
+        }
       }
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.detail || errorData.error || 'API Request Failed');
+      const errMsg = errorData.detail || errorData.error || (errorData.non_field_errors ? errorData.non_field_errors[0] : null) || `API error ${response.status}`;
+      throw new Error(errMsg);
     }
 
     if (response.status === 204) {
@@ -658,8 +691,10 @@ export const fetchAPI = async (endpoint, options = {}) => {
 
     return await response.json();
   } catch (err) {
-    // Graceful fallback to client-side datastore for seamless live client demos
-    console.info(`[FAD Online Engine] Serving interactive dynamic handler for ${endpoint}`);
+    if (err.name === 'AbortError') {
+      console.warn(`[FAD API] Request to ${endpoint} timed out after 30s.`);
+    }
+    console.warn(`[FAD API Notice] ${endpoint} returned:`, err.message);
     return handleMockFallback(endpoint, options);
   }
 };

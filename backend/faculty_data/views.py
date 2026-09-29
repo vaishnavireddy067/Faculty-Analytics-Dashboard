@@ -26,17 +26,25 @@ class BaseActivityViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         
-        # If SuperAdmin, they see everything
+        # SuperAdmin sees everything
         if user.role == 'SUPERADMIN':
             return self.queryset.all().order_by('-created_at')
-            
-        # Admin, IQAC, HOD see all from their institution
-        if user.role in ['HOD', 'IQAC', 'ADMIN']:
+
+        # HOD sees only faculty belonging to their authorized department
+        if user.role == 'HOD':
+            if user.department:
+                return self.queryset.filter(faculty__department__iexact=user.department).order_by('-created_at')
             if user.institution:
                 return self.queryset.filter(faculty__institution=user.institution).order_by('-created_at')
-            return self.queryset.all().order_by('-created_at') # Fallback if no institution
+            return self.queryset.all().order_by('-created_at')
             
-        # Faculty sees only their own
+        # Admin and IQAC see all from their institution
+        if user.role in ['IQAC', 'ADMIN']:
+            if user.institution:
+                return self.queryset.filter(faculty__institution=user.institution).order_by('-created_at')
+            return self.queryset.all().order_by('-created_at')
+            
+        # Faculty sees ONLY their own private records
         return self.queryset.filter(faculty=user).order_by('-created_at')
 
     def perform_create(self, serializer):

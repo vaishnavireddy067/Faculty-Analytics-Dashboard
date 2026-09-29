@@ -95,6 +95,8 @@ const DashboardLayout = () => {
   const handleLogout = () => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
+    localStorage.removeItem('current_user_email');
+    localStorage.removeItem('current_user_info');
     navigate('/login');
   };
 
