@@ -152,7 +152,7 @@ const DashboardLayout = () => {
           {isHodOrAdmin ? (
             <NavItem to="/monthly-reports" icon={<Layers size={18} />} label="HOD Review & Tracker" onClick={toggleMobileMenu} badge="HOD" />
           ) : (
-            <NavItem to="/monthly-reports" icon={<Send size={18} />} label="My Monthly Submission" onClick={toggleMobileMenu} badge="Active" />
+            <NavItem to="/monthly-submission" icon={<Send size={18} />} label="My Monthly Submission" onClick={toggleMobileMenu} badge="Active" />
           )}
 
           <NavItem to="/ai-copilot" icon={<Sparkles size={18} />} label="AI Co-Pilot" onClick={toggleMobileMenu} badge="AI" />
@@ -168,7 +168,7 @@ const DashboardLayout = () => {
             {/* HOD Consolidation & IQAC Master Report visible ONLY to HOD / Admin */}
             {isHodOrAdmin && (
               <>
-                <NavItem to="/monthly-reports" icon={<Layers size={18} />} label="HOD Consolidation" onClick={toggleMobileMenu} badge="1-Click" />
+                <NavItem to="/hod-consolidation" icon={<Layers size={18} />} label="HOD Consolidation" onClick={toggleMobileMenu} badge="1-Click" />
                 <NavItem to="/iqac-report" icon={<FileText size={18} />} label="IQAC Master Report" onClick={toggleMobileMenu} badge="Official" />
               </>
             )}

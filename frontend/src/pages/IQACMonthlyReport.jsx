@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useContext } from 'react';
+import { useLocation } from 'react-router-dom';
 import { 
   Download, Printer, FileText, FileSpreadsheet, RefreshCw, 
   PlusCircle, Trash2, CheckCircle2, Building, Calendar, 
@@ -105,6 +106,21 @@ const IQACMonthlyReport = () => {
   const [facultySubmissions, setFacultySubmissions] = useState([]);
   const [selectedSubIds, setSelectedSubIds] = useState(new Set());
   const [previewingSub, setPreviewingSub] = useState(null);
+  const location = useLocation();
+
+  // Synchronize tab and role mode with URL route
+  useEffect(() => {
+    if (location.pathname === '/monthly-reports' || location.pathname === '/hod-review') {
+      setActiveTab('submissions');
+      setRoleMode('HOD');
+    } else if (location.pathname === '/monthly-submission') {
+      setActiveTab('editor');
+      setRoleMode('FACULTY');
+    } else if (location.pathname === '/iqac-report' || location.pathname === '/hod-consolidation') {
+      setActiveTab('editor');
+      setRoleMode('HOD');
+    }
+  }, [location.pathname]);
 
   // Check if faculty already submitted for this period
   useEffect(() => {
@@ -967,11 +983,11 @@ const IQACMonthlyReport = () => {
             </p>
           </div>
 
-          {/* Tab Switcher: Editor vs Central Vault */}
+          {/* Tab Switcher: Editor vs Faculty Submissions vs Central Vault */}
           <div className="flex items-center bg-gray-100 dark:bg-slate-800 p-1 rounded-2xl border border-gray-200 dark:border-slate-700">
             <button
               onClick={() => setActiveTab('editor')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
                 activeTab === 'editor' 
                   ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm' 
                   : 'text-gray-600 dark:text-slate-300 hover:text-black dark:hover:text-white'
@@ -980,8 +996,18 @@ const IQACMonthlyReport = () => {
               <FileText size={14} /> Document Editor & Preview
             </button>
             <button
+              onClick={() => setActiveTab('submissions')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                activeTab === 'submissions' 
+                  ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-sm' 
+                  : 'text-gray-600 dark:text-slate-300 hover:text-black dark:hover:text-white'
+              }`}
+            >
+              <Users size={14} /> Faculty Submissions ({facultySubmissions.length})
+            </button>
+            <button
               onClick={() => setActiveTab('vault')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
                 activeTab === 'vault' 
                   ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm' 
                   : 'text-gray-600 dark:text-slate-300 hover:text-black dark:hover:text-white'
@@ -1323,49 +1349,8 @@ const IQACMonthlyReport = () => {
         </div>
       )}
 
-      {/* 🔄 ROLE MODE SWITCHER (FACULTY vs HOD) */}
-      <div className="print:hidden flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl px-5 py-3 shadow-xs">
-        <div className="flex items-center space-x-2">
-          <span className="text-xs font-bold text-gray-500 dark:text-slate-400">Portal View:</span>
-          <div className="flex items-center bg-gray-100 dark:bg-slate-800 p-1 rounded-xl">
-            <button
-              onClick={() => setRoleMode('HOD')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
-                roleMode === 'HOD'
-                  ? 'bg-purple-600 text-white shadow-xs'
-                  : 'text-gray-600 dark:text-slate-300 hover:text-black dark:hover:text-white'
-              }`}
-            >
-              <Users size={14} /> 🏛️ HOD Portal (Review & Consolidate)
-            </button>
-            <button
-              onClick={() => setRoleMode('FACULTY')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
-                roleMode === 'FACULTY'
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-gray-600 dark:text-slate-300 hover:text-black dark:hover:text-white'
-              }`}
-            >
-              <Send size={14} /> 👨‍🏫 Faculty Submission Mode
-            </button>
-          </div>
-        </div>
-
-        <div className="text-xs text-gray-500 dark:text-slate-400">
-          {roleMode === 'HOD' ? (
-            <span className="text-purple-600 dark:text-purple-400 font-semibold">
-              HOD Mode: Review faculty submissions, Select, Accept or Delete, then click Auto-Merge.
-            </span>
-          ) : (
-            <span className="text-indigo-600 dark:text-indigo-400 font-semibold">
-              Faculty Mode: Fill individual monthly tables and click Submit to HOD.
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* 👨‍🏫 FACULTY SUBMISSION BANNER (Visible in Faculty Mode) */}
-      {roleMode === 'FACULTY' && (
+      {/* 👨‍🏫 FACULTY SUBMISSION BANNER (Visible only in Faculty Mode) */}
+      {roleMode === 'FACULTY' && activeTab === 'editor' && (
         <div className="print:hidden p-4 bg-indigo-50/80 dark:bg-indigo-950/40 border-2 border-indigo-200 dark:border-indigo-800/80 rounded-2xl flex flex-wrap items-center justify-between gap-3 animate-in fade-in shadow-xs">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold">
@@ -1407,8 +1392,8 @@ const IQACMonthlyReport = () => {
         </div>
       )}
 
-      {/* 🏛️ HOD PORTAL: FACULTY SUBMISSIONS REVIEW & AUTO-CONSOLIDATION PANEL */}
-      {roleMode === 'HOD' && (
+      {/* 🏛️ TAB 2: HOD PORTAL - FACULTY SUBMISSIONS REVIEW & AUTO-CONSOLIDATION PANEL */}
+      {activeTab === 'submissions' && (
         <div className="print:hidden bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4 animate-in fade-in">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-gray-100 dark:border-slate-800 pb-4">
             <div>
@@ -1633,11 +1618,13 @@ const IQACMonthlyReport = () => {
           </div>
         </div>
       )}
-      <div 
-        ref={reportRef}
-        className="bg-white text-black p-8 sm:p-12 shadow-2xl rounded-2xl border border-gray-300 print:shadow-none print:border-none print:p-0 print:m-0 print:rounded-none font-sans"
-        style={{ color: '#000', backgroundColor: '#fff' }}
-      >
+      {/* 📄 THE OFFICIAL PRINTABLE REPORT CONTAINER (Visible in Editor Tab or on Print) */}
+      {(activeTab === 'editor') && (
+        <div 
+          ref={reportRef}
+          className="bg-white text-black p-8 sm:p-12 shadow-2xl rounded-2xl border border-gray-300 print:shadow-none print:border-none print:p-0 print:m-0 print:rounded-none font-sans"
+          style={{ color: '#000', backgroundColor: '#fff' }}
+        >
         {/* Institutional Header Banner matching AVN template */}
         <div className="border-b-2 border-black pb-4 mb-6">
           <div className="flex items-center justify-between gap-4">
@@ -3272,6 +3259,7 @@ const IQACMonthlyReport = () => {
           </div>
         </div>
       </div>
+      )}
       </div>
     </ReportEditorContext.Provider>
   );
