@@ -305,8 +305,8 @@ const Login = () => {
             localStorage.setItem('refresh_token', data.refresh || '');
             localStorage.setItem('current_user_email', data.user?.email || inputUser);
             
-            // Prioritize actual registered role from database
-            const finalRole = data.user?.role || selectedRole || 'FACULTY';
+            // Prioritize actual registered role from database (Strict Backend Authority)
+            const finalRole = (data.user?.role || 'FACULTY').toUpperCase();
             localStorage.setItem('user_role', finalRole);
 
             if (data.user) {
@@ -337,7 +337,8 @@ const Login = () => {
             }
             localStorage.setItem('fad_user_accounts', JSON.stringify(users));
 
-            window.location.href = '/dashboard';
+            // Role-based redirect: HOD goes to HOD Dashboard (Review & Tracker), Faculty to Faculty Dashboard
+            window.location.href = finalRole === 'HOD' ? '/monthly-reports' : '/dashboard';
             return;
           }
         } else {
@@ -635,11 +636,14 @@ const Login = () => {
           // Save account locally in fad_user_accounts
           const users = getRegisteredUsers();
           const existingIdx = users.findIndex(u => u.email?.toLowerCase() === regEmail);
+          const nameParts = (regFullName || 'Faculty').split(' ');
+          const parsedFirstName = nameParts[0] || 'Faculty';
+          const parsedLastName = nameParts.slice(1).join(' ') || '';
           const userRec = {
             email: regEmail,
             username: regUsername,
-            firstName: regFirstName,
-            lastName: regLastName,
+            firstName: parsedFirstName,
+            lastName: parsedLastName,
             department: regDept,
             role: regRole,
             is_email_verified: true
