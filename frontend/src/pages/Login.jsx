@@ -35,6 +35,13 @@ const Login = () => {
   const [resetEmail, setResetEmail] = useState('');
   const [resetNewPass, setResetNewPass] = useState('');
 
+  // Clear inputs on view or role change to guarantee clean, unpopulated fields
+  useEffect(() => {
+    setUsername('');
+    setPassword('');
+    setError('');
+  }, [view, selectedRole]);
+
   // Countdown timer effect for OTP resend
   useEffect(() => {
     let interval = null;
@@ -867,11 +874,14 @@ const Login = () => {
                     <input 
                       type="email" 
                       id="login-email-input"
+                      name="official_academic_email_auth"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
                       className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm transition-all shadow-sm" 
                       placeholder={selectedRole === 'HOD' ? "hod.cse@institution.edu" : "faculty@institution.edu"}
-                      autoComplete="email"
+                      autoComplete="off"
+                      autoCapitalize="none"
+                      spellCheck="false"
                       required
                     />
                   </div>
@@ -896,11 +906,13 @@ const Login = () => {
                     </div>
                     <input 
                       type={showPassword ? "text" : "password"} 
+                      id="login-password-input"
+                      name="official_academic_password_auth"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className="w-full pl-10 pr-10 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm transition-all shadow-sm" 
                       placeholder="••••••••"
-                      autoComplete="current-password"
+                      autoComplete="new-password"
                       required
                     />
                     <button
@@ -916,7 +928,7 @@ const Login = () => {
 
                 <div className="flex items-center justify-between pt-1">
                   <label className="flex items-center text-xs text-gray-600 cursor-pointer">
-                    <input id="remember-me" type="checkbox" defaultChecked className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" />
+                    <input id="remember-me" type="checkbox" className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" />
                     <span className="ml-2 font-medium">Remember on this device</span>
                   </label>
                 </div>
