@@ -10,6 +10,10 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showRegPassword, setShowRegPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [fullName, setFullName] = useState('');
+  const [employeeId, setEmployeeId] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -436,12 +440,33 @@ const Login = () => {
     setSuccessMsg('');
     setLoading(true);
 
+    const regFullName = fullName.trim();
     const regEmail = email.trim().toLowerCase();
-    const regUsername = (username.trim() || regEmail.split('@')[0]).toLowerCase();
+    const regEmpId = employeeId.trim();
+    const regDept = department.trim();
     const regPass = password.trim();
+    const regConfirmPass = confirmPassword.trim();
+
+    if (!regFullName) {
+      setError('Please enter your full name.');
+      setLoading(false);
+      return;
+    }
 
     if (!regEmail || !regEmail.includes('@')) {
-      setError('Please provide a valid institutional or personal email address.');
+      setError('Please provide a valid official faculty email address.');
+      setLoading(false);
+      return;
+    }
+
+    if (!regEmpId) {
+      setError('Please enter your official Employee ID.');
+      setLoading(false);
+      return;
+    }
+
+    if (!regDept) {
+      setError('Please enter your academic department.');
       setLoading(false);
       return;
     }
@@ -452,19 +477,25 @@ const Login = () => {
       return;
     }
 
+    if (regPass !== regConfirmPass) {
+      setError('Password and Confirm Password do not match. Please re-enter.');
+      setLoading(false);
+      return;
+    }
+
+    const regUsername = regEmail.split('@')[0].toLowerCase();
     setEmail(regEmail);
     setUsername(regUsername);
     setRegisteredPassword(regPass);
 
-    // Persist securely in sessionStorage so page refresh or navigation never drops the chosen password
+    // Persist securely in sessionStorage
     sessionStorage.setItem('fad_reg_email', regEmail);
+    sessionStorage.setItem('fad_reg_fullname', regFullName);
+    sessionStorage.setItem('fad_reg_empid', regEmpId);
+    sessionStorage.setItem('fad_reg_dept', regDept);
     sessionStorage.setItem('fad_reg_username', regUsername);
     sessionStorage.setItem('fad_reg_password', regPass);
-    sessionStorage.setItem('fad_reg_role', selectedRole);
-    sessionStorage.setItem('fad_reg_firstname', firstName || 'Faculty');
-    sessionStorage.setItem('fad_reg_lastname', lastName || '');
-    sessionStorage.setItem('fad_reg_dept', department || 'Computer Science & Engineering');
-    sessionStorage.setItem('fad_reg_phone', phone || '');
+    sessionStorage.setItem('fad_reg_role', 'FACULTY');
 
     try {
       const response = await fetch(`${API_BASE_URL}/auth/send-otp/`, {
@@ -545,14 +576,13 @@ const Login = () => {
     setLoading(true);
 
     const regEmail = (email.trim() || sessionStorage.getItem('fad_reg_email') || username.trim()).toLowerCase();
+    const regFullName = fullName.trim() || sessionStorage.getItem('fad_reg_fullname') || 'Faculty';
+    const regEmpId = employeeId.trim() || sessionStorage.getItem('fad_reg_empid') || '';
+    const regDept = department.trim() || sessionStorage.getItem('fad_reg_dept') || 'Computer Science & Engineering';
     const regUsername = (username.trim() || sessionStorage.getItem('fad_reg_username') || regEmail.split('@')[0]).toLowerCase();
     const regPass = (registeredPassword || password || sessionStorage.getItem('fad_reg_password') || '').trim();
     const cleanOtp = otp.trim();
-    const regRole = selectedRole || sessionStorage.getItem('fad_reg_role') || 'FACULTY';
-    const regFirstName = firstName || sessionStorage.getItem('fad_reg_firstname') || 'Faculty';
-    const regLastName = lastName || sessionStorage.getItem('fad_reg_lastname') || '';
-    const regDept = department || sessionStorage.getItem('fad_reg_dept') || 'Computer Science & Engineering';
-    const regPhone = phone || sessionStorage.getItem('fad_reg_phone') || '';
+    const regRole = 'FACULTY';
 
     if (!cleanOtp || cleanOtp.length < 6) {
       setError('Please enter the complete 6-digit verification code.');
@@ -578,10 +608,9 @@ const Login = () => {
           otp: cleanOtp,
           username: regUsername,
           password: regPass,
-          firstName: regFirstName,
-          lastName: regLastName,
+          full_name: regFullName,
+          employee_id: regEmpId,
           department: regDept,
-          phone_number: regPhone,
           role: regRole
         }),
       }).catch(() => null);
@@ -923,73 +952,27 @@ const Login = () => {
             </>
           ) : view === 'register' ? (
             <>
-              {/* Role Selection for Registration */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                  Registering As
-                </label>
-                <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 rounded-xl border border-gray-200/80">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedRole('FACULTY')}
-                    className={`py-2 px-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                      selectedRole === 'FACULTY'
-                        ? 'bg-white text-indigo-600 shadow-sm border border-gray-200/60 ring-1 ring-indigo-500/20'
-                        : 'text-gray-600 hover:text-gray-900 bg-transparent border-none'
-                    }`}
-                  >
-                    <User size={15} /> Faculty Member
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedRole('HOD')}
-                    className={`py-2 px-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                      selectedRole === 'HOD'
-                        ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900 bg-transparent border-none'
-                    }`}
-                  >
-                    <ShieldCheck size={15} /> Head of Dept (HOD)
-                  </button>
+              {/* Official Faculty Registration Header */}
+              <div className="bg-indigo-50 border border-indigo-200/80 rounded-xl p-3 flex items-center gap-2.5">
+                <ShieldCheck size={20} className="text-indigo-600 flex-shrink-0" />
+                <div>
+                  <div className="text-xs font-bold text-indigo-950">Official Faculty Registration</div>
+                  <div className="text-[11px] text-indigo-700">6-digit email OTP verification required for activation</div>
                 </div>
               </div>
 
               {/* --- STEP 1: REGISTRATION FORM WITH OTP DISPATCH --- */}
-              <form className="space-y-3.5" onSubmit={handleInitiateRegistration}>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">First Name</label>
-                    <input 
-                      type="text" 
-                      value={firstName} 
-                      onChange={(e) => setFirstName(e.target.value)} 
-                      placeholder="e.g. Ramesh"
-                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-                      required 
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Last Name</label>
-                    <input 
-                      type="text" 
-                      value={lastName} 
-                      onChange={(e) => setLastName(e.target.value)} 
-                      placeholder="e.g. Kumar"
-                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-                      required 
-                    />
-                  </div>
-                </div>
-
+              <form className="space-y-3" onSubmit={handleInitiateRegistration}>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Username</label>
+                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Full Name</label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><User size={16} /></div>
                     <input 
                       type="text" 
-                      value={username} 
-                      onChange={(e) => setUsername(e.target.value)} 
-                      placeholder="ramesh.cse"
+                      id="register-fullname"
+                      value={fullName} 
+                      onChange={(e) => setFullName(e.target.value)} 
+                      placeholder="e.g. Dr. Rajesh Sharma"
                       className="w-full pl-9 pr-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
                       required 
                     />
@@ -997,11 +980,12 @@ const Login = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Institutional Email</label>
+                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Official Faculty Email</label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><Mail size={16} /></div>
                     <input 
                       type="email" 
+                      id="register-email"
                       value={email} 
                       onChange={(e) => setEmail(e.target.value)} 
                       placeholder="faculty@institution.edu"
@@ -1009,34 +993,37 @@ const Login = () => {
                       required 
                     />
                   </div>
-                  <p className="text-[11px] text-gray-400 mt-1">A 6-digit OTP will be sent to this email for 1st-time verification.</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">One email = one account. A 6-digit OTP will be sent here.</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Department</label>
+                    <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Employee ID</label>
                     <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><Building size={16} /></div>
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><KeyRound size={16} /></div>
                       <input 
                         type="text" 
-                        placeholder="CSE / AI&DS" 
-                        value={department} 
-                        onChange={(e) => setDepartment(e.target.value)} 
+                        id="register-employee-id"
+                        placeholder="e.g. EMP-2024-042" 
+                        value={employeeId} 
+                        onChange={(e) => setEmployeeId(e.target.value)} 
                         className="w-full pl-9 pr-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
                         required 
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Phone</label>
+                    <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Department</label>
                     <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><Phone size={16} /></div>
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><Building size={16} /></div>
                       <input 
                         type="text" 
-                        placeholder="+91 9876543210"
-                        value={phone} 
-                        onChange={(e) => setPhone(e.target.value)} 
+                        id="register-department"
+                        placeholder="CSE / AI&DS / ECE" 
+                        value={department} 
+                        onChange={(e) => setDepartment(e.target.value)} 
                         className="w-full pl-9 pr-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
+                        required 
                       />
                     </div>
                   </div>
@@ -1048,6 +1035,7 @@ const Login = () => {
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><Lock size={16} /></div>
                     <input 
                       type={showRegPassword ? "text" : "password"} 
+                      id="register-password"
                       value={password} 
                       onChange={(e) => setPassword(e.target.value)} 
                       placeholder="Minimum 6 characters"
@@ -1065,12 +1053,37 @@ const Login = () => {
                   </div>
                 </div>
 
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Confirm Password</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><Lock size={16} /></div>
+                    <input 
+                      type={showConfirmPassword ? "text" : "password"} 
+                      id="register-confirm-password"
+                      value={confirmPassword} 
+                      onChange={(e) => setConfirmPassword(e.target.value)} 
+                      placeholder="Re-enter password"
+                      className="w-full pl-9 pr-10 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
+                      required 
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 bg-transparent border-none cursor-pointer"
+                      title={showConfirmPassword ? "Hide password" : "Show password"}
+                    >
+                      {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
                 <button 
                   type="submit" 
+                  id="send-otp-submit-btn"
                   disabled={loading} 
-                  className="w-full flex justify-center items-center gap-2 py-3 px-4 mt-2 border border-transparent rounded-xl shadow-md text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all disabled:opacity-50"
+                  className="w-full flex justify-center items-center gap-2 py-3 px-4 mt-2 border border-transparent rounded-xl shadow-md text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all disabled:opacity-50 cursor-pointer"
                 >
-                  {loading ? 'Sending Verification OTP...' : 'Send Verification Code (OTP)'} <ChevronRight size={18} />
+                  {loading ? 'Sending Verification OTP...' : 'Send Verification OTP'} <ChevronRight size={18} />
                 </button>
               </form>
 

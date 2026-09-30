@@ -106,7 +106,11 @@ def send_registration_otp(request):
         email = (data.get('email') or '').strip().lower()
 
         if not email or '@' not in email:
-            return Response({'error': 'Please provide a valid institutional or personal email address.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Please provide a valid institutional email address.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Enforce unique email: One email = one account
+        if User.objects.filter(email__iexact=email, is_active=True).exists():
+            return Response({'error': 'An account with this email address already exists. Please log in directly.'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Generate secure 6-digit numeric OTP
         otp_code = f"{secrets.randbelow(900000) + 100000}"
@@ -191,7 +195,7 @@ Faculty Analytics Team
             'email_sent': email_sent,
         }
 
-        # Always provide debug_otp so user has instant code access in development/UI as well as real email
+        # Provide debug_otp for convenience in testing
         resp_payload['debug_otp'] = otp_code
 
         return Response(resp_payload, status=status.HTTP_200_OK)
@@ -204,6 +208,7 @@ Faculty Analytics Team
 def verify_registration_otp(request):
     """
     Verifies the 6-digit OTP, creates the verified faculty user account, and returns JWT tokens.
+    Self-registration is strictly for FACULTY.
     """
     try:
         data = request.data
@@ -214,16 +219,33 @@ def verify_registration_otp(request):
         if not raw_password or len(raw_password) < 6:
             return Response({'error': 'Password is required and must be at least 6 characters long.'}, status=status.HTTP_400_BAD_REQUEST)
         password = raw_password
-        first_name = (data.get('firstName') or data.get('first_name') or 'Faculty').strip()
+        full_name = (data.get('full_name') or data.get('fullName') or '').strip()
+        first_name = (data.get('firstName') or data.get('first_name') or '').strip()
         last_name = (data.get('lastName') or data.get('last_name') or '').strip()
+
+        if full_name and not first_name:
+            name_parts = full_name.split(' ', 1)
+            first_name = name_parts[0]
+            last_name = name_parts[1] if len(name_parts) > 1 else ''
+
+        if not first_name:
+            first_name = 'Faculty'
+
         department = (data.get('department') or 'Computer Science & Engineering').strip()
+        employee_id = (data.get('employee_id') or data.get('employeeId') or '').strip()
         phone_number = (data.get('phone_number') or data.get('phone') or '').strip()
-        role = data.get('role', 'FACULTY')
+        
+        # Self-registration is strictly for FACULTY (HOD accounts are managed)
+        role = 'FACULTY'
 
         clean_otp = re.sub(r'[^0-9]', '', str(otp or '')).strip()
 
         if not email or not clean_otp or len(clean_otp) < 6:
             return Response({'error': 'A valid 6-digit verification code is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Enforce unique email check
+        if User.objects.filter(email__iexact=email, is_active=True).exists():
+            return Response({'error': 'An account with this email address already exists. Please log in directly.'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Check if the submitted OTP matches ANY valid, unexpired OTP for this email
         otp_record = EmailVerificationOTP.objects.filter(
@@ -256,25 +278,18 @@ def verify_registration_otp(request):
         clean_username = re.sub(r'[^a-zA-Z0-9_.]', '', username) or (email.split('@')[0] if email else 'faculty_user')
         unique_username = clean_username
         counter = 1
-        existing_user = User.objects.filter(email__iexact=email).order_by('-id').first()
 
-        if not existing_user:
-            while User.objects.filter(username__iexact=unique_username).exists():
-                unique_username = f"{clean_username}_{counter}"
-                counter += 1
+        while User.objects.filter(username__iexact=unique_username).exists():
+            unique_username = f"{clean_username}_{counter}"
+            counter += 1
 
-            user = User.objects.create_user(
-                username=unique_username,
-                email=email,
-                password=password,
-                first_name=first_name,
-                last_name=last_name
-            )
-        else:
-            user = existing_user
-            user.set_password(password)
-            user.first_name = first_name
-            user.last_name = last_name
+        user = User.objects.create_user(
+            username=unique_username,
+            email=email,
+            password=password,
+            first_name=first_name,
+            last_name=last_name
+        )
 
         user.role = role
         user.department = department
@@ -282,6 +297,16 @@ def verify_registration_otp(request):
         user.is_email_verified = True
         user.is_active = True
         user.save()
+
+        # Ensure FacultyProfile exists with employee_id
+        try:
+            from faculty_data.models import FacultyProfile
+            prof, _ = FacultyProfile.objects.get_or_create(faculty=user)
+            if employee_id:
+                prof.aicte_id = employee_id
+                prof.save(update_fields=['aicte_id'])
+        except Exception:
+            pass
 
         # Ensure FacultyProfile exists
         try:

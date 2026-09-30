@@ -431,26 +431,38 @@ class IQACReport(models.Model):
 
 class FacultyMonthlySubmission(models.Model):
     STATUS_CHOICES = (
+        ('PENDING', 'Pending'),
         ('DRAFT', 'Draft'),
         ('SUBMITTED', 'Submitted'),
+        ('CHANGES_REQUESTED', 'Changes Requested'),
         ('APPROVED', 'Approved'),
+        ('REJECTED', 'Rejected'),
+        ('LOCKED', 'Approved & Locked'),
     )
     faculty = models.ForeignKey(User, on_delete=models.CASCADE, related_name='monthly_submissions')
     department = models.CharField(max_length=255)
     month = models.CharField(max_length=50, default="AUGUST")
     year = models.CharField(max_length=20, default="2025")
     academic_year = models.CharField(max_length=50, default="2025-26")
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='SUBMITTED')
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='SUBMITTED')
     submission_data = models.JSONField(default=dict, help_text="Contains structured tables for FDPs, publications, events, etc.")
-    submitted_at = models.DateTimeField(auto_now=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    last_modified_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='modified_monthly_submissions')
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_monthly_submissions')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    locked_at = models.DateTimeField(null=True, blank=True)
+    change_request_reason = models.TextField(blank=True, null=True)
+    audit_history = models.JSONField(default=list, blank=True)
 
     class Meta:
-        ordering = ['-submitted_at']
+        ordering = ['-updated_at']
         unique_together = ('faculty', 'month', 'year')
 
     def __str__(self):
-        return f"Monthly Submission - {self.faculty.username} ({self.month} {self.year})"
+        return f"Monthly Submission - {self.faculty.username} ({self.month} {self.year}) [{self.status}]"
 
 
 

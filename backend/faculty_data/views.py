@@ -2312,17 +2312,45 @@ def faculty_monthly_submission_detail(request):
         submission_data = request.data.get('submission_data', {})
         status = request.data.get('status', 'SUBMITTED')
 
-        sub_obj, created = FacultyMonthlySubmission.objects.update_or_create(
-            faculty=user,
-            month=month,
-            year=year,
-            defaults={
-                'department': dept,
-                'academic_year': academic_year,
-                'status': status,
-                'submission_data': submission_data
-            }
-        )
+        # Find existing submission if any
+        sub_obj = FacultyMonthlySubmission.objects.filter(faculty=user, month=month, year=year).first()
+        prev_status = sub_obj.status if sub_obj else 'PENDING'
+        history = list(sub_obj.audit_history or []) if sub_obj else []
+
+        # Record audit entry
+        history.append({
+            'action': 'SUBMITTED' if status == 'SUBMITTED' else 'DRAFT_SAVED',
+            'performed_by': user.username,
+            'role': user.role,
+            'timestamp': timezone.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'previous_status': prev_status,
+            'new_status': status,
+            'details': f"Faculty {user.get_full_name() or user.username} {'submitted report for HOD review' if status == 'SUBMITTED' else 'saved draft'}."
+        })
+
+        if not sub_obj:
+            sub_obj = FacultyMonthlySubmission.objects.create(
+                faculty=user,
+                department=dept,
+                month=month,
+                year=year,
+                academic_year=academic_year,
+                status=status,
+                submission_data=submission_data,
+                submitted_at=timezone.now() if status == 'SUBMITTED' else None,
+                last_modified_by=user,
+                audit_history=history
+            )
+        else:
+            sub_obj.department = dept
+            sub_obj.academic_year = academic_year
+            sub_obj.status = status
+            sub_obj.submission_data = submission_data
+            if status == 'SUBMITTED':
+                sub_obj.submitted_at = timezone.now()
+            sub_obj.last_modified_by = user
+            sub_obj.audit_history = history
+            sub_obj.save()
 
         AuditLog.objects.create(
             performed_by=user,
@@ -2333,10 +2361,11 @@ def faculty_monthly_submission_detail(request):
 
         return Response({
             'success': True,
-            'message': f"Monthly report for {month} {year} submitted successfully!",
+            'message': f"Monthly report for {month} {year} {'submitted to HOD' if status == 'SUBMITTED' else 'saved as draft'} successfully!",
             'submission_id': sub_obj.id,
             'status': sub_obj.status,
-            'submitted_at': sub_obj.submitted_at.strftime('%Y-%m-%d %H:%M:%S')
+            'submitted_at': sub_obj.submitted_at.strftime('%Y-%m-%d %H:%M:%S') if sub_obj.submitted_at else None,
+            'audit_history': sub_obj.audit_history
         })
 
     # GET Request
@@ -2352,7 +2381,13 @@ def faculty_monthly_submission_detail(request):
             'year': sub_obj.year,
             'academic_year': sub_obj.academic_year,
             'status': sub_obj.status,
-            'submitted_at': sub_obj.submitted_at.strftime('%Y-%m-%d %H:%M:%S'),
+            'submitted_at': sub_obj.submitted_at.strftime('%Y-%m-%d %H:%M:%S') if sub_obj.submitted_at else None,
+            'reviewed_at': sub_obj.reviewed_at.strftime('%Y-%m-%d %H:%M:%S') if sub_obj.reviewed_at else None,
+            'approved_at': sub_obj.approved_at.strftime('%Y-%m-%d %H:%M:%S') if sub_obj.approved_at else None,
+            'locked_at': sub_obj.locked_at.strftime('%Y-%m-%d %H:%M:%S') if sub_obj.locked_at else None,
+            'reviewed_by': sub_obj.reviewed_by.get_full_name() or sub_obj.reviewed_by.username if sub_obj.reviewed_by else None,
+            'change_request_reason': sub_obj.change_request_reason,
+            'audit_history': sub_obj.audit_history or [],
             'submission_data': sub_obj.submission_data
         })
     else:
@@ -2378,6 +2413,7 @@ def faculty_monthly_submission_detail(request):
             'year': year,
             'academic_year': academic_year,
             'status': 'PENDING',
+            'audit_history': [],
             'submission_data': default_data
         })
 
@@ -2386,7 +2422,7 @@ def faculty_monthly_submission_detail(request):
 @permission_classes([permissions.IsAuthenticated])
 def faculty_monthly_submission_action(request, pk):
     """
-    HOD / Admin review endpoint: Approve or Reject a faculty monthly submission.
+    HOD review endpoint: View Details, Review, Request Changes, Approve & Lock, or Reject.
     """
     from .models import FacultyMonthlySubmission, AuditLog
     
@@ -2394,25 +2430,68 @@ def faculty_monthly_submission_action(request, pk):
     action = request.data.get('action', 'APPROVE').upper()
     remarks = request.data.get('remarks', '')
 
-    new_status = 'APPROVED' if action == 'APPROVE' else 'REJECTED'
+    prev_status = sub.status
+    now = timezone.now()
+
+    if action in ['APPROVE_AND_LOCK', 'LOCK']:
+        new_status = 'LOCKED'
+        sub.locked_at = now
+        sub.approved_at = sub.approved_at or now
+    elif action == 'APPROVE':
+        new_status = 'APPROVED'
+        sub.approved_at = now
+    elif action == 'REQUEST_CHANGES':
+        new_status = 'CHANGES_REQUESTED'
+        sub.change_request_reason = remarks
+    elif action == 'REJECT':
+        new_status = 'REJECTED'
+        sub.change_request_reason = remarks
+    else:
+        new_status = 'APPROVED'
+        sub.approved_at = now
+
     sub.status = new_status
+    sub.reviewed_by = request.user
+    sub.reviewed_at = now
+
     if remarks:
         if not sub.submission_data:
             sub.submission_data = {}
         sub.submission_data['hod_review_remarks'] = remarks
+
+    # Append to audit history
+    history = list(sub.audit_history or [])
+    history.append({
+        'action': new_status,
+        'performed_by': request.user.username,
+        'performed_by_name': request.user.get_full_name() or request.user.username,
+        'role': request.user.role,
+        'timestamp': now.strftime('%Y-%m-%d %H:%M:%S'),
+        'previous_status': prev_status,
+        'new_status': new_status,
+        'reason': remarks,
+        'details': f"HOD {request.user.get_full_name() or request.user.username} set status to {new_status}. {f'Reason: {remarks}' if remarks else ''}"
+    })
+    sub.audit_history = history
     sub.save()
 
     AuditLog.objects.create(
         performed_by=request.user,
         action=f"MONTHLY_REPORT_{new_status}",
         target_activity=f"Submission #{sub.id} ({sub.faculty.username})",
-        details=f"HOD {request.user.username} {new_status.lower()} monthly report for {sub.month} {sub.year}. Remarks: {remarks}"
+        details=f"HOD {request.user.username} set status to {new_status} for {sub.month} {sub.year}. Remarks: {remarks}"
     )
 
     return Response({
         'success': True,
-        'message': f"Monthly submission #{sub.id} {new_status.lower()} successfully!",
-        'status': new_status
+        'message': f"Monthly submission #{sub.id} marked as {new_status} successfully!",
+        'status': new_status,
+        'reviewed_by': request.user.get_full_name() or request.user.username,
+        'reviewed_at': now.strftime('%Y-%m-%d %H:%M:%S'),
+        'approved_at': sub.approved_at.strftime('%Y-%m-%d %H:%M:%S') if sub.approved_at else None,
+        'locked_at': sub.locked_at.strftime('%Y-%m-%d %H:%M:%S') if sub.locked_at else None,
+        'change_request_reason': sub.change_request_reason,
+        'audit_history': sub.audit_history
     })
 
 
@@ -2453,9 +2532,24 @@ def faculty_monthly_department_tracker(request):
 
     for fac in faculties_qs:
         sub = submissions_map.get(fac.id)
-        if sub and sub.status in ['SUBMITTED', 'APPROVED']:
-            submitted_count += 1
+        if sub:
             data = sub.submission_data or {}
+            num_records = (
+                len(data.get('fdps_workshops_attended', [])) +
+                len(data.get('events_organized', [])) +
+                len(data.get('journal_publications', [])) +
+                len(data.get('conference_publications', [])) +
+                len(data.get('patents', [])) +
+                len(data.get('awards_honors', [])) +
+                len(data.get('guest_lectures', [])) +
+                len(data.get('certifications', [])) +
+                len(data.get('student_projects_guided', []))
+            )
+            if sub.status in ['APPROVED', 'LOCKED', 'SUBMITTED']:
+                submitted_count += 1
+            else:
+                pending_count += 1
+
             faculties_list.append({
                 'faculty_id': fac.id,
                 'faculty_name': fac.get_full_name() or fac.username,
@@ -2463,34 +2557,16 @@ def faculty_monthly_department_tracker(request):
                 'department': fac.department or dept,
                 'designation': getattr(fac, 'profile', None).designation if hasattr(fac, 'profile') else 'Faculty',
                 'status': sub.status,
+                'number_of_records': num_records,
                 'created_at': sub.created_at.strftime('%Y-%m-%d %H:%M:%S') if sub.created_at else '—',
                 'submitted_at': sub.submitted_at.strftime('%Y-%m-%d %H:%M:%S') if sub.submitted_at else '—',
-                'last_modified': sub.submitted_at.strftime('%Y-%m-%d %H:%M:%S') if sub.submitted_at else '—',
-                'submission_id': sub.id,
-                'counts': {
-                    'fdps': len(data.get('fdps_workshops_attended', [])),
-                    'events': len(data.get('events_organized', [])),
-                    'publications': len(data.get('journal_publications', [])) + len(data.get('conference_publications', [])),
-                    'patents': len(data.get('patents', [])),
-                    'awards': len(data.get('awards_honors', [])),
-                    'guest_lectures': len(data.get('guest_lectures', [])),
-                    'certifications': len(data.get('certifications', []))
-                },
-                'submission_data': data
-            })
-        elif sub and sub.status in ['DRAFT', 'REJECTED']:
-            pending_count += 1
-            data = sub.submission_data or {}
-            faculties_list.append({
-                'faculty_id': fac.id,
-                'faculty_name': fac.get_full_name() or fac.username,
-                'email': fac.email,
-                'department': fac.department or dept,
-                'designation': getattr(fac, 'profile', None).designation if hasattr(fac, 'profile') else 'Faculty',
-                'status': sub.status,
-                'created_at': sub.created_at.strftime('%Y-%m-%d %H:%M:%S') if sub.created_at else '—',
-                'submitted_at': sub.submitted_at.strftime('%Y-%m-%d %H:%M:%S') if sub.submitted_at else '—',
-                'last_modified': sub.submitted_at.strftime('%Y-%m-%d %H:%M:%S') if sub.submitted_at else '—',
+                'last_modified': sub.updated_at.strftime('%Y-%m-%d %H:%M:%S') if sub.updated_at else '—',
+                'reviewed_at': sub.reviewed_at.strftime('%Y-%m-%d %H:%M:%S') if sub.reviewed_at else '—',
+                'approved_at': sub.approved_at.strftime('%Y-%m-%d %H:%M:%S') if sub.approved_at else '—',
+                'locked_at': sub.locked_at.strftime('%Y-%m-%d %H:%M:%S') if sub.locked_at else '—',
+                'reviewed_by': sub.reviewed_by.get_full_name() or sub.reviewed_by.username if sub.reviewed_by else None,
+                'change_request_reason': sub.change_request_reason,
+                'audit_history': sub.audit_history or [],
                 'submission_id': sub.id,
                 'counts': {
                     'fdps': len(data.get('fdps_workshops_attended', [])),
@@ -2512,9 +2588,16 @@ def faculty_monthly_department_tracker(request):
                 'department': fac.department or dept,
                 'designation': getattr(fac, 'profile', None).designation if hasattr(fac, 'profile') else 'Faculty',
                 'status': 'PENDING',
+                'number_of_records': 0,
                 'created_at': None,
                 'submitted_at': None,
                 'last_modified': None,
+                'reviewed_at': None,
+                'approved_at': None,
+                'locked_at': None,
+                'reviewed_by': None,
+                'change_request_reason': None,
+                'audit_history': [],
                 'submission_id': None,
                 'counts': {'fdps': 0, 'events': 0, 'publications': 0, 'patents': 0, 'awards': 0, 'guest_lectures': 0, 'certifications': 0},
                 'submission_data': None
@@ -2660,20 +2743,18 @@ def faculty_monthly_consolidate(request):
     selected_submission_ids = request.data.get('selected_submission_ids')
     selected_faculty_ids = request.data.get('selected_faculty_ids')
 
-    base_qs = FacultyMonthlySubmission.objects.filter(month=month, year=year)
+    # STRICT REQUIREMENT: Only APPROVED and LOCKED submissions are eligible for consolidation
+    base_qs = FacultyMonthlySubmission.objects.filter(month=month, year=year, status__in=['APPROVED', 'LOCKED'])
 
     if selected_submission_ids and len(selected_submission_ids) > 0:
-        # If HOD explicitly selected specific submissions
+        # If HOD explicitly selected specific submissions, filter among approved/locked only
         submissions = base_qs.filter(id__in=selected_submission_ids)
     elif selected_faculty_ids and len(selected_faculty_ids) > 0:
-        # If HOD explicitly selected specific faculties
+        # If HOD explicitly selected specific faculties, filter among approved/locked only
         submissions = base_qs.filter(faculty_id__in=selected_faculty_ids)
     else:
-        # Default: Fetch APPROVED monthly reports for this month and year
-        submissions = base_qs.filter(status='APPROVED')
-        if not submissions.exists():
-            # If none are explicitly approved yet, also fallback to submitted returns
-            submissions = base_qs.filter(status__in=['SUBMITTED', 'APPROVED'])
+        # Default: Fetch ALL APPROVED + LOCKED monthly reports for this month and year
+        submissions = base_qs
 
     # Check how many total submissions exist
     total_submissions_count = base_qs.count()
@@ -2723,7 +2804,7 @@ def faculty_monthly_consolidate(request):
         fac_name = fac.get_full_name() or fac.username
         sub = submissions_by_faculty.get(fac.id)
         
-        if sub and sub.status in ['SUBMITTED', 'APPROVED']:
+        if sub and sub.status in ['APPROVED', 'LOCKED']:
             data = sub.submission_data or {}
             
             # Format classes/teaching

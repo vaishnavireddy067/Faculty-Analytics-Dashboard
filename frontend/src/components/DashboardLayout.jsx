@@ -189,9 +189,6 @@ const DashboardLayout = () => {
             <NavItem to="/grants" icon={<Search size={18} />} label="Grant Matcher" onClick={toggleMobileMenu} />
             <NavItem to="/mentorship" icon={<Users size={18} />} label="Mentorship Bridge" onClick={toggleMobileMenu} />
             <NavItem to="/leaderboard" icon={<Award size={18} />} label="Leaderboard" onClick={toggleMobileMenu} />
-            {isHodOrAdmin && (
-              <NavItem to="/admin-dashboard" icon={<ShieldAlert size={18} />} label="Admin Dashboard" onClick={toggleMobileMenu} />
-            )}
           </div>
         </nav>
 

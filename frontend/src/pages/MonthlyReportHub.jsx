@@ -1385,24 +1385,35 @@ const MonthlyReportHub = () => {
                         title="Select All Submissions"
                       />
                     </th>
-                    <th className="p-3">Faculty Name & Designation</th>
-                    <th className="p-3">Department</th>
-                    <th className="p-3 text-center">Status</th>
-                    <th className="p-3">Activities Breakdown</th>
-                    <th className="p-3">Submission Timestamp</th>
+                    <th className="p-3">Faculty Name</th>
+                    <th className="p-3 text-center">Submission Status</th>
+                    <th className="p-3 text-center">Number of Records</th>
+                    <th className="p-3">Submitted At</th>
+                    <th className="p-3">Last Modified</th>
+                    <th className="p-3">Reviewed At</th>
+                    <th className="p-3">Approved At</th>
                     <th className="p-3 text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
                   {filteredFaculties.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="p-8 text-center text-gray-400 text-xs">
+                      <td colSpan="9" className="p-8 text-center text-gray-400 text-xs">
                         No faculty members match the filter criteria.
                       </td>
                     </tr>
                   ) : (
                     filteredFaculties.map((fac, idx) => {
                       const isSelected = fac.submission_id && selectedSubmissionIds.includes(fac.submission_id);
+                      const numRecords = fac.number_of_records || (
+                        (fac.counts?.fdps || 0) + 
+                        (fac.counts?.events || 0) + 
+                        (fac.counts?.publications || 0) + 
+                        (fac.counts?.patents || 0) + 
+                        (fac.counts?.awards || 0) + 
+                        (fac.counts?.guest_lectures || 0) + 
+                        (fac.counts?.certifications || 0)
+                      );
                       return (
                         <tr 
                           key={idx} 
@@ -1423,55 +1434,95 @@ const MonthlyReportHub = () => {
                           </td>
                           <td className="p-3">
                             <div className="font-bold text-gray-900 dark:text-white text-xs">{fac.faculty_name}</div>
-                            <div className="text-[10px] text-gray-400">{fac.email} • {fac.designation}</div>
+                            <div className="text-[10px] text-gray-400">{fac.email} • {fac.department}</div>
                           </td>
-                          <td className="p-3 text-gray-600 dark:text-gray-300">{fac.department}</td>
                           <td className="p-3 text-center">
                             <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold ${
-                              fac.status === 'APPROVED'
+                              fac.status === 'LOCKED'
+                                ? 'bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-100 border border-emerald-400'
+                                : fac.status === 'APPROVED'
                                 ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300'
                                 : fac.status === 'SUBMITTED'
                                 ? 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-300'
+                                : fac.status === 'CHANGES_REQUESTED'
+                                ? 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-200 border border-amber-300'
                                 : fac.status === 'REJECTED'
                                 ? 'bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-300'
                                 : fac.status === 'DRAFT'
-                                ? 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-300'
-                                : 'bg-gray-100 dark:bg-slate-800 text-gray-500 border border-gray-300'
+                                ? 'bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-300 border border-gray-300'
+                                : 'bg-gray-100 dark:bg-slate-800 text-gray-400 border border-gray-200'
                             }`}>
-                              {fac.status === 'APPROVED' ? '✅ APPROVED' : fac.status === 'SUBMITTED' ? '📩 SUBMITTED' : fac.status === 'REJECTED' ? '⚠️ REVISION' : fac.status}
+                              {fac.status === 'LOCKED' ? '🔒 APPROVED & LOCKED' :
+                               fac.status === 'APPROVED' ? '✅ APPROVED' :
+                               fac.status === 'SUBMITTED' ? '📩 SUBMITTED' :
+                               fac.status === 'CHANGES_REQUESTED' ? '⚠️ CHANGES REQUESTED' :
+                               fac.status === 'REJECTED' ? '❌ REJECTED' :
+                               fac.status === 'DRAFT' ? '📝 DRAFT' : '⏳ PENDING'}
                             </span>
                           </td>
-                          <td className="p-3">
-                            {fac.status === 'SUBMITTED' || fac.status === 'APPROVED' || fac.status === 'DRAFT' ? (
-                              <div className="flex flex-wrap gap-1">
-                                {fac.counts.fdps > 0 && <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 rounded text-[10px] font-bold">{fac.counts.fdps} FDPs</span>}
-                                {fac.counts.events > 0 && <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 rounded text-[10px] font-bold">{fac.counts.events} Events</span>}
-                                {fac.counts.publications > 0 && <span className="px-1.5 py-0.5 bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300 rounded text-[10px] font-bold">{fac.counts.publications} Pubs</span>}
-                                {fac.counts.patents > 0 && <span className="px-1.5 py-0.5 bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 rounded text-[10px] font-bold">{fac.counts.patents} Patents</span>}
-                                {fac.counts.awards > 0 && <span className="px-1.5 py-0.5 bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300 rounded text-[10px] font-bold">{fac.counts.awards} Awards</span>}
-                              </div>
+                          <td className="p-3 text-center font-bold text-gray-700 dark:text-gray-200">
+                            {numRecords > 0 ? (
+                              <span className="px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-[11px]">
+                                {numRecords} records
+                              </span>
                             ) : (
-                              <span className="text-gray-400 italic text-[11px]">No return submitted</span>
+                              <span className="text-gray-400">0</span>
                             )}
                           </td>
-                          <td className="p-3 text-gray-500 text-xs">
+                          <td className="p-3 text-gray-500 text-[11px]">
                             {fac.submitted_at || '—'}
                           </td>
+                          <td className="p-3 text-gray-500 text-[11px]">
+                            {fac.last_modified || fac.submitted_at || '—'}
+                          </td>
+                          <td className="p-3 text-gray-500 text-[11px]">
+                            {fac.reviewed_at || '—'}
+                          </td>
+                          <td className="p-3 text-gray-500 text-[11px]">
+                            {fac.approved_at || fac.locked_at || '—'}
+                          </td>
                           <td className="p-3 text-center">
-                            {fac.submission_data ? (
-                              <button
-                                type="button"
-                                onClick={() => setSelectedPreviewFaculty(fac)}
-                                className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded-xl text-xs font-bold transition-all flex items-center space-x-1 mx-auto cursor-pointer shadow-xs"
-                              >
-                                <Eye size={13} />
-                                <span>👁️ Review Tables</span>
-                              </button>
+                            {fac.submission_data || fac.submission_id ? (
+                              <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedPreviewFaculty(fac)}
+                                  className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 rounded-lg text-[11px] font-bold transition-all cursor-pointer border border-indigo-200 dark:border-indigo-800"
+                                  title="View Details & Review"
+                                >
+                                  View / Review
+                                </button>
+                                {fac.submission_id && fac.status !== 'LOCKED' && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleHODAction(fac.submission_id, 'APPROVE_AND_LOCK')}
+                                      className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold cursor-pointer"
+                                      title="Approve & Lock for Consolidation"
+                                    >
+                                      Approve & Lock
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const reason = window.prompt("Enter requested changes for faculty:", "Please verify paper indexing and attach proof.");
+                                        if (reason !== null) {
+                                          handleHODAction(fac.submission_id, 'REQUEST_CHANGES', reason);
+                                        }
+                                      }}
+                                      className="px-2 py-1 bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-200 hover:bg-amber-200 rounded-lg text-[10px] font-bold cursor-pointer"
+                                      title="Request Changes"
+                                    >
+                                      Changes
+                                    </button>
+                                  </>
+                                )}
+                              </div>
                             ) : (
                               <button
                                 type="button"
                                 onClick={() => alert(`Reminder notification sent to ${fac.faculty_name} (${fac.email})`)}
-                                className="px-2.5 py-1 bg-gray-100 dark:bg-slate-800 text-gray-500 hover:bg-gray-200 rounded-xl text-[11px] font-semibold cursor-pointer"
+                                className="px-2.5 py-1 bg-gray-100 dark:bg-slate-800 text-gray-500 hover:bg-gray-200 rounded-lg text-[11px] font-semibold cursor-pointer"
                               >
                                 Send Reminder
                               </button>
