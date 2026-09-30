@@ -12,7 +12,8 @@ from core.views import (
     google_auth_login, 
     google_auth_config,
     send_registration_otp,
-    verify_registration_otp
+    verify_registration_otp,
+    api_reset_password
 )
 from faculty_data.views import system_health_check
 
@@ -23,6 +24,7 @@ urlpatterns = [
     path('api/register/', api_register, name='api_register'),
     path('api/auth/send-otp/', send_registration_otp, name='send_registration_otp'),
     path('api/auth/verify-otp/', verify_registration_otp, name='verify_registration_otp'),
+    path('api/auth/reset-password/', api_reset_password, name='api_reset_password'),
     path('api/auth/google/', google_auth_login, name='google_auth_login'),
     path('api/auth/google/config/', google_auth_config, name='google_auth_config'),
     path('api/health/', system_health_check, name='system_health_check_root'),

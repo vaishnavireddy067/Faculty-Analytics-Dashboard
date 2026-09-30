@@ -100,7 +100,7 @@ const IQACMonthlyReport = () => {
 
   const userRole = (localStorage.getItem('user_role') || '').toUpperCase();
   const isHod = userRole === 'HOD' || userRole === 'ADMIN' || userRole === 'SUPERADMIN';
-  const [roleMode, setRoleMode] = useState(isHod ? 'HOD' : 'HOD'); // default to HOD so HOD portal features are immediately open
+  const [roleMode, setRoleMode] = useState(isHod ? 'HOD' : 'FACULTY');
   const [submissionStatus, setSubmissionStatus] = useState('PENDING');
   const [submittedAt, setSubmittedAt] = useState('');
   const [facultySubmissions, setFacultySubmissions] = useState([]);
@@ -111,16 +111,23 @@ const IQACMonthlyReport = () => {
   // Synchronize tab and role mode with URL route
   useEffect(() => {
     if (location.pathname === '/monthly-reports' || location.pathname === '/hod-review') {
-      setActiveTab('submissions');
-      setRoleMode('HOD');
+      if (isHod) {
+        setActiveTab('submissions');
+        setRoleMode('HOD');
+      } else {
+        setActiveTab('editor');
+        setRoleMode('FACULTY');
+      }
     } else if (location.pathname === '/monthly-submission') {
       setActiveTab('editor');
       setRoleMode('FACULTY');
     } else if (location.pathname === '/iqac-report' || location.pathname === '/hod-consolidation') {
       setActiveTab('editor');
-      setRoleMode('HOD');
+      setRoleMode(isHod ? 'HOD' : 'FACULTY');
+    } else {
+      setRoleMode(isHod ? 'HOD' : 'FACULTY');
     }
-  }, [location.pathname]);
+  }, [location.pathname, isHod]);
 
   // Check if faculty already submitted for this period
   useEffect(() => {
@@ -966,9 +973,11 @@ const IQACMonthlyReport = () => {
           <div>
             <div className="flex items-center space-x-2">
               <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                Official Institutional Format
+                {isHod && roleMode === 'HOD' ? 'Official Institutional Format' : 'Faculty Activity Portal'}
               </span>
-              <span className="text-xs text-gray-400">NAAC / NBA Monthly IQAC Record</span>
+              <span className="text-xs text-gray-400">
+                {isHod && roleMode === 'HOD' ? 'NAAC / NBA Monthly IQAC Record' : 'Monthly Activity Submission to HOD'}
+              </span>
               {reportData?.is_saved_in_db && (
                 <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 flex items-center gap-1">
                   <Database size={12} /> Stored in DB
@@ -976,10 +985,14 @@ const IQACMonthlyReport = () => {
               )}
             </div>
             <h1 className="text-2xl font-black text-gray-900 dark:text-white mt-1">
-              Monthly IQAC Departmental Report & Document Vault
+              {isHod && roleMode === 'HOD' 
+                ? 'Monthly IQAC Departmental Report & Document Vault' 
+                : 'Faculty Monthly Activity Report'}
             </h1>
             <p className="text-xs text-gray-500 dark:text-slate-400">
-              Create, edit, save custom tables and share official NAAC/NBA documents across all departments in one central repository.
+              {isHod && roleMode === 'HOD'
+                ? 'Create, edit, save custom tables and share official NAAC/NBA documents across all departments in one central repository.'
+                : 'Fill in your monthly academic and research achievements to submit directly to your Department HOD for monthly IQAC consolidation.'}
             </p>
           </div>
 
@@ -993,18 +1006,20 @@ const IQACMonthlyReport = () => {
                   : 'text-gray-600 dark:text-slate-300 hover:text-black dark:hover:text-white'
               }`}
             >
-              <FileText size={14} /> Document Editor & Preview
+              <FileText size={14} /> {isHod && roleMode === 'HOD' ? 'Document Editor & Preview' : 'My Activity Form'}
             </button>
-            <button
-              onClick={() => setActiveTab('submissions')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
-                activeTab === 'submissions' 
-                  ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-sm' 
-                  : 'text-gray-600 dark:text-slate-300 hover:text-black dark:hover:text-white'
-              }`}
-            >
-              <Users size={14} /> Faculty Submissions ({facultySubmissions.length})
-            </button>
+            {isHod && roleMode === 'HOD' && (
+              <button
+                onClick={() => setActiveTab('submissions')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                  activeTab === 'submissions' 
+                    ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-sm' 
+                    : 'text-gray-600 dark:text-slate-300 hover:text-black dark:hover:text-white'
+                }`}
+              >
+                <Users size={14} /> Faculty Submissions ({facultySubmissions.length})
+              </button>
+            )}
             <button
               onClick={() => setActiveTab('vault')}
               className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
@@ -1034,7 +1049,7 @@ const IQACMonthlyReport = () => {
               onClick={() => handleShareLink()}
               className="inline-flex items-center px-4 py-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 text-xs font-bold transition-all cursor-pointer"
             >
-              <Share2 size={16} className="mr-1.5" /> Share Document Link
+              <Share2 size={16} /> Share Document Link
             </button>
 
             <button
@@ -1044,13 +1059,24 @@ const IQACMonthlyReport = () => {
               <PlusSquare size={16} className="mr-1.5" /> + Add Custom Table
             </button>
 
-            <button
-              onClick={handleAutoMergeFacultySubmissions}
-              disabled={loading}
-              className="inline-flex items-center px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-xs font-extrabold shadow-md shadow-indigo-500/20 transition-all cursor-pointer"
-            >
-              <Sparkles size={16} className="mr-1.5" /> Auto-Merge Faculty Submissions
-            </button>
+            {/* Auto-Merge is strictly for HOD Review panel. In Faculty mode, show Submit to HOD! */}
+            {isHod && roleMode === 'HOD' ? (
+              <button
+                onClick={() => setActiveTab('submissions')}
+                className="inline-flex items-center px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-xs font-extrabold shadow-md shadow-indigo-500/20 transition-all cursor-pointer"
+              >
+                <Sparkles size={16} className="mr-1.5" /> Auto-Merge Faculty Submissions
+              </button>
+            ) : (
+              <button
+                onClick={handleSubmitToHod}
+                disabled={saving}
+                className="inline-flex items-center px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-extrabold shadow-md shadow-emerald-500/20 transition-all cursor-pointer"
+              >
+                <Send size={15} className={`mr-1.5 ${saving ? 'animate-spin' : ''}`} />
+                {saving ? 'Submitting to HOD...' : submissionStatus === 'SUBMITTED' ? '✓ Submitted (Click to Update)' : '📤 Submit to HOD'}
+              </button>
+            )}
 
             <button
               onClick={() => setIsEditing(!isEditing)}

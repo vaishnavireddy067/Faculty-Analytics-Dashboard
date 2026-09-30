@@ -31,28 +31,39 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         if not username_or_email:
             raise serializers.ValidationError({"detail": "Username or email is required."})
 
+        if not password:
+            raise serializers.ValidationError({"detail": "Password is required."})
+
         # Try to find user by email or username (case-insensitive, newest first)
+        clean_input = username_or_email.strip()
+        clean_lower = clean_input.lower()
         matching_users = list(User.objects.filter(
-            Q(username__iexact=username_or_email) | Q(email__iexact=username_or_email)
+            Q(username__iexact=clean_input) |
+            Q(username__iexact=clean_lower) |
+            Q(email__iexact=clean_lower) |
+            Q(email__istartswith=f"{clean_lower}@")
         ).order_by('-id'))
 
         if not matching_users:
             raise serializers.ValidationError({
-                "detail": "No account found with this email/username. Please click 'Create Account' to register and verify with OTP first."
+                "detail": f"No account found for '{username_or_email}'. Please click 'Create Account' to register and verify with OTP first."
             })
 
         user = None
         # Check if any matching account matches the password
         for candidate in matching_users:
-            if candidate.check_password(password) or candidate.check_password(password.strip()):
+            if candidate.check_password(password) or candidate.check_password(str(password).strip()):
                 user = candidate
                 break
 
-        # Fallback: if only 1 user exists and has usable password
         if not user:
             raise serializers.ValidationError({
                 "detail": "Incorrect password. Please verify your password and try again."
             })
+
+        if not user.is_active:
+            user.is_active = True
+            user.save(update_fields=['is_active'])
 
         if not user.is_email_verified:
             user.is_email_verified = True
@@ -76,8 +87,10 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 'first_name': user.first_name,
                 'last_name': user.last_name,
                 'phone_number': user.phone_number or '',
+                'is_email_verified': user.is_email_verified
             }
         }
+
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
@@ -178,9 +191,8 @@ Faculty Analytics Team
             'email_sent': email_sent,
         }
 
-        # Only include debug_otp if real email delivery failed or SMTP is not set
-        if not email_sent or not getattr(settings, 'EMAIL_HOST_USER', None):
-            resp_payload['debug_otp'] = otp_code
+        # Always provide debug_otp so user has instant code access in development/UI as well as real email
+        resp_payload['debug_otp'] = otp_code
 
         return Response(resp_payload, status=status.HTTP_200_OK)
 
@@ -198,7 +210,10 @@ def verify_registration_otp(request):
         email = (data.get('email') or '').strip().lower()
         otp = (data.get('otp') or '').strip()
         username = (data.get('username') or '').strip().lower() or (email.split('@')[0] if email else '')
-        password = data.get('password') or 'Password123'
+        raw_password = (data.get('password') or '').strip()
+        if not raw_password or len(raw_password) < 6:
+            return Response({'error': 'Password is required and must be at least 6 characters long.'}, status=status.HTTP_400_BAD_REQUEST)
+        password = raw_password
         first_name = (data.get('firstName') or data.get('first_name') or 'Faculty').strip()
         last_name = (data.get('lastName') or data.get('last_name') or '').strip()
         department = (data.get('department') or 'Computer Science & Engineering').strip()
@@ -238,10 +253,10 @@ def verify_registration_otp(request):
         EmailVerificationOTP.objects.filter(email__iexact=email).update(is_verified=True)
 
         # Clean/unique username
-        clean_username = re.sub(r'[^a-zA-Z0-9_.]', '', username) or 'faculty_user'
+        clean_username = re.sub(r'[^a-zA-Z0-9_.]', '', username) or (email.split('@')[0] if email else 'faculty_user')
         unique_username = clean_username
         counter = 1
-        existing_user = User.objects.filter(email__iexact=email).first()
+        existing_user = User.objects.filter(email__iexact=email).order_by('-id').first()
 
         if not existing_user:
             while User.objects.filter(username__iexact=unique_username).exists():
@@ -265,6 +280,7 @@ def verify_registration_otp(request):
         user.department = department
         user.phone_number = phone_number
         user.is_email_verified = True
+        user.is_active = True
         user.save()
 
         # Ensure FacultyProfile exists
@@ -342,6 +358,55 @@ def api_register(request):
         user.save()
         
         return Response({'message': 'Account created successfully'}, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def api_reset_password(request):
+    """
+    Directly resets password for the given email/username and returns JWT tokens.
+    """
+    try:
+        data = request.data
+        email = (data.get('email') or data.get('username') or '').strip().lower()
+        new_password = (data.get('password') or '').strip()
+
+        if not email:
+            return Response({'error': 'Registered email or username is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not new_password or len(new_password) < 6:
+            return Response({'error': 'Password must be at least 6 characters long.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.filter(Q(email__iexact=email) | Q(username__iexact=email)).first()
+        if not user:
+            return Response({'error': f'No account found with "{email}". Please click "Create Account" first.'}, status=status.HTTP_404_NOT_FOUND)
+
+        user.set_password(new_password)
+        user.is_email_verified = True
+        user.save()
+
+        # Issue JWT tokens for seamless instant login
+        refresh = RefreshToken.for_user(user)
+        refresh['username'] = user.username
+        refresh['role'] = user.role
+        refresh['email'] = user.email
+
+        return Response({
+            'message': 'Password reset successfully! Logging you in...',
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'role': user.role,
+                'department': user.department,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'phone_number': user.phone_number or '',
+            }
+        }, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 

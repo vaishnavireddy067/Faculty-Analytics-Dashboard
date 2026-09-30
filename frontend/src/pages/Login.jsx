@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, ChevronRight, User, Phone, Building, ShieldCheck, KeyRound, Settings, CheckCircle2, AlertCircle, Sparkles, ArrowLeft, Clock, RefreshCw } from 'lucide-react';
+import { Lock, Mail, ChevronRight, User, Phone, Building, ShieldCheck, KeyRound, Settings, CheckCircle2, AlertCircle, Sparkles, ArrowLeft, Clock, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import { API_BASE_URL } from '../services/api';
 
 const Login = () => {
@@ -8,6 +8,8 @@ const Login = () => {
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showRegPassword, setShowRegPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -26,6 +28,8 @@ const Login = () => {
   const [selectedRole, setSelectedRole] = useState(() => localStorage.getItem('user_role') || 'FACULTY');
   const [view, setView] = useState('login'); // 'login' | 'forgot' | 'register' | 'otp-verify' | 'google-setup'
   const [resetSent, setResetSent] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetNewPass, setResetNewPass] = useState('');
 
   // Countdown timer effect for OTP resend
   useEffect(() => {
@@ -258,11 +262,11 @@ const Login = () => {
     setSuccessMsg('');
     setLoading(true);
 
-    const inputUser = username.trim().toLowerCase();
-    const inputPass = password.trim();
+    const inputUser = username.trim();
+    const inputPass = password;
 
     if (!inputUser) {
-      setError('Please enter your official institutional email address.');
+      setError('Please enter your official institutional email address or username.');
       setLoading(false);
       return;
     }
@@ -273,72 +277,91 @@ const Login = () => {
       return;
     }
 
-    // 1. Try Backend API first with generous timeout for cloud cold starts
+    // 1. Authenticate with Django Backend API
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
 
       const response = await fetch(`${API_BASE_URL}/token/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Bypass-Tunnel-Reminder': 'true',
         },
         body: JSON.stringify({ username: inputUser, password: inputPass }),
         signal: controller.signal,
       }).catch(() => null);
       clearTimeout(timeoutId);
-      
+
       if (response) {
         if (response.ok) {
           const data = await response.json().catch(() => null);
           if (data && data.access) {
             localStorage.setItem('access_token', data.access);
             localStorage.setItem('refresh_token', data.refresh || '');
-            localStorage.setItem('current_user_email', inputUser);
-            localStorage.setItem('user_role', selectedRole);
+            localStorage.setItem('current_user_email', data.user?.email || inputUser);
+            
+            // Prioritize actual registered role from database
+            const finalRole = data.user?.role || selectedRole || 'FACULTY';
+            localStorage.setItem('user_role', finalRole);
+
             if (data.user) {
-              data.user.role = selectedRole;
               localStorage.setItem('current_user_info', JSON.stringify(data.user));
             } else {
-              localStorage.setItem('current_user_info', JSON.stringify({ email: inputUser, role: selectedRole }));
+              localStorage.setItem('current_user_info', JSON.stringify({ email: inputUser, role: finalRole }));
             }
+
+            // Sync with local offline account list
+            const users = getRegisteredUsers();
+            const existingIdx = users.findIndex(u => 
+              (u.email && u.email.toLowerCase() === (data.user?.email || inputUser).toLowerCase()) ||
+              (u.username && u.username.toLowerCase() === (data.user?.username || inputUser).toLowerCase())
+            );
+            const userRec = {
+              email: data.user?.email || inputUser,
+              username: data.user?.username || inputUser,
+              firstName: data.user?.first_name || 'Faculty',
+              lastName: data.user?.last_name || '',
+              department: data.user?.department || 'Computer Science & Engineering',
+              role: finalRole,
+              is_email_verified: true,
+            };
+            if (existingIdx >= 0) {
+              users[existingIdx] = { ...users[existingIdx], ...userRec };
+            } else {
+              users.push(userRec);
+            }
+            localStorage.setItem('fad_user_accounts', JSON.stringify(users));
+
             window.location.href = '/dashboard';
             return;
           }
-        } else if (!response.ok) {
+        } else {
+          // Backend responded with an error (e.g., incorrect password or user not found)
           const errorData = await response.json().catch(() => ({}));
-          // Check if the user is registered in this browser's local store before rejecting
-          const users = getRegisteredUsers();
-          const localMatch = users.find(u => 
-            (u.email && u.email.toLowerCase() === inputUser) || 
-            (u.username && u.username.toLowerCase() === inputUser) ||
-            (u.email && u.email.toLowerCase().split('@')[0] === inputUser)
-          );
-          if (!localMatch) {
-            const errMsg = errorData.detail || errorData.error || (
-              errorData.non_field_errors ? errorData.non_field_errors[0] : null
-            ) || 'No account found with this email/username. Please click "Create Account" to register and verify with OTP first.';
-            setError(errMsg);
-            setLoading(false);
-            return;
-          }
+          const errMsg = errorData.detail || errorData.error || (
+            errorData.non_field_errors ? errorData.non_field_errors[0] : null
+          ) || 'Authentication failed. Please verify your credentials.';
+          setError(errMsg);
+          setLoading(false);
+          return;
         }
       }
     } catch (err) {
-      console.warn('Backend server connection issue, checking local session:', err);
+      console.warn('Backend server connection issue during login:', err);
     }
 
-    // 2. Client-side authentication fallback (Strict: Never auto-create account on login)
+    // 2. Client-side authentication fallback (Offline mode only)
     try {
       const users = getRegisteredUsers();
       const existingUser = users.find(u => 
-        (u.email && u.email.toLowerCase() === inputUser) || 
-        (u.username && u.username.toLowerCase() === inputUser) ||
-        (u.email && u.email.toLowerCase().split('@')[0] === inputUser)
+        (u.email && u.email.toLowerCase() === inputUser.toLowerCase()) || 
+        (u.username && u.username.toLowerCase() === inputUser.toLowerCase()) ||
+        (u.email && u.email.toLowerCase().split('@')[0] === inputUser.toLowerCase())
       );
 
       if (!existingUser) {
-        setError('No account found with this email/username. Please click "Create an Account" below to register and verify with OTP first.');
+        setError('No account found with this email/username. Please click "Create Account" below to register and verify with OTP first.');
         setLoading(false);
         return;
       }
@@ -350,7 +373,7 @@ const Login = () => {
       }
 
       const userEmail = existingUser.email || inputUser;
-      const userDatastoreKey = 'fad_user_data_' + userEmail;
+      const userDatastoreKey = 'fad_user_data_' + userEmail.toLowerCase();
       
       if (!localStorage.getItem(userDatastoreKey)) {
         const initialStore = {
@@ -361,7 +384,7 @@ const Login = () => {
             first_name: existingUser.firstName,
             last_name: existingUser.lastName,
             department: existingUser.department || 'Computer Science & Engineering',
-            designation: 'Faculty / Researcher',
+            designation: existingUser.role === 'HOD' ? 'Head of Department (HOD)' : 'Faculty / Researcher',
             phone_number: existingUser.phone || '',
             total_citations: 0,
             h_index: 0,
@@ -388,12 +411,12 @@ const Login = () => {
         localStorage.setItem(userDatastoreKey, JSON.stringify(initialStore));
       }
 
-      existingUser.role = selectedRole;
+      const finalRole = existingUser.role || selectedRole || 'FACULTY';
       localStorage.setItem('access_token', 'fad_auth_token_' + Date.now());
       localStorage.setItem('refresh_token', 'fad_auth_refresh_' + Date.now());
       localStorage.setItem('current_user_email', userEmail);
-      localStorage.setItem('user_role', selectedRole);
-      localStorage.setItem('current_user_info', JSON.stringify(existingUser));
+      localStorage.setItem('user_role', finalRole);
+      localStorage.setItem('current_user_info', JSON.stringify({ ...existingUser, role: finalRole }));
 
       window.location.href = '/dashboard';
     } catch (e) {
@@ -423,21 +446,32 @@ const Login = () => {
       return;
     }
 
-    setEmail(regEmail);
-    setUsername(regUsername);
-    setRegisteredPassword(regPass);
-
     if (!regPass || regPass.length < 6) {
       setError('Password must be at least 6 characters long.');
       setLoading(false);
       return;
     }
 
+    setEmail(regEmail);
+    setUsername(regUsername);
+    setRegisteredPassword(regPass);
+
+    // Persist securely in sessionStorage so page refresh or navigation never drops the chosen password
+    sessionStorage.setItem('fad_reg_email', regEmail);
+    sessionStorage.setItem('fad_reg_username', regUsername);
+    sessionStorage.setItem('fad_reg_password', regPass);
+    sessionStorage.setItem('fad_reg_role', selectedRole);
+    sessionStorage.setItem('fad_reg_firstname', firstName || 'Faculty');
+    sessionStorage.setItem('fad_reg_lastname', lastName || '');
+    sessionStorage.setItem('fad_reg_dept', department || 'Computer Science & Engineering');
+    sessionStorage.setItem('fad_reg_phone', phone || '');
+
     try {
       const response = await fetch(`${API_BASE_URL}/auth/send-otp/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Bypass-Tunnel-Reminder': 'true',
         },
         body: JSON.stringify({ email: regEmail, username: regUsername }),
       }).catch(() => null);
@@ -453,33 +487,17 @@ const Login = () => {
         setOtp('');
       } else if (response) {
         const errData = await response.json().catch(() => ({}));
-        const fallbackOtp = String(Math.floor(100000 + Math.random() * 900000));
-        setDebugOtp(fallbackOtp);
-        setSuccessMsg(`Verification code: ${fallbackOtp}`);
-        setView('otp-verify');
-        setOtpTimer(60);
-        setOtp('');
+        setError(errData.error || 'Failed to send verification code. Please check your email and try again.');
       } else {
-        const fallbackOtp = String(Math.floor(100000 + Math.random() * 900000));
-        setDebugOtp(fallbackOtp);
-        setSuccessMsg(`Verification code: ${fallbackOtp}`);
-        setView('otp-verify');
-        setOtpTimer(60);
-        setOtp('');
+        setError('Unable to reach server to send verification code. Please check your network.');
       }
     } catch (err) {
       console.error('Backend OTP connection error:', err);
-      const fallbackOtp = String(Math.floor(100000 + Math.random() * 900000));
-      setDebugOtp(fallbackOtp);
-      setSuccessMsg(`Verification code: ${fallbackOtp}`);
-      setView('otp-verify');
-      setOtpTimer(60);
-      setOtp('');
+      setError('Network connection failed. Please check your server and try again.');
     } finally {
       setLoading(false);
     }
   };
-
 
   // Step 2: Resend Verification Code
   const handleResendOtp = async () => {
@@ -488,13 +506,17 @@ const Login = () => {
     setSuccessMsg('');
     setLoading(true);
 
-    const regEmail = (email.trim() || username.trim()).toLowerCase();
+    const regEmail = (email.trim() || sessionStorage.getItem('fad_reg_email') || username.trim()).toLowerCase();
+    const regUsername = username.trim() || sessionStorage.getItem('fad_reg_username') || regEmail.split('@')[0];
 
     try {
       const response = await fetch(`${API_BASE_URL}/auth/send-otp/`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: regEmail, username }),
+        headers: { 
+          'Content-Type': 'application/json',
+          'Bypass-Tunnel-Reminder': 'true',
+        },
+        body: JSON.stringify({ email: regEmail, username: regUsername }),
       }).catch(() => null);
 
       if (response && response.ok) {
@@ -505,16 +527,11 @@ const Login = () => {
         setSuccessMsg(`A fresh verification code was sent to ${regEmail}.`);
         setOtpTimer(60);
       } else {
-        const fallbackOtp = String(Math.floor(100000 + Math.random() * 900000));
-        setDebugOtp(fallbackOtp);
-        setSuccessMsg(`Fresh verification code: ${fallbackOtp}`);
-        setOtpTimer(60);
+        const errData = await response?.json().catch(() => ({}));
+        setError(errData?.error || 'Failed to resend code. Please try again.');
       }
     } catch (err) {
-      const fallbackOtp = String(Math.floor(100000 + Math.random() * 900000));
-      setDebugOtp(fallbackOtp);
-      setSuccessMsg(`Fresh verification code: ${fallbackOtp}`);
-      setOtpTimer(60);
+      setError('Network connection failed while resending code.');
     } finally {
       setLoading(false);
     }
@@ -527,10 +544,15 @@ const Login = () => {
     setSuccessMsg('');
     setLoading(true);
 
-    const regEmail = (email.trim() || username.trim()).toLowerCase();
-    const regUsername = (username.trim() || regEmail.split('@')[0]).toLowerCase();
-    const regPass = (registeredPassword || password || '').trim();
+    const regEmail = (email.trim() || sessionStorage.getItem('fad_reg_email') || username.trim()).toLowerCase();
+    const regUsername = (username.trim() || sessionStorage.getItem('fad_reg_username') || regEmail.split('@')[0]).toLowerCase();
+    const regPass = (registeredPassword || password || sessionStorage.getItem('fad_reg_password') || '').trim();
     const cleanOtp = otp.trim();
+    const regRole = selectedRole || sessionStorage.getItem('fad_reg_role') || 'FACULTY';
+    const regFirstName = firstName || sessionStorage.getItem('fad_reg_firstname') || 'Faculty';
+    const regLastName = lastName || sessionStorage.getItem('fad_reg_lastname') || '';
+    const regDept = department || sessionStorage.getItem('fad_reg_dept') || 'Computer Science & Engineering';
+    const regPhone = phone || sessionStorage.getItem('fad_reg_phone') || '';
 
     if (!cleanOtp || cleanOtp.length < 6) {
       setError('Please enter the complete 6-digit verification code.');
@@ -538,25 +560,29 @@ const Login = () => {
       return;
     }
 
-    let authSuccess = false;
-    let authData = null;
+    if (!regPass || regPass.length < 6) {
+      setError('Password missing. Please click "Back to details" to re-enter your chosen password.');
+      setLoading(false);
+      return;
+    }
 
     try {
       const response = await fetch(`${API_BASE_URL}/auth/verify-otp/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Bypass-Tunnel-Reminder': 'true',
         },
         body: JSON.stringify({
           email: regEmail,
           otp: cleanOtp,
           username: regUsername,
           password: regPass,
-          firstName: firstName || 'Faculty',
-          lastName: lastName || 'Member',
-          department: department || 'Computer Science & Engineering',
-          phone_number: phone,
-          role: selectedRole || 'FACULTY'
+          firstName: regFirstName,
+          lastName: regLastName,
+          department: regDept,
+          phone_number: regPhone,
+          role: regRole
         }),
       }).catch(() => null);
 
@@ -566,119 +592,96 @@ const Login = () => {
           localStorage.setItem('access_token', data.access);
           localStorage.setItem('refresh_token', data.refresh || '');
           localStorage.setItem('current_user_email', data.user?.email || regEmail);
-          localStorage.setItem('user_role', selectedRole || 'FACULTY');
+          localStorage.setItem('user_role', data.user?.role || regRole);
+          
           if (data.user) {
-            data.user.role = selectedRole || 'FACULTY';
             localStorage.setItem('current_user_info', JSON.stringify(data.user));
           } else {
-            localStorage.setItem('current_user_info', JSON.stringify({ email: regEmail, role: selectedRole || 'FACULTY' }));
+            localStorage.setItem('current_user_info', JSON.stringify({ email: regEmail, role: regRole }));
           }
-          authSuccess = true;
-          authData = data;
+
+          // Clean up registration session
+          sessionStorage.removeItem('fad_reg_password');
+
+          // Save account locally in fad_user_accounts
+          const users = getRegisteredUsers();
+          const existingIdx = users.findIndex(u => u.email?.toLowerCase() === regEmail);
+          const userRec = {
+            email: regEmail,
+            username: regUsername,
+            firstName: regFirstName,
+            lastName: regLastName,
+            department: regDept,
+            role: regRole,
+            is_email_verified: true
+          };
+          if (existingIdx >= 0) {
+            users[existingIdx] = userRec;
+          } else {
+            users.push(userRec);
+          }
+          localStorage.setItem('fad_user_accounts', JSON.stringify(users));
+
+          // Set up initial profile data store if missing
+          const userDatastoreKey = 'fad_user_data_' + regEmail;
+          if (!localStorage.getItem(userDatastoreKey)) {
+            localStorage.setItem(userDatastoreKey, JSON.stringify({
+              profile: {
+                id: data.user?.id || Date.now(),
+                username: regUsername,
+                email: regEmail,
+                first_name: regFirstName,
+                last_name: regLastName,
+                department: regDept,
+                designation: regRole === 'HOD' ? 'Head of Department (HOD)' : 'Faculty / Researcher',
+                role: regRole,
+                phone_number: regPhone,
+                total_citations: 0,
+                h_index: 0,
+                i10_index: 0,
+                is_email_verified: true,
+                digital_twin: {
+                  research_health: '88%',
+                  promotion_chance: 'Evaluating',
+                  predicted_api: '95',
+                  research_growth: 'Active'
+                },
+                impact_score: 15
+              },
+              publications: [],
+              patents: [],
+              grants: [],
+              roles: [],
+              certificates: [],
+              books: [],
+              'fdp-training': [],
+              consultancy: [],
+              certifications: [],
+              saved_reports: []
+            }));
+          }
+
+          setSuccessMsg('Account created & verified successfully! Logging you in...');
+          setTimeout(() => {
+            window.location.href = '/dashboard';
+          }, 500);
+          return;
         }
-      } else if (debugOtp && cleanOtp === debugOtp) {
-        authSuccess = true;
       } else if (response) {
         const errData = await response.json().catch(() => ({}));
-        if (debugOtp && cleanOtp === debugOtp) {
-          authSuccess = true;
-        } else {
-          // If cleanOtp is 6 digits and backend had a network/database error, allow verified registration fallback
-          authSuccess = true;
-        }
+        setError(errData.error || errData.detail || 'Verification code is invalid or has expired. Please check your email or click Resend Code.');
+        setLoading(false);
+        return;
       } else {
-        authSuccess = true;
+        setError('Unable to connect to verification server. Please check your network.');
+        setLoading(false);
+        return;
       }
     } catch (err) {
       console.warn('Backend verification error:', err);
-      authSuccess = true;
+      setError('An error occurred during verification. Please try again.');
+      setLoading(false);
     }
-
-    // Save user locally & in user datastore
-    const users = getRegisteredUsers();
-    const existingIndex = users.findIndex(u => 
-      (u.email && u.email.toLowerCase() === regEmail) || 
-      (u.username && u.username.toLowerCase() === regUsername)
-    );
-
-    const newUser = {
-      email: regEmail,
-      username: regUsername,
-      password: regPass,
-      firstName: firstName || 'Faculty',
-      lastName: lastName || 'Member',
-      phone,
-      department: department || 'Computer Science & Engineering',
-      role: selectedRole || 'FACULTY',
-      is_email_verified: true
-    };
-
-    if (existingIndex >= 0) {
-      users[existingIndex] = newUser;
-    } else {
-      users.push(newUser);
-    }
-    localStorage.setItem('fad_user_accounts', JSON.stringify(users));
-
-    const userDatastoreKey = 'fad_user_data_' + regEmail;
-    if (!localStorage.getItem(userDatastoreKey)) {
-      localStorage.setItem(userDatastoreKey, JSON.stringify({
-        profile: {
-          id: Date.now(),
-          username: regUsername,
-          email: regEmail,
-          first_name: firstName || 'Faculty',
-          last_name: lastName || 'Member',
-          department: department || 'Computer Science & Engineering',
-          designation: selectedRole === 'HOD' ? 'Head of Department (HOD)' : 'Faculty / Researcher',
-          role: selectedRole || 'FACULTY',
-          phone_number: phone || '',
-          total_citations: 0,
-          h_index: 0,
-          i10_index: 0,
-          is_email_verified: true,
-          digital_twin: {
-            research_health: '88%',
-            promotion_chance: 'Evaluating',
-            predicted_api: '95',
-            research_growth: 'Active'
-          },
-          impact_score: 15
-        },
-        publications: [],
-        patents: [],
-        grants: [],
-        roles: [],
-        certificates: [],
-        books: [],
-        'fdp-training': [],
-        consultancy: [],
-        certifications: [],
-        saved_reports: []
-      }));
-    }
-
-    // Direct Instant Login on Verification Success!
-    if (authSuccess || localStorage.getItem('access_token')) {
-      localStorage.setItem('user_role', selectedRole || 'FACULTY');
-      if (!localStorage.getItem('access_token')) {
-        localStorage.setItem('access_token', 'fad_auth_token_' + Date.now());
-        localStorage.setItem('refresh_token', 'fad_auth_refresh_' + Date.now());
-        localStorage.setItem('current_user_email', regEmail);
-        localStorage.setItem('current_user_info', JSON.stringify({ ...newUser, role: selectedRole || 'FACULTY' }));
-      }
-      window.location.href = '/dashboard';
-      return;
-    }
-
-    // Fallback: If no auto-token, return to Sign In with pre-filled credentials
-    setUsername(regEmail);
-    setPassword(regPass);
-    setOtp('');
-    setError('');
-    setSuccessMsg('Email verified successfully! Please click Sign In to continue.');
-    setView('login');
-    setLoading(false);
   };
 
 
@@ -859,14 +862,22 @@ const Login = () => {
                       <Lock size={18} />
                     </div>
                     <input 
-                      type="password" 
+                      type={showPassword ? "text" : "password"} 
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm transition-all shadow-sm" 
+                      className="w-full pl-10 pr-10 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm transition-all shadow-sm" 
                       placeholder="••••••••"
-                      autoComplete="new-password"
+                      autoComplete="current-password"
                       required
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-gray-600 bg-transparent border-none cursor-pointer"
+                      title={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
                   </div>
                 </div>
 
@@ -905,6 +916,57 @@ const Login = () => {
                     Create Account
                   </button>
                 </p>
+              </div>
+
+              {/* Quick Fill Credentials Helper */}
+              <div className="mt-4 p-3.5 bg-indigo-50/70 border border-indigo-100 rounded-2xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-indigo-900 uppercase tracking-wider flex items-center gap-1">
+                    <Sparkles size={13} className="text-indigo-600" /> Quick-Fill Verified Accounts
+                  </span>
+                  <span className="text-[10px] text-gray-400">1-Click Sign In</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUsername('anuguvaishnavireddy0@gmail.com');
+                      setPassword('Password@123');
+                      setSelectedRole('FACULTY');
+                      setError('');
+                    }}
+                    className="p-2 text-left bg-white rounded-xl border border-gray-200 hover:border-indigo-400 transition-all text-xs cursor-pointer shadow-2xs"
+                  >
+                    <span className="font-bold text-gray-900 block truncate">👨‍🏫 Faculty</span>
+                    <span className="text-[10px] text-gray-500 block truncate">Vaishnavi</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUsername('hod@example.com');
+                      setPassword('hod123');
+                      setSelectedRole('HOD');
+                      setError('');
+                    }}
+                    className="p-2 text-left bg-white rounded-xl border border-purple-200 hover:border-purple-400 transition-all text-xs cursor-pointer shadow-2xs"
+                  >
+                    <span className="font-bold text-purple-700 block truncate">🏛️ HOD</span>
+                    <span className="text-[10px] text-gray-500 block truncate">hod123</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUsername('admin@example.com');
+                      setPassword('admin123');
+                      setSelectedRole('ADMIN');
+                      setError('');
+                    }}
+                    className="p-2 text-left bg-white rounded-xl border border-gray-200 hover:border-indigo-400 transition-all text-xs cursor-pointer shadow-2xs"
+                  >
+                    <span className="font-bold text-gray-900 block truncate">🛡️ Admin</span>
+                    <span className="text-[10px] text-gray-500 block truncate">admin123</span>
+                  </button>
+                </div>
               </div>
             </>
           ) : view === 'register' ? (
@@ -1033,13 +1095,21 @@ const Login = () => {
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><Lock size={16} /></div>
                     <input 
-                      type="password" 
+                      type={showRegPassword ? "text" : "password"} 
                       value={password} 
                       onChange={(e) => setPassword(e.target.value)} 
                       placeholder="Minimum 6 characters"
-                      className="w-full pl-9 pr-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
+                      className="w-full pl-9 pr-10 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
                       required 
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowRegPassword(!showRegPassword)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 bg-transparent border-none cursor-pointer"
+                      title={showRegPassword ? "Hide password" : "Show password"}
+                    >
+                      {showRegPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
                   </div>
                 </div>
 
@@ -1152,7 +1222,61 @@ const Login = () => {
             </>
           ) : (
             <>
-              <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); setResetSent(true); }}>
+              <form className="space-y-4" onSubmit={async (e) => {
+                e.preventDefault();
+                setError('');
+                setSuccessMsg('');
+                setLoading(true);
+
+                const targetEmail = (resetEmail.trim() || username.trim()).toLowerCase();
+                const newPass = resetNewPass.trim();
+
+                if (!targetEmail) {
+                  setError('Please enter your registered email address.');
+                  setLoading(false);
+                  return;
+                }
+                if (!newPass || newPass.length < 6) {
+                  setError('New password must be at least 6 characters long.');
+                  setLoading(false);
+                  return;
+                }
+
+                try {
+                  const response = await fetch(`${API_BASE_URL}/auth/reset-password/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: targetEmail, password: newPass }),
+                  }).catch(() => null);
+
+                  if (response && response.ok) {
+                    const data = await response.json().catch(() => ({}));
+                    if (data.access) {
+                      localStorage.setItem('access_token', data.access);
+                      localStorage.setItem('refresh_token', data.refresh || '');
+                      localStorage.setItem('current_user_email', data.user?.email || targetEmail);
+                      localStorage.setItem('user_role', data.user?.role || selectedRole);
+                      if (data.user) {
+                        localStorage.setItem('current_user_info', JSON.stringify(data.user));
+                      }
+                      setSuccessMsg('Password updated successfully! Logging you in...');
+                      setTimeout(() => {
+                        window.location.href = '/dashboard';
+                      }, 800);
+                      return;
+                    }
+                  } else if (response) {
+                    const errData = await response.json().catch(() => ({}));
+                    setError(errData.error || 'Failed to update password. Please check your email.');
+                  } else {
+                    setError('Cannot connect to server. Please check your connection.');
+                  }
+                } catch (err) {
+                  setError('An error occurred during password reset.');
+                } finally {
+                  setLoading(false);
+                }
+              }}>
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">Registered Email</label>
                   <div className="relative">
@@ -1161,28 +1285,45 @@ const Login = () => {
                     </div>
                     <input 
                       type="email" 
-                      className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all" 
-                      placeholder="faculty@avn.edu.in"
+                      value={resetEmail || username}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm" 
+                      placeholder="faculty@institution.edu"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">New Password</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                      <Lock size={18} />
+                    </div>
+                    <input 
+                      type="password" 
+                      value={resetNewPass}
+                      onChange={(e) => setResetNewPass(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm" 
+                      placeholder="At least 6 characters"
                       required
                     />
                   </div>
                 </div>
                 
-                <button type="submit" className="w-full py-3 px-4 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md transition-all">
-                  Send Recovery Link
+                <button 
+                  type="submit" 
+                  disabled={loading}
+                  className="w-full py-3 px-4 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {loading ? 'Updating Password...' : 'Save New Password & Sign In'}
                 </button>
               </form>
 
-              {resetSent && (
-                <div className="bg-emerald-50 text-emerald-800 p-4 rounded-xl border border-emerald-200 text-center text-sm font-medium">
-                  Password reset link has been dispatched to your email!
-                </div>
-              )}
-
-              <div className="text-center">
+              <div className="text-center pt-2">
                 <button 
-                  type="button"
-                  onClick={() => { setView('login'); setResetSent(false); }}
+                  type="button" 
+                  onClick={() => { setView('login'); setError(''); setSuccessMsg(''); }}
                   className="text-sm font-semibold text-indigo-600 hover:text-indigo-700 bg-transparent border-none p-0 cursor-pointer"
                 >
                   ← Return to Sign In

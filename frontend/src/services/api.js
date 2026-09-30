@@ -7,13 +7,12 @@ export const getApiBaseUrl = () => {
   }
   if (typeof window !== 'undefined' && window.location) {
     const hostname = window.location.hostname;
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://127.0.0.1:8000';
+    // When running on Vercel or cloud static hosting, point to the live Render backend
+    if (hostname.includes('vercel.app') || hostname.includes('netlify.app')) {
+      return (envUrl && !envUrl.includes('localhost')) ? envUrl.replace(/\/$/, '') : 'https://faculty-analytics-backend.onrender.com';
     }
-    // Local network Wi-Fi IP (e.g., 192.168.x.x, 10.x.x.x, 172.16-31.x.x)
-    if (/^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(hostname)) {
-      return `http://${hostname}:8000`;
-    }
+    // In local development, LAN, or Cloudflare tunnel, route through window.location.origin
+    return window.location.origin;
   }
   // Production default (Render backend)
   return 'https://faculty-analytics-backend.onrender.com';
