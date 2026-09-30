@@ -35,10 +35,16 @@ const Login = () => {
   const [resetEmail, setResetEmail] = useState('');
   const [resetNewPass, setResetNewPass] = useState('');
 
-  // Clear inputs on view or role change to guarantee clean, unpopulated fields
+  // Clear all inputs on view or role change to guarantee clean, unpopulated fields
   useEffect(() => {
     setUsername('');
     setPassword('');
+    setFullName('');
+    setEmail('');
+    setEmployeeId('');
+    setDepartment('');
+    setConfirmPassword('');
+    setOtp('');
     setError('');
   }, [view, selectedRole]);
 
@@ -463,12 +469,6 @@ const Login = () => {
 
     if (!regEmail || !regEmail.includes('@')) {
       setError('Please provide a valid official faculty email address.');
-      setLoading(false);
-      return;
-    }
-
-    if (!regEmpId) {
-      setError('Please enter your official Employee ID.');
       setLoading(false);
       return;
     }
@@ -978,7 +978,7 @@ const Login = () => {
               </div>
 
               {/* --- STEP 1: REGISTRATION FORM WITH OTP DISPATCH --- */}
-              <form className="space-y-3" onSubmit={handleInitiateRegistration}>
+              <form className="space-y-3" onSubmit={handleInitiateRegistration} autoComplete="off">
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Full Name</label>
                   <div className="relative">
@@ -986,10 +986,14 @@ const Login = () => {
                     <input 
                       type="text" 
                       id="register-fullname"
+                      name="faculty_account_applicant_name"
                       value={fullName} 
                       onChange={(e) => setFullName(e.target.value)} 
                       placeholder="e.g. Dr. Rajesh Sharma"
                       className="w-full pl-9 pr-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
+                      autoComplete="off"
+                      autoCorrect="off"
+                      spellCheck="false"
                       required 
                     />
                   </div>
@@ -1002,46 +1006,35 @@ const Login = () => {
                     <input 
                       type="email" 
                       id="register-email"
+                      name="faculty_account_applicant_email"
                       value={email} 
                       onChange={(e) => setEmail(e.target.value)} 
                       placeholder="faculty@institution.edu"
                       className="w-full pl-9 pr-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
+                      autoComplete="off"
+                      autoCorrect="off"
+                      spellCheck="false"
                       required 
                     />
                   </div>
                   <p className="text-[10px] text-gray-400 mt-0.5">One email = one account. A 6-digit OTP will be sent here.</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Employee ID</label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><KeyRound size={16} /></div>
-                      <input 
-                        type="text" 
-                        id="register-employee-id"
-                        placeholder="e.g. EMP-2024-042" 
-                        value={employeeId} 
-                        onChange={(e) => setEmployeeId(e.target.value)} 
-                        className="w-full pl-9 pr-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-                        required 
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Department</label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><Building size={16} /></div>
-                      <input 
-                        type="text" 
-                        id="register-department"
-                        placeholder="CSE / AI&DS / ECE" 
-                        value={department} 
-                        onChange={(e) => setDepartment(e.target.value)} 
-                        className="w-full pl-9 pr-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-                        required 
-                      />
-                    </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Department</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><Building size={16} /></div>
+                    <input 
+                      type="text" 
+                      id="register-department"
+                      name="faculty_account_applicant_department"
+                      placeholder="CSE / AI&DS / ECE" 
+                      value={department} 
+                      onChange={(e) => setDepartment(e.target.value)} 
+                      className="w-full pl-9 pr-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
+                      autoComplete="off"
+                      required 
+                    />
                   </div>
                 </div>
 
@@ -1052,10 +1045,12 @@ const Login = () => {
                     <input 
                       type={showRegPassword ? "text" : "password"} 
                       id="register-password"
+                      name="faculty_reg_secret_pass"
                       value={password} 
                       onChange={(e) => setPassword(e.target.value)} 
                       placeholder="Minimum 6 characters"
                       className="w-full pl-9 pr-10 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
+                      autoComplete="new-password"
                       required 
                     />
                     <button
@@ -1076,10 +1071,12 @@ const Login = () => {
                     <input 
                       type={showConfirmPassword ? "text" : "password"} 
                       id="register-confirm-password"
+                      name="faculty_reg_secret_confirm"
                       value={confirmPassword} 
                       onChange={(e) => setConfirmPassword(e.target.value)} 
                       placeholder="Re-enter password"
                       className="w-full pl-9 pr-10 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
+                      autoComplete="new-password"
                       required 
                     />
                     <button

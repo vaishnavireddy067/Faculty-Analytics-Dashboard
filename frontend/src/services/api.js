@@ -678,6 +678,14 @@ export const fetchAPI = async (endpoint, options = {}) => {
             console.warn('[FAD Auth] Token refresh failed:', refreshErr);
           }
         }
+        // If refresh token fails or is invalid, clear stale auth and redirect to login
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('current_user_email');
+        localStorage.removeItem('current_user_info');
+        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
       }
       const errorData = await response.json().catch(() => ({}));
       const errMsg = errorData.detail || errorData.error || (errorData.non_field_errors ? errorData.non_field_errors[0] : null) || `API error ${response.status}`;
@@ -693,8 +701,8 @@ export const fetchAPI = async (endpoint, options = {}) => {
     if (err.name === 'AbortError') {
       console.warn(`[FAD API] Request to ${endpoint} timed out after 30s.`);
     }
-    console.warn(`[FAD API Notice] ${endpoint} returned:`, err.message);
-    return handleMockFallback(endpoint, options);
+    console.error(`[FAD Database API Error] ${endpoint}:`, err.message);
+    throw err;
   }
 };
 
