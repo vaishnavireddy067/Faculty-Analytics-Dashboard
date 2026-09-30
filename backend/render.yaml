@@ -1,12 +1,21 @@
+databases:
+  - name: faculty-analytics-db
+    databaseName: faculty_analytics
+    user: faculty_admin
+    plan: free
+
 services:
   - type: web
     name: faculty-analytics-backend
-    env: python
+    runtime: python
     buildCommand: "./build.sh"
     startCommand: "gunicorn backend.wsgi:application"
+    plan: free
     envVars:
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: faculty-analytics-db
+          property: connectionString
       - key: SECRET_KEY
         generateValue: true
       - key: DEBUG
@@ -25,3 +34,5 @@ services:
         value: "nswxqngdddphnsgj"
       - key: DEFAULT_FROM_EMAIL
         value: "Faculty Analytics Portal <anuguvaishnavireddy6@gmail.com>"
+      - key: PYTHON_VERSION
+        value: "3.12.0"
