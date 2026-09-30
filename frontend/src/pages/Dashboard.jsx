@@ -6,7 +6,7 @@ import { Target, Medal, MessageSquareText, CalendarDays, Clock } from 'lucide-re
 
 const COLORS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
-const StatCard = ({ title, value, icon, trend, trendValue, colorClass }) => (
+const StatCard = ({ title, value, icon, colorClass }) => (
   <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 flex flex-col h-full hover:shadow-md transition-shadow">
     <div className="flex justify-between items-start mb-4">
       <div>
@@ -17,16 +17,9 @@ const StatCard = ({ title, value, icon, trend, trendValue, colorClass }) => (
         {icon}
       </div>
     </div>
-    <div className="mt-auto flex items-center text-sm">
-      {trend === 'up' ? (
-        <TrendingUp size={16} className="text-emerald-500 mr-1" />
-      ) : (
-        <TrendingDown size={16} className="text-rose-500 mr-1" />
-      )}
-      <span className={trend === 'up' ? 'text-emerald-600 font-medium' : 'text-rose-600 font-medium'}>
-        {trendValue}
-      </span>
-      <span className="text-gray-400 ml-2">vs last month</span>
+    <div className="mt-auto flex items-center text-xs text-emerald-600 font-medium">
+      <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block mr-1.5"></span>
+      Connected to Central Database
     </div>
   </div>
 );
@@ -36,24 +29,27 @@ const Dashboard = () => {
   const [aiData, setAiData] = useState(null);
   const [fundingData, setFundingData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [populating, setPopulating] = useState(false);
+  const [populateMsg, setPopulateMsg] = useState('');
+
+  const loadDashboardStats = async () => {
+    try {
+      const stats = await fetchAPI('/analytics/stats/');
+      setData(stats);
+      if (stats && stats.role === 'FACULTY') {
+          const ai = await fetchAPI('/analytics/ai-insights/').catch(() => null);
+          if (ai) setAiData(ai);
+          const funding = await fetchAPI('/faculty/funding-finder/').catch(() => null);
+          if (funding) setFundingData(funding);
+      }
+    } catch (error) {
+      console.error("Failed to load dashboard stats", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadDashboardStats = async () => {
-      try {
-        const stats = await fetchAPI('/analytics/stats/');
-        setData(stats);
-        if (stats && stats.role === 'FACULTY') {
-            const ai = await fetchAPI('/analytics/ai-insights/').catch(() => null);
-            if (ai) setAiData(ai);
-            const funding = await fetchAPI('/faculty/funding-finder/').catch(() => null);
-            if (funding) setFundingData(funding);
-        }
-      } catch (error) {
-        console.error("Failed to load dashboard stats", error);
-      } finally {
-        setLoading(false);
-      }
-    };
     loadDashboardStats();
 
     // Auto-refresh for real-time KPI updates (every 30 seconds)
@@ -63,6 +59,37 @@ const Dashboard = () => {
     
     return () => clearInterval(interval);
   }, []);
+
+  const handlePopulateSample = async () => {
+    setPopulating(true);
+    setPopulateMsg('');
+    try {
+      await fetchAPI('/analytics/populate-starter-data/', { method: 'POST' });
+      await loadDashboardStats();
+      setPopulateMsg('⚡ Starter research records successfully saved to PostgreSQL! Live metrics updated.');
+      setTimeout(() => setPopulateMsg(''), 6000);
+    } catch (err) {
+      console.error(err);
+      setPopulateMsg('Failed to populate starter data.');
+    } finally {
+      setPopulating(false);
+    }
+  };
+
+  const handleClearSample = async () => {
+    if (!window.confirm('Are you sure you want to clear your research records from the database?')) return;
+    setPopulating(true);
+    try {
+      await fetchAPI('/analytics/clear-starter-data/', { method: 'POST' });
+      await loadDashboardStats();
+      setPopulateMsg('All your research records have been cleared from PostgreSQL.');
+      setTimeout(() => setPopulateMsg(''), 5000);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setPopulating(false);
+    }
+  };
 
   const handleExportPDF = () => {
     window.open(`${API_BASE_URL}/analytics/export/pdf/`, '_blank');
@@ -92,35 +119,53 @@ const Dashboard = () => {
     total_patents: 0,
     total_grants_amount: 0
   };
+  const apiScore = data?.api_score || {
+    research: 0,
+    teaching: 0,
+    service: 0,
+    total: 0,
+    max: 110
+  };
+  const badges = data?.badges || [];
   const trend_data = data?.trend_data || [
     { name: String(currentYear - 2), publications: 0 },
     { name: String(currentYear - 1), publications: 0 },
     { name: String(currentYear), publications: 0 }
   ];
   const dept_data = data?.dept_data || [
-    { name: 'CSE', value: 0 }
+    { name: data?.department || 'CSE', value: 0 }
   ];
   const recent_activities = data?.recent_activities || [];
+  const feedbackData = data?.feedback || { average_rating: null, total_count: 0, positive_pct: 0, recent: [] };
+  const deadlines = data?.deadlines || [];
   const isFaculty = role === 'FACULTY';
+  const isFreshAccount = isFaculty && kpis.total_publications === 0 && kpis.total_patents === 0 && (kpis.total_grants_amount || 0) === 0;
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
-            {isFaculty ? 'My Performance Overview' : 'Dashboard Overview'}
+            {isFaculty ? 'My Performance Overview' : 'Department Analytics & Overview'}
           </h1>
           <p className="text-gray-500 text-sm mt-1">
-            {role === 'ADMIN' ? 'College-wide analytics and faculty performance.' : 
-             role === 'HOD' ? 'Department analytics.' : 'Your recent activities and stats.'}
+            {role === 'ADMIN' ? 'College-wide analytics and faculty performance from database.' : 
+             role === 'HOD' ? `Department metrics for ${data?.department || 'your department'}.` : 'Your personal records and metrics directly from the central database.'}
           </p>
         </div>
         
         <div className="flex gap-2 flex-wrap justify-end">
           {isFaculty && (
-            <button onClick={handleExportAppraisal} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors shadow-sm">
-              <Download size={16} /> Annual Appraisal
-            </button>
+            <>
+              <button onClick={handleExportAppraisal} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors shadow-sm">
+                <Download size={16} /> Annual Appraisal
+              </button>
+              {!isFreshAccount && (
+                <button onClick={handleClearSample} disabled={populating} className="flex items-center gap-1.5 text-xs text-rose-600 hover:text-rose-700 bg-rose-50 border border-rose-200 px-3 py-2 rounded-lg font-medium transition-colors">
+                  Clear My Records
+                </button>
+              )}
+            </>
           )}
           {!isFaculty && (
             <>
@@ -141,15 +186,55 @@ const Dashboard = () => {
         </div>
       </div>
 
+      {populateMsg && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-sm flex items-center justify-between">
+          <span>{populateMsg}</span>
+          <button onClick={() => setPopulateMsg('')} className="text-emerald-600 hover:text-emerald-900 font-bold ml-4">✕</button>
+        </div>
+      )}
+
+      {/* Fresh Account Interactive Database Notice */}
+      {isFreshAccount && (
+        <div className="bg-gradient-to-r from-indigo-50 to-sky-50 dark:from-indigo-950/40 dark:to-sky-950/40 border border-indigo-200 dark:border-indigo-800 rounded-2xl p-5 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-lg flex-shrink-0 shadow-sm">
+              🗄️
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                Live PostgreSQL Database Connected
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              </h4>
+              <p className="text-xs text-gray-600 dark:text-gray-300 mt-1 max-w-2xl leading-relaxed">
+                Your faculty account is active in the central database. Because this is a fresh account, your publication, patent, and grant counts are currently <strong>0</strong>. You can manually enter your records via <strong>Data Entry</strong>, or click below to populate starter research records to see the dynamic charts, badges, and automated API score calculate live.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5 flex-shrink-0 w-full md:w-auto justify-end">
+            <button
+              onClick={handlePopulateSample}
+              disabled={populating}
+              className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm flex items-center gap-1.5 whitespace-nowrap"
+            >
+              {populating ? 'Saving to Database...' : '⚡ Populate Starter Records'}
+            </button>
+            <a
+              href="/data-entry"
+              className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:bg-gray-50 text-gray-700 dark:text-gray-200 text-xs font-semibold px-3.5 py-2.5 rounded-xl transition-colors whitespace-nowrap"
+            >
+              ➕ Go to Data Entry
+            </a>
+          </div>
+        </div>
+      )}
+
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {!isFaculty && (
           <StatCard 
-            title="Total Faculty" 
+            title="Department Faculty" 
             value={kpis.total_faculty} 
             icon={<Users size={24} className="text-indigo-600" />} 
-            trend="up" 
-            trendValue="+12%" 
             colorClass="bg-indigo-50"
           />
         )}
@@ -157,29 +242,23 @@ const Dashboard = () => {
           title={isFaculty ? 'My Publications' : 'Total Publications'}
           value={kpis.total_publications} 
           icon={<FileText size={24} className="text-sky-600" />} 
-          trend="up" 
-          trendValue="+18%" 
           colorClass="bg-sky-50"
         />
         <StatCard 
           title={isFaculty ? 'My Patents' : 'Total Patents'}
           value={kpis.total_patents} 
           icon={<Award size={24} className="text-emerald-600" />} 
-          trend="up" 
-          trendValue="+2" 
           colorClass="bg-emerald-50"
         />
         <StatCard 
           title={isFaculty ? 'My Grants' : 'Total Grants'} 
           value={`₹${(kpis.total_grants_amount || 0).toLocaleString()}`} 
           icon={<IndianRupee size={24} className="text-amber-600" />} 
-          trend="up" 
-          trendValue="+5%" 
           colorClass="bg-amber-50"
         />
       </div>
 
-      {/* Charts Section */}
+      {/* Dynamic API Score & Badges Section */}
       {isFaculty && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="bg-gradient-to-br from-indigo-900 to-purple-800 rounded-2xl shadow-lg p-6 text-white relative overflow-hidden">
@@ -190,41 +269,43 @@ const Dashboard = () => {
             <div className="relative z-10 space-y-4">
               <div className="flex justify-between items-center text-sm">
                 <span className="text-indigo-200">Research Score</span>
-                <span className="font-semibold">40/50</span>
+                <span className="font-semibold">{apiScore.research}/50</span>
               </div>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-indigo-200">Teaching Score</span>
-                <span className="font-semibold">35/40</span>
+                <span className="font-semibold">{apiScore.teaching}/40</span>
               </div>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-indigo-200">Service Score</span>
-                <span className="font-semibold">15/20</span>
+                <span className="font-semibold">{apiScore.service}/20</span>
               </div>
               <div className="pt-4 mt-4 border-t border-white/20">
                 <div className="flex justify-between items-center">
                   <span className="text-lg text-indigo-100">Total Score</span>
-                  <span className="text-3xl font-extrabold text-white">90<span className="text-xl text-indigo-300">/110</span></span>
+                  <span className="text-3xl font-extrabold text-white">{apiScore.total}<span className="text-xl text-indigo-300">/{apiScore.max}</span></span>
                 </div>
               </div>
             </div>
           </div>
           <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-800 p-6 flex flex-col transition-colors">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center">
-              <Medal className="mr-2 text-yellow-500" size={24} /> Achievement Badges
+              <Medal className="mr-2 text-yellow-500" size={24} /> Earned Badges
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2">
-              <div className="flex flex-col items-center p-4 bg-yellow-50/70 dark:bg-yellow-950/30 border border-yellow-100 dark:border-yellow-900/40 rounded-2xl text-center group hover:bg-yellow-100/70 transition-colors cursor-default">
-                <span className="text-4xl mb-2 group-hover:scale-110 transition-transform">🏆</span>
-                <span className="text-xs font-bold text-yellow-800 dark:text-yellow-300">Research Champion</span>
-              </div>
-              <div className="flex flex-col items-center p-4 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/40 rounded-2xl text-center group hover:bg-emerald-100/70 transition-colors cursor-default">
-                <span className="text-4xl mb-2 group-hover:scale-110 transition-transform">🥇</span>
-                <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300">Patent Creator</span>
-              </div>
-              <div className="flex flex-col items-center p-4 bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 rounded-2xl text-center group hover:bg-indigo-100/70 transition-colors cursor-default">
-                <span className="text-4xl mb-2 group-hover:scale-110 transition-transform">📚</span>
-                <span className="text-xs font-bold text-indigo-800 dark:text-indigo-300">Publication Leader</span>
-              </div>
+              {badges.length > 0 ? (
+                badges.map((b) => (
+                  <div key={b.id} className="flex flex-col items-center p-4 bg-yellow-50/70 dark:bg-yellow-950/30 border border-yellow-100 dark:border-yellow-900/40 rounded-2xl text-center group hover:bg-yellow-100/70 transition-colors cursor-default">
+                    <span className="text-4xl mb-2 group-hover:scale-110 transition-transform">{b.icon}</span>
+                    <span className="text-xs font-bold text-yellow-800 dark:text-yellow-300">{b.title}</span>
+                    <span className="text-[10px] text-gray-500 mt-1">{b.count} in Database</span>
+                  </div>
+                ))
+              ) : (
+                <div className="col-span-3 py-6 text-center text-gray-400 text-sm">
+                  <span className="block text-2xl mb-1">🎯</span>
+                  No badges unlocked yet. Add your publications, patents, or grants in <a href="/data-entry" className="text-indigo-600 font-bold underline">Data Entry</a> to earn badges!
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -351,114 +432,111 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* Student Feedback System */}
+      {/* Real Student Feedback System from PostgreSQL */}
       {isFaculty && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-800 p-6">
           <div className="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center">
               <MessageSquareText className="mr-2 text-indigo-500" size={24} /> Student Feedback & Ratings
             </h3>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-lg">
-                <span className="text-lg font-bold text-indigo-700 dark:text-indigo-400">4.8</span>
-                <span className="text-sm text-indigo-500 font-medium">/ 5.0</span>
+            {feedbackData.total_count > 0 ? (
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-lg">
+                  <span className="text-lg font-bold text-indigo-700 dark:text-indigo-400">{feedbackData.average_rating}</span>
+                  <span className="text-sm text-indigo-500 font-medium">/ 5.0</span>
+                </div>
+                <span className="text-xs text-gray-400">({feedbackData.total_count} in database)</span>
               </div>
-            </div>
+            ) : (
+              <span className="text-xs bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400 px-3 py-1 rounded-full font-medium">
+                No feedback recorded yet
+              </span>
+            )}
           </div>
-          
-          <div className="mb-6 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-xl p-4 border border-emerald-100 dark:border-emerald-800/30 flex gap-4">
-            <div className="h-10 w-10 bg-emerald-100 dark:bg-emerald-800/50 rounded-full flex items-center justify-center flex-shrink-0 text-emerald-600 dark:text-emerald-400">
-              <Brain size={20} />
-            </div>
-            <div>
-              <h4 className="font-bold text-gray-900 dark:text-emerald-100 text-sm mb-1">AI Sentiment Analysis</h4>
-              <p className="text-sm text-gray-600 dark:text-gray-300">
-                <strong>Sentiment:</strong> 85% Positive, 10% Neutral, 5% Negative.<br/>
-                <strong>Key AI Insight:</strong> Students highly appreciate your practical examples and real-world connections. A minor suggestion is to slow down slightly when explaining complex mathematical proofs.
+
+          {feedbackData.total_count > 0 ? (
+            <>
+              <div className="mb-6 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-xl p-4 border border-emerald-100 dark:border-emerald-800/30 flex gap-4">
+                <div className="h-10 w-10 bg-emerald-100 dark:bg-emerald-800/50 rounded-full flex items-center justify-center flex-shrink-0 text-emerald-600 dark:text-emerald-400">
+                  <Brain size={20} />
+                </div>
+                <div>
+                  <h4 className="font-bold text-gray-900 dark:text-emerald-100 text-sm mb-1">Live Database Sentiment Analysis</h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    <strong>Calculated Rating:</strong> {feedbackData.average_rating} / 5.0 ({feedbackData.positive_pct}% positive feedback across {feedbackData.total_count} student responses in database).
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {feedbackData.recent.map((fb) => (
+                  <div key={fb.id} className="bg-gray-50 dark:bg-slate-800 p-4 rounded-xl border border-gray-100 dark:border-slate-700">
+                    <div className="flex text-amber-400 mb-2">
+                      {[...Array(5)].map((_, i) => (
+                        <Star key={i} size={16} fill={i < Math.round(fb.rating) ? 'currentColor' : 'none'} className={i < Math.round(fb.rating) ? 'text-amber-400' : 'text-gray-300'} />
+                      ))}
+                      <span className="ml-2 text-xs font-bold text-gray-700 dark:text-gray-300">{fb.rating}.0</span>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-300 italic">"{fb.comments}"</p>
+                    <p className="text-xs text-gray-400 mt-2 font-medium">{fb.time}</p>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="py-8 text-center text-gray-400 text-sm bg-gray-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-gray-200 dark:border-slate-700">
+              <span className="block text-3xl mb-2">💬</span>
+              <p className="font-semibold text-gray-700 dark:text-gray-300">No Student Feedback in Database Yet</p>
+              <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">
+                When students submit course evaluations through the student portal, your verified ratings and NLP sentiment will automatically compute here from PostgreSQL.
               </p>
             </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-              <div className="flex text-amber-400 mb-2">
-                <Star size={16} fill="currentColor" /><Star size={16} fill="currentColor" /><Star size={16} fill="currentColor" /><Star size={16} fill="currentColor" /><Star size={16} fill="currentColor" />
-              </div>
-              <p className="text-sm text-gray-600 italic">"Excellent teaching methodology. Explains complex AI concepts very clearly with real-world examples."</p>
-              <p className="text-xs text-gray-400 mt-2 font-medium">- 6th Sem, CSE</p>
-            </div>
-            <div className="bg-gray-50 dark:bg-slate-800 p-4 rounded-xl border border-gray-100 dark:border-slate-700">
-              <div className="flex text-amber-400 mb-2">
-                <Star size={16} fill="currentColor" /><Star size={16} fill="currentColor" /><Star size={16} fill="currentColor" /><Star size={16} fill="currentColor" /><Star size={16} fill="currentColor" />
-              </div>
-              <p className="text-sm text-gray-600 italic">"Very approachable and helpful during project guidance. Recommended!"</p>
-              <p className="text-xs text-gray-400 mt-2 font-medium">- 8th Sem, CSE</p>
-            </div>
-            <div className="bg-gray-50 dark:bg-slate-800 p-4 rounded-xl border border-gray-100 dark:border-slate-700">
-              <div className="flex text-amber-400 mb-2">
-                <Star size={16} fill="currentColor" /><Star size={16} fill="currentColor" /><Star size={16} fill="currentColor" /><Star size={16} fill="currentColor" /><Star size={16} />
-              </div>
-              <p className="text-sm text-gray-600 italic">"Great lectures, but sometimes moves a bit fast on the mathematical proofs."</p>
-              <p className="text-xs text-gray-400 mt-2 font-medium">- 6th Sem, CSE</p>
-            </div>
-          </div>
+          )}
         </div>
       )}
 
-      {/* Calendar and Deadlines Widget */}
+      {/* Real Calendar and Deadlines from PostgreSQL */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-800 p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center">
-            <CalendarDays className="mr-2 text-indigo-500" size={24} /> Academic Calendar & Deadlines
+            <CalendarDays className="mr-2 text-indigo-500" size={24} /> Institutional Compliance Deadlines
           </h3>
-          <button className="text-sm text-indigo-600 dark:text-indigo-400 font-medium hover:underline">View Full Calendar</button>
+          <span className="text-xs text-emerald-600 font-semibold bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-full border border-emerald-200 dark:border-emerald-800">
+            ● Live PostgreSQL Sync
+          </span>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800/30 p-4 rounded-xl flex items-start gap-4">
-            <div className="bg-white dark:bg-slate-800 p-2 rounded-lg text-center shadow-sm border border-rose-100 dark:border-rose-800/50 min-w-[50px]">
-              <span className="block text-xs font-bold text-rose-500 uppercase">Oct</span>
-              <span className="block text-xl font-bold text-gray-900 dark:text-white">15</span>
-            </div>
-            <div>
-              <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">NAAC Report Submission</h4>
-              <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 flex items-center gap-1"><Clock size={12}/> Due in 3 days</p>
-            </div>
+        {deadlines.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {deadlines.map((dl, idx) => {
+              const bgColors = [
+                'bg-rose-50 dark:bg-rose-900/20 border-rose-100 dark:border-rose-800/30 text-rose-600',
+                'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-100 dark:border-indigo-800/30 text-indigo-600',
+                'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-100 dark:border-emerald-800/30 text-emerald-600',
+                'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-800/30 text-amber-600'
+              ];
+              const colorStyle = bgColors[idx % bgColors.length];
+              return (
+                <div key={dl.id} className={`border p-4 rounded-xl flex items-start gap-4 ${colorStyle.split(' ')[0]} ${colorStyle.split(' ')[1]}`}>
+                  <div className="bg-white dark:bg-slate-800 p-2 rounded-lg text-center shadow-sm border min-w-[50px]">
+                    <span className="block text-xs font-bold uppercase text-indigo-600 dark:text-indigo-400">{dl.month}</span>
+                    <span className="block text-xl font-bold text-gray-900 dark:text-white">{dl.day}</span>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{dl.title}</h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1">
+                      <Clock size={12}/> {dl.status_text}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          
-          <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/30 p-4 rounded-xl flex items-start gap-4">
-            <div className="bg-white dark:bg-slate-800 p-2 rounded-lg text-center shadow-sm border border-indigo-100 dark:border-indigo-800/50 min-w-[50px]">
-              <span className="block text-xs font-bold text-indigo-500 uppercase">Nov</span>
-              <span className="block text-xl font-bold text-gray-900 dark:text-white">02</span>
-            </div>
-            <div>
-              <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">AICTE Grant Proposal</h4>
-              <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1 flex items-center gap-1"><Clock size={12}/> Review Phase</p>
-            </div>
+        ) : (
+          <div className="py-6 text-center text-gray-400 text-sm">
+            No institutional deadlines scheduled in database.
           </div>
-          
-          <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/30 p-4 rounded-xl flex items-start gap-4">
-            <div className="bg-white dark:bg-slate-800 p-2 rounded-lg text-center shadow-sm border border-emerald-100 dark:border-emerald-800/50 min-w-[50px]">
-              <span className="block text-xs font-bold text-emerald-500 uppercase">Nov</span>
-              <span className="block text-xl font-bold text-gray-900 dark:text-white">10</span>
-            </div>
-            <div>
-              <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">International AI FDP</h4>
-              <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1"><Clock size={12}/> 5 Days Event</p>
-            </div>
-          </div>
-          
-          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/30 p-4 rounded-xl flex items-start gap-4">
-            <div className="bg-white dark:bg-slate-800 p-2 rounded-lg text-center shadow-sm border border-amber-100 dark:border-amber-800/50 min-w-[50px]">
-              <span className="block text-xs font-bold text-amber-500 uppercase">Dec</span>
-              <span className="block text-xl font-bold text-gray-900 dark:text-white">01</span>
-            </div>
-            <div>
-              <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">End Semester Exams</h4>
-              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1"><Clock size={12}/> Starts 9:00 AM</p>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Data Table Section */}

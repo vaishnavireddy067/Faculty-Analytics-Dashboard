@@ -2,71 +2,232 @@ from django.http import HttpResponse
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, Avg
 from django.utils import timezone
 from datetime import timedelta
 
 import openpyxl
 from reportlab.pdfgen import canvas
 import io
-from faculty_data.models import Publication, Patent, Grant, Activity, Book
+from faculty_data.models import Publication, Patent, Grant, Activity, Book, StudentFeedback, AccreditationDeadline
 from core.models import User
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def dashboard_stats(request):
     user = request.user
-    is_admin = user.role in ['ADMIN', 'HOD', 'IQAC']
+    is_hod = user.role == 'HOD'
+    is_admin = user.role == 'ADMIN'
 
-    # Filter base querysets
-    pubs = Publication.objects.all() if is_admin else Publication.objects.filter(faculty=user)
-    patents = Patent.objects.all() if is_admin else Patent.objects.filter(faculty=user)
-    grants = Grant.objects.all() if is_admin else Grant.objects.filter(faculty=user)
+    # Filter base querysets with strict data isolation
+    if is_admin:
+        faculty_users = User.objects.filter(role='FACULTY')
+        pubs = Publication.objects.all()
+        patents = Patent.objects.all()
+        grants = Grant.objects.all()
+    elif is_hod:
+        faculty_users = User.objects.filter(role='FACULTY', department=user.department)
+        pubs = Publication.objects.filter(faculty__department=user.department)
+        patents = Patent.objects.filter(faculty__department=user.department)
+        grants = Grant.objects.filter(faculty__department=user.department)
+    else:
+        # Faculty sees ONLY their own records
+        faculty_users = User.objects.filter(id=user.id)
+        pubs = Publication.objects.filter(faculty=user)
+        patents = Patent.objects.filter(faculty=user)
+        grants = Grant.objects.filter(faculty=user)
 
     # 1. KPI Cards Data
     total_pubs = pubs.count()
     total_patents = patents.count()
     total_grants = grants.aggregate(total=Sum('amount'))['total'] or 0
-    total_faculty = User.objects.filter(role='FACULTY').count() if is_admin else 0
+    total_faculty = faculty_users.count() if (is_admin or is_hod) else 1
 
-    # 2. Publication Trend (Last 5 Years)
+    # 2. Dynamic Automated API Score (Calculated from real DB records)
+    research_score = min(50, total_pubs * 10 + total_patents * 15 + (10 if total_grants > 0 else 0))
+    teaching_score = min(40, 20 + total_pubs * 5) if total_pubs > 0 else (15 if (total_patents + total_grants) > 0 else 0)
+    service_score = min(20, total_patents * 5 + (5 if total_pubs > 0 else 0))
+    total_api_score = research_score + teaching_score + service_score
+
+    # 3. Dynamic Earned Badges
+    badges = []
+    if total_pubs >= 1:
+        badges.append({"id": "pub", "title": "Publication Leader", "icon": "📚", "count": total_pubs})
+    if total_patents >= 1:
+        badges.append({"id": "pat", "title": "Patent Creator", "icon": "🥇", "count": total_patents})
+    if total_grants > 0:
+        badges.append({"id": "grt", "title": "Research Champion", "icon": "🏆", "count": total_grants})
+
+    # 4. Publication Trend (Last 5 Years) from actual database
     current_year = timezone.now().year
     trend_data = []
     for year in range(current_year - 4, current_year + 1):
         count = pubs.filter(year=year).count()
         trend_data.append({"name": str(year), "publications": count})
 
-    # 3. Department Data (for Admins)
+    # 5. Department Data (for HOD / Admin)
     dept_data = []
-    if is_admin:
-        # Assuming we just group by user's department
-        departments = User.objects.exclude(department__isnull=True).exclude(department="").values('department').annotate(value=Count('id'))
-        dept_data = [{"name": d['department'], "value": d['value']} for d in departments]
+    if is_admin or is_hod:
+        dept_qs = faculty_users.exclude(department__isnull=True).exclude(department="").values('department').annotate(value=Count('id'))
+        dept_data = [{"name": d['department'], "value": d['value']} for d in dept_qs]
 
-    # 4. Recent Activities
-    # Combine recent publications, patents, etc. (Simplified: just fetch 5 recent pubs)
-    recent_pubs = pubs.order_by('-created_at')[:5]
+    # 6. Real Recent Activities
+    recent_pubs = pubs.select_related('faculty').order_by('-created_at')[:5]
     recent_activities = []
     for p in recent_pubs:
         recent_activities.append({
             "id": p.id,
-            "user": p.faculty.username,
+            "user": p.faculty.get_full_name() or p.faculty.username,
             "dept": p.faculty.department or 'Unknown',
-            "action": f"Published: {p.title[:30]}...",
+            "action": f"Published: {p.title[:35]}...",
             "time": p.created_at.strftime("%b %d, %Y")
+        })
+
+    # 7. Real Student Feedback from database
+    if is_admin or is_hod:
+        feedbacks = StudentFeedback.objects.all()
+    else:
+        feedbacks = StudentFeedback.objects.filter(faculty=user)
+    
+    feedback_count = feedbacks.count()
+    if feedback_count > 0:
+        avg_rating = round(feedbacks.aggregate(avg=Avg('rating'))['avg'] or 0.0, 1)
+        recent_feedbacks = [
+            {
+                "id": f.id,
+                "rating": f.rating,
+                "comments": f.comments or "No comments provided",
+                "time": f.created_at.strftime("%b %d, %Y")
+            }
+            for f in feedbacks.order_by('-created_at')[:3]
+        ]
+        positive_count = feedbacks.filter(rating__gte=4.0).count()
+        positive_pct = int((positive_count / feedback_count) * 100)
+    else:
+        avg_rating = None
+        recent_feedbacks = []
+        positive_pct = 0
+
+    # 8. Real Accreditation Deadlines from database
+    deadlines = AccreditationDeadline.objects.all().order_by('due_date')[:4]
+    deadlines_data = []
+    for d in deadlines:
+        days_left = (d.due_date - timezone.now().date()).days
+        deadlines_data.append({
+            "id": d.id,
+            "title": d.title,
+            "description": d.description or "",
+            "due_date": d.due_date.strftime("%b %d, %Y"),
+            "month": d.due_date.strftime("%b"),
+            "day": str(d.due_date.day),
+            "status_text": f"Due in {days_left} days" if days_left >= 0 else f"Overdue by {abs(days_left)} days"
         })
 
     return Response({
         "role": user.role,
+        "department": user.department or 'General',
         "kpis": {
             "total_faculty": total_faculty,
             "total_publications": total_pubs,
             "total_patents": total_patents,
             "total_grants_amount": total_grants
         },
+        "api_score": {
+            "research": research_score,
+            "teaching": teaching_score,
+            "service": service_score,
+            "total": total_api_score,
+            "max": 110
+        },
+        "badges": badges,
         "trend_data": trend_data,
         "dept_data": dept_data,
-        "recent_activities": recent_activities
+        "recent_activities": recent_activities,
+        "feedback": {
+            "average_rating": avg_rating,
+            "total_count": feedback_count,
+            "positive_pct": positive_pct,
+            "recent": recent_feedbacks
+        },
+        "deadlines": deadlines_data
+    })
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def populate_sample_data(request):
+    user = request.user
+    curr_yr = timezone.now().year
+    
+    Publication.objects.get_or_create(
+        faculty=user,
+        title="Edge AI and Deep Learning Optimization for Embedded IoT Systems",
+        defaults={
+            "journal_name": "IEEE Internet of Things Journal",
+            "indexing": "SCOPUS",
+            "year": curr_yr,
+            "authors": f"{user.get_full_name() or user.username}, et al."
+        }
+    )
+    Publication.objects.get_or_create(
+        faculty=user,
+        title="Transformer Architectures in Academic Analytics and Performance Modeling",
+        defaults={
+            "journal_name": "Elsevier Computers & Education",
+            "indexing": "SCI",
+            "year": curr_yr - 1,
+            "authors": f"{user.get_full_name() or user.username}, et al."
+        }
+    )
+    Patent.objects.get_or_create(
+        faculty=user,
+        title="Low-Latency Telemetry Sensor Mesh for Smart Campus Monitoring",
+        defaults={
+            "application_number": "IN202541098765",
+            "patent_status": "FILED",
+            "year": curr_yr
+        }
+    )
+    Grant.objects.get_or_create(
+        faculty=user,
+        project_title="AICTE Research Promotion Scheme for Edge Intelligence Lab",
+        defaults={
+            "funding_agency": "AICTE - RPS",
+            "amount": 1250000.0,
+            "year": curr_yr
+        }
+    )
+    StudentFeedback.objects.get_or_create(
+        faculty=user,
+        rating=5.0,
+        defaults={
+            "comments": "Inspiring teaching style! Explains complex concepts with very clear hands-on demonstrations.",
+            "sentiment_summary": "Highly Positive"
+        }
+    )
+    StudentFeedback.objects.get_or_create(
+        faculty=user,
+        rating=4.5,
+        defaults={
+            "comments": "Extremely approachable and supportive with research projects and lab sessions.",
+            "sentiment_summary": "Positive"
+        }
+    )
+    return Response({
+        "success": True,
+        "message": "Sample research records successfully populated in PostgreSQL!"
+    })
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def clear_sample_data(request):
+    user = request.user
+    Publication.objects.filter(faculty=user).delete()
+    Patent.objects.filter(faculty=user).delete()
+    Grant.objects.filter(faculty=user).delete()
+    StudentFeedback.objects.filter(faculty=user).delete()
+    return Response({
+        "success": True,
+        "message": "All your research records have been cleared from PostgreSQL."
     })
 
 @api_view(['GET'])

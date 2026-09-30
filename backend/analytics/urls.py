@@ -8,4 +8,6 @@ urlpatterns = [
     path('export/compliance/<str:report_type>/', views.export_compliance, name='export_compliance'),
     path('export/appraisal/', views.export_appraisal, name='export_appraisal'),
     path('ai-insights/', views.ai_insights, name='ai_insights'),
+    path('populate-starter-data/', views.populate_sample_data, name='populate_sample_data'),
+    path('clear-starter-data/', views.clear_sample_data, name='clear_sample_data'),
 ]
