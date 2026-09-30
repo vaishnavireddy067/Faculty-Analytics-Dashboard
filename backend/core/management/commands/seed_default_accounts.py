@@ -31,28 +31,6 @@ class Command(BaseCommand):
                 'is_staff': False,
                 'is_superuser': False,
             },
-            {
-                'email': 'anuguvaishnavireddy0@gmail.com',
-                'username': 'vaishnavi0',
-                'password': 'Password@123',
-                'role': 'FACULTY',
-                'first_name': 'Vaishnavi',
-                'last_name': 'Reddy',
-                'department': 'Computer Science & Engineering',
-                'is_staff': False,
-                'is_superuser': False,
-            },
-            {
-                'email': 'anuguvaishnavireddy74@gmail.com',
-                'username': 'anuguvaishnavireddy74',
-                'password': 'Password@123',
-                'role': 'FACULTY',
-                'first_name': 'Vaishnavi',
-                'last_name': 'Reddy',
-                'department': 'AI & Data Science',
-                'is_staff': False,
-                'is_superuser': False,
-            },
         ]
 
         for acc in accounts:
