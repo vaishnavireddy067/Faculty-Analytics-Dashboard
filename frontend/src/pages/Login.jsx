@@ -897,77 +897,29 @@ const Login = () => {
                 </button>
               </form>
 
-              <div className="text-center pt-2">
+              <div className="pt-4 border-t border-gray-100 text-center space-y-2">
                 <p className="text-sm text-gray-600">
-                  New faculty member?{' '}
-                  <button 
-                    type="button"
-                    onClick={() => { 
-                      if (username && username.includes('@')) {
-                        setEmail(username);
-                      }
-                      setView('register'); 
-                      setError(''); 
-                      setSuccessMsg(''); 
-                      setPassword(''); 
-                    }}
-                    className="font-semibold text-indigo-600 hover:text-indigo-700 bg-transparent border-none p-0 cursor-pointer"
-                  >
-                    Create Account
-                  </button>
+                  Don't have an account yet?
                 </p>
+                <button 
+                  type="button"
+                  id="create-account-btn"
+                  onClick={() => { 
+                    if (username && username.includes('@')) {
+                      setEmail(username);
+                    }
+                    setView('register'); 
+                    setError(''); 
+                    setSuccessMsg(''); 
+                    setPassword(''); 
+                  }}
+                  className="w-full py-2.5 px-4 rounded-xl border-2 border-dashed border-indigo-200 text-indigo-600 hover:bg-indigo-50/60 font-semibold text-sm transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <User size={16} /> Create Account with Email OTP
+                </button>
               </div>
 
-              {/* Quick Fill Credentials Helper */}
-              <div className="mt-4 p-3.5 bg-indigo-50/70 border border-indigo-100 rounded-2xl space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-indigo-900 uppercase tracking-wider flex items-center gap-1">
-                    <Sparkles size={13} className="text-indigo-600" /> Quick-Fill Verified Accounts
-                  </span>
-                  <span className="text-[10px] text-gray-400">1-Click Sign In</span>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUsername('anuguvaishnavireddy0@gmail.com');
-                      setPassword('Password@123');
-                      setSelectedRole('FACULTY');
-                      setError('');
-                    }}
-                    className="p-2 text-left bg-white rounded-xl border border-gray-200 hover:border-indigo-400 transition-all text-xs cursor-pointer shadow-2xs"
-                  >
-                    <span className="font-bold text-gray-900 block truncate">👨‍🏫 Faculty</span>
-                    <span className="text-[10px] text-gray-500 block truncate">Vaishnavi</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUsername('hod@example.com');
-                      setPassword('hod123');
-                      setSelectedRole('HOD');
-                      setError('');
-                    }}
-                    className="p-2 text-left bg-white rounded-xl border border-purple-200 hover:border-purple-400 transition-all text-xs cursor-pointer shadow-2xs"
-                  >
-                    <span className="font-bold text-purple-700 block truncate">🏛️ HOD</span>
-                    <span className="text-[10px] text-gray-500 block truncate">hod123</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUsername('admin@example.com');
-                      setPassword('admin123');
-                      setSelectedRole('ADMIN');
-                      setError('');
-                    }}
-                    className="p-2 text-left bg-white rounded-xl border border-gray-200 hover:border-indigo-400 transition-all text-xs cursor-pointer shadow-2xs"
-                  >
-                    <span className="font-bold text-gray-900 block truncate">🛡️ Admin</span>
-                    <span className="text-[10px] text-gray-500 block truncate">admin123</span>
-                  </button>
-                </div>
-              </div>
+
             </>
           ) : view === 'register' ? (
             <>
