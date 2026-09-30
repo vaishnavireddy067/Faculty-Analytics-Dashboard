@@ -525,7 +525,7 @@ const Login = () => {
         }
         setSuccessMsg(data.message || `Verification OTP sent to ${regEmail}.`);
         setView('otp-verify');
-        setOtpTimer(60);
+        setOtpTimer(15);
         setOtp('');
       } else if (response) {
         const errData = await response.json().catch(() => ({}));
@@ -567,7 +567,7 @@ const Login = () => {
           setDebugOtp(data.debug_otp);
         }
         setSuccessMsg(`A fresh verification code was sent to ${regEmail}.`);
-        setOtpTimer(60);
+        setOtpTimer(15);
       } else {
         const errData = await response?.json().catch(() => ({}));
         setError(errData?.error || 'Failed to resend code. Please try again.');
@@ -673,12 +673,12 @@ const Login = () => {
                 id: data.user?.id || Date.now(),
                 username: regUsername,
                 email: regEmail,
-                first_name: regFirstName,
-                last_name: regLastName,
-                department: regDept,
+                first_name: data.user?.first_name || parsedFirstName,
+                last_name: data.user?.last_name || parsedLastName,
+                department: data.user?.department || regDept,
                 designation: regRole === 'HOD' ? 'Head of Department (HOD)' : 'Faculty / Researcher',
                 role: regRole,
-                phone_number: regPhone,
+                phone_number: data.user?.phone_number || '',
                 total_citations: 0,
                 h_index: 0,
                 i10_index: 0,
