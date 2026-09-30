@@ -35,17 +35,20 @@ const Login = () => {
   const [resetEmail, setResetEmail] = useState('');
   const [resetNewPass, setResetNewPass] = useState('');
 
-  // Clear all inputs on view or role change to guarantee clean, unpopulated fields
+  // Clear inputs selectively based on view to avoid wiping email/pass on OTP verify
   useEffect(() => {
-    setUsername('');
-    setPassword('');
-    setFullName('');
-    setEmail('');
-    setEmployeeId('');
-    setDepartment('');
-    setConfirmPassword('');
-    setOtp('');
-    setError('');
+    if (view === 'login') {
+      setUsername('');
+      setPassword('');
+      setError('');
+    } else if (view === 'register') {
+      setFullName('');
+      setEmail('');
+      setDepartment('');
+      setPassword('');
+      setConfirmPassword('');
+      setError('');
+    }
   }, [view, selectedRole]);
 
   // Countdown timer effect for OTP resend
@@ -816,9 +819,25 @@ const Login = () => {
           )}
 
           {error && (
-            <div className="bg-rose-50 text-rose-800 p-3.5 rounded-xl text-sm font-medium flex items-center gap-2.5 border border-rose-200">
-              <AlertCircle size={18} className="text-rose-600 flex-shrink-0" />
-              <span>{error}</span>
+            <div className="bg-rose-50 text-rose-800 p-3.5 rounded-xl text-sm font-medium flex flex-col gap-2 border border-rose-200">
+              <div className="flex items-center gap-2.5">
+                <AlertCircle size={18} className="text-rose-600 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+              {error.toLowerCase().includes('already exists') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const savedEmail = email || sessionStorage.getItem('fad_reg_email') || '';
+                    if (savedEmail) setUsername(savedEmail);
+                    setView('login');
+                    setError('');
+                  }}
+                  className="self-start text-xs font-bold text-indigo-700 hover:text-indigo-900 underline mt-1 cursor-pointer bg-transparent border-none p-0"
+                >
+                  Click here to Sign In with this account ➔
+                </button>
+              )}
             </div>
           )}
 
@@ -1127,7 +1146,7 @@ const Login = () => {
                   </button>
                 </div>
                 <div className="bg-white px-3 py-2 rounded-xl border border-indigo-100 font-mono text-xs text-indigo-950 font-bold truncate">
-                  {email}
+                  {email || sessionStorage.getItem('fad_reg_email') || 'Official Email'}
                 </div>
               </div>
 
