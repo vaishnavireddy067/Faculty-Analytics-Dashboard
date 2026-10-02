@@ -258,4 +258,6 @@ DEFAULT_FROM_EMAIL = os.environ.get(
     'DEFAULT_FROM_EMAIL', 
     f'Faculty Analytics Portal <{EMAIL_HOST_USER}>'
 )
+# 5-second socket timeout to prevent SMTP connections from hanging indefinitely
+EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', 5))
 

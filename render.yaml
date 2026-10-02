@@ -35,5 +35,7 @@ services:
         value: "nswxqngdddphnsgj"
       - key: DEFAULT_FROM_EMAIL
         value: "Faculty Analytics Portal <anuguvaishnavireddy6@gmail.com>"
+      - key: EMAIL_TIMEOUT
+        value: "5"
       - key: PYTHON_VERSION
         value: "3.12.0"

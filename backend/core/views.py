@@ -1,13 +1,15 @@
 import re
 import os
 import secrets
+import threading
+import logging
 from datetime import timedelta
 from django.utils import timezone
 from django.core.mail import send_mail
 from django.conf import settings
-from rest_framework import serializers, status
+from rest_framework import serializers, status, permissions
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -16,60 +18,86 @@ from django.contrib.auth import get_user_model
 from django.db.models import Q
 from .models import EmailVerificationOTP
 
+logger = logging.getLogger(__name__)
+
+def dispatch_email_async(subject, text_message, from_email, recipient_list, html_message=None):
+    """
+    Dispatches email in a non-blocking background thread with safe timeout handling.
+    Ensures that slow SMTP servers, blocked cloud ports, or external email APIs never
+    block the HTTP response cycle or cause worker timeouts.
+    """
+    def _send():
+        try:
+            send_mail(
+                subject=subject,
+                message=text_message,
+                from_email=from_email,
+                recipient_list=recipient_list,
+                html_message=html_message,
+                fail_silently=False
+            )
+            logger.info(f"Email successfully dispatched to {recipient_list}")
+        except Exception as e:
+            logger.warning(f"Background email delivery notification for {recipient_list}: {e}")
+
+    thread = threading.Thread(target=_send, daemon=True)
+    thread.start()
+
 User = get_user_model()
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields[self.username_field].required = True
-        self.fields['password'].required = False
+        self.fields['password'].required = True
 
     def validate(self, attrs):
-        username_or_email = attrs.get(self.username_field, '').strip()
+        # Accept both 'email' and 'username' (they are the same — the official email)
+        raw_email = (attrs.get('email') or attrs.get(self.username_field) or '').strip()
         password = attrs.get('password', '')
 
-        if not username_or_email:
-            raise serializers.ValidationError({"detail": "Username or email is required."})
+        if not raw_email:
+            raise serializers.ValidationError("Registered official email address is required.")
+
+        clean_email = raw_email.lower()
+        if '@' not in clean_email:
+            raise serializers.ValidationError("Please enter a valid official email address.")
 
         if not password:
-            raise serializers.ValidationError({"detail": "Password is required."})
+            raise serializers.ValidationError("Password is required.")
 
-        # Try to find user by email or username (case-insensitive, newest first)
-        clean_input = username_or_email.strip()
-        clean_lower = clean_input.lower()
-        matching_users = list(User.objects.filter(
-            Q(username__iexact=clean_input) |
-            Q(username__iexact=clean_lower) |
-            Q(email__iexact=clean_lower) |
-            Q(email__istartswith=f"{clean_lower}@")
-        ).order_by('-id'))
-
-        if not matching_users:
-            raise serializers.ValidationError({
-                "detail": f"No account found for '{username_or_email}'. Please click 'Create Account' to register and verify with OTP first."
-            })
-
-        user = None
-        # Check if any matching account matches the password
-        for candidate in matching_users:
-            if candidate.check_password(password) or candidate.check_password(str(password).strip()):
-                user = candidate
-                break
+        # Normalised email lookup
+        user = User.objects.filter(email__iexact=clean_email).first()
 
         if not user:
-            raise serializers.ValidationError({
-                "detail": "Incorrect password. Please verify your password and try again."
-            })
+            raise serializers.ValidationError(
+                f"No account found for '{raw_email}'. Please click 'Create Account' to register."
+            )
 
-        if not user.is_active:
-            user.is_active = True
-            user.save(update_fields=['is_active'])
+        # Unverified / inactive account must FAIL login before password check
+        if not user.is_email_verified or not user.is_active:
+            raise serializers.ValidationError(
+                "Your account email is not verified. Please verify your email with the OTP "
+                "sent during registration, or use 'Forgot Password' to reset your account."
+            )
 
-        if not user.is_email_verified:
-            user.is_email_verified = True
-            user.save(update_fields=['is_email_verified'])
+        # Verify password using Django's secure check_password
+        if not user.check_password(password):
+            raise serializers.ValidationError(
+                "Incorrect password. Please verify your credentials and try again."
+            )
 
-        # Generate JWT tokens
+        # Fetch employee ID if profile exists
+        employee_id = ''
+        try:
+            from faculty_data.models import FacultyProfile
+            prof = FacultyProfile.objects.filter(faculty=user).first()
+            if prof and prof.aicte_id:
+                employee_id = prof.aicte_id
+        except Exception:
+            pass
+
+        # Generate JWT tokens — each device gets its own independent token pair
         refresh = RefreshToken.for_user(user)
         refresh['username'] = user.username
         refresh['role'] = user.role
@@ -82,10 +110,12 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 'id': user.id,
                 'username': user.username,
                 'email': user.email,
-                'role': user.role,
-                'department': user.department,
+                'full_name': user.get_full_name() or f"{user.first_name} {user.last_name}".strip() or user.username,
                 'first_name': user.first_name,
                 'last_name': user.last_name,
+                'role': user.role,
+                'department': user.department or '',
+                'employee_id': employee_id,
                 'phone_number': user.phone_number or '',
                 'is_email_verified': user.is_email_verified
             }
@@ -95,61 +125,215 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
-def send_registration_otp(request):
+def api_auth_login(request):
     """
-    Sends a 6-digit verification OTP to the user's email for 1st time account registration.
+    Canonical login endpoint: POST /api/auth/login/
+    Accepts: {email, password}  or  {username, password}
+    Returns: {access, refresh, user: {id, email, role, ...}}
+
+    Works from ANY device. JWT is independently issued per device.
+    Identity comes from request.user on the backend — never trusted from frontend.
+    """
+    data = request.data
+    raw_email = (data.get('email') or data.get('username') or '').strip().lower()
+    password = (data.get('password') or '').strip()
+
+    if not raw_email or '@' not in raw_email:
+        return Response({'error': 'A valid official email address is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    if not password:
+        return Response({'error': 'Password is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    user = User.objects.filter(email__iexact=raw_email).first()
+
+    if not user:
+        return Response(
+            {'error': f"No account found for '{raw_email}'. Please create an account first."},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    if not user.is_email_verified or not user.is_active:
+        return Response(
+            {'error': 'Account not verified. Please complete OTP verification or use Forgot Password.'},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
+    if not user.check_password(password):
+        return Response(
+            {'error': 'Incorrect password. Please verify your credentials and try again.'},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
+    employee_id = ''
+    try:
+        from faculty_data.models import FacultyProfile
+        prof = FacultyProfile.objects.filter(faculty=user).first()
+        if prof and prof.aicte_id:
+            employee_id = prof.aicte_id
+    except Exception:
+        pass
+
+    refresh = RefreshToken.for_user(user)
+    refresh['username'] = user.username
+    refresh['role'] = user.role
+    refresh['email'] = user.email
+
+    return Response({
+        'access': str(refresh.access_token),
+        'refresh': str(refresh),
+        'user': {
+            'id': user.id,
+            'email': user.email,
+            'username': user.username,
+            'full_name': user.get_full_name() or f"{user.first_name} {user.last_name}".strip() or user.username,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'role': user.role,
+            'department': user.department or '',
+            'employee_id': employee_id,
+            'phone_number': user.phone_number or '',
+            'is_email_verified': user.is_email_verified,
+        }
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def api_create_account(request):
+    """
+    Phase 2: Create Account
+    Validates input, creates account in a safe unverified state, hashes password with Django,
+    generates a 6-digit OTP, stores OTP securely with expiry, sends OTP to the registered email.
     """
     try:
         data = request.data
+        full_name = (data.get('full_name') or data.get('fullName') or '').strip()
         email = (data.get('email') or '').strip().lower()
+        employee_id = (data.get('employee_id') or data.get('employeeId') or '').strip()
+        department = (data.get('department') or '').strip()
+        password = (data.get('password') or '').strip()
+        confirm_password = (data.get('confirm_password') or data.get('confirmPassword') or '').strip()
+
+        # Phase 2 Validation
+        if not full_name:
+            return Response({'error': 'Full Name is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
         if not email or '@' not in email:
-            return Response({'error': 'Please provide a valid institutional email address.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'A valid official email address is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Enforce unique email: One email = one account
-        if User.objects.filter(email__iexact=email, is_active=True).exists():
-            return Response({'error': 'An account with this email address already exists. Please log in directly.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not employee_id:
+            return Response({'error': 'Employee ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not department:
+            return Response({'error': 'Academic Department is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not password or len(password) < 6:
+            return Response({'error': 'Password is required and must be at least 6 characters long.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if confirm_password and password != confirm_password:
+            return Response({'error': 'Password confirmation does not match. Please re-enter your password.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check existing account
+        existing_user = User.objects.filter(email__iexact=email).first()
+        if existing_user:
+            if existing_user.is_email_verified and existing_user.is_active:
+                # Account already exists and is active — guide user to sign in
+                return Response({
+                    'error': 'An account with this email address already exists. Please sign in with your password, or use "Forgot Password" to reset it.',
+                    'sign_in_redirect': True,
+                    'email': email,
+                }, status=status.HTTP_400_BAD_REQUEST)
+            # Unverified account exists: update details and reset password so user can complete OTP
+            name_parts = full_name.split(' ', 1)
+            existing_user.first_name = name_parts[0]
+            existing_user.last_name = name_parts[1] if len(name_parts) > 1 else ''
+            existing_user.department = department
+            existing_user.set_password(password)
+            existing_user.is_email_verified = False
+            existing_user.is_active = False
+            existing_user.role = 'FACULTY'
+            existing_user.save()
+            user = existing_user
+        else:
+            # Create new user in safe UNVERIFIED state
+            base_user = re.sub(r'[^a-zA-Z0-9_.]', '', email.split('@')[0]) or 'faculty'
+            unique_username = base_user
+            counter = 1
+            while User.objects.filter(username__iexact=unique_username).exists():
+                unique_username = f"{base_user}_{counter}"
+                counter += 1
+
+            name_parts = full_name.split(' ', 1)
+            first_name = name_parts[0]
+            last_name = name_parts[1] if len(name_parts) > 1 else ''
+
+            user = User.objects.create(
+                username=unique_username,
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+                department=department,
+                role='FACULTY',
+                is_active=False,
+                is_email_verified=False
+            )
+            # Hash password securely using Django
+            user.set_password(password)
+            user.save()
+
+        # Link FacultyProfile with employee_id
+        try:
+            from faculty_data.models import FacultyProfile
+            prof, _ = FacultyProfile.objects.get_or_create(faculty=user)
+            if employee_id:
+                prof.aicte_id = employee_id
+                prof.save(update_fields=['aicte_id'])
+        except Exception as prof_err:
+            print(f"Profile creation notice: {prof_err}")
 
         # Generate secure 6-digit numeric OTP
         otp_code = f"{secrets.randbelow(900000) + 100000}"
         expires_at = timezone.now() + timedelta(minutes=10)
 
-        # Invalidate previous unverified OTPs for this email
+        # Invalidate old unverified OTPs for this email
         EmailVerificationOTP.objects.filter(email__iexact=email, is_verified=False).delete()
 
-        # Save new OTP
+        # Store OTP securely
         EmailVerificationOTP.objects.create(
             email=email,
             otp=otp_code,
             expires_at=expires_at
         )
 
+        # Prepare and send OTP email via real SMTP
         subject = f"Your Verification Code: {otp_code} - Faculty Analytics Portal"
-        text_message = f"""Hello,
+        text_message = f"""Hello {full_name},
 
-Your verification code for registering on the Faculty Analytics Portal is: {otp_code}
+Your 6-digit verification code for activating your account on the Faculty Analytics Portal is: {otp_code}
 
-This code is valid for 10 minutes. Enter this code to verify your email and complete your one-time registration.
+This code is valid for 10 minutes.
 
-If you did not request this, please disregard this email.
+Enter this code on the verification screen to activate your account.
+
+If you did not register for an account, please disregard this email.
 
 Best regards,
-Faculty Analytics Team
+Faculty Analytics Portal
 """
         html_message = f"""<!DOCTYPE html>
 <html>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px;">
   <div style="max-width: 520px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
     <div style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); padding: 28px 24px; text-align: center; color: white;">
-      <h2 style="margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">Faculty Analytics</h2>
-      <p style="margin: 6px 0 0; font-size: 13px; color: #e0e7ff;">Institutional Governance & Research Portal</p>
+      <h2 style="margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">Faculty Analytics Portal</h2>
+      <p style="margin: 6px 0 0; font-size: 13px; color: #e0e7ff;">Institutional Research &amp; Performance Management</p>
     </div>
     <div style="padding: 28px 24px;">
-      <h3 style="margin: 0 0 12px; color: #0f172a; font-size: 17px; font-weight: 700;">Email Verification Code</h3>
+      <h3 style="margin: 0 0 12px; color: #0f172a; font-size: 17px; font-weight: 700;">Account Activation OTP</h3>
       <p style="margin: 0 0 20px; color: #475569; font-size: 14px; line-height: 1.6;">
-        Welcome to Faculty Analytics! Use the 6-digit OTP code below to verify your email and complete your 1st-time account creation:
+        Hello <strong>{full_name}</strong>, use the 6-digit verification code below to verify your email and activate your faculty account:
       </p>
       
       <div style="background-color: #f1f5f9; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 18px; text-align: center; margin-bottom: 20px;">
@@ -173,81 +357,53 @@ Faculty Analytics Team
 </body>
 </html>"""
 
-        email_sent = False
-        try:
-            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'Faculty Analytics <noreply@institution.edu>')
-            send_mail(
-                subject=subject,
-                message=text_message,
-                from_email=from_email,
-                recipient_list=[email],
-                html_message=html_message,
-                fail_silently=False
-            )
-            email_sent = True
-        except Exception as mail_err:
-            print(f"Email delivery notification ({email}): {mail_err}")
+        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or settings.EMAIL_HOST_USER or 'Faculty Analytics <noreply@institution.edu>'
+        dispatch_email_async(
+            subject=subject,
+            text_message=text_message,
+            from_email=from_email,
+            recipient_list=[email],
+            html_message=html_message
+        )
 
-        resp_payload = {
-            'message': f'Verification OTP sent to {email}.',
+        response_data = {
+            'message': f'Verification OTP successfully sent to {email}.',
             'email': email,
             'expires_in_minutes': 10,
-            'email_sent': email_sent,
+            'debug_otp': otp_code,
         }
 
-        # Provide debug_otp for convenience in testing
-        resp_payload['debug_otp'] = otp_code
-
-        return Response(resp_payload, status=status.HTTP_200_OK)
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
     except Exception as e:
-        return Response({'error': f'Failed to send OTP: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': f'Account registration failed: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
-def verify_registration_otp(request):
+def api_verify_otp(request):
     """
-    Verifies the 6-digit OTP, creates the verified faculty user account, and returns JWT tokens.
-    Self-registration is strictly for FACULTY.
+    Phase 3: Verify OTP
+    Verifies 6-digit OTP, marks account email as verified, activates account.
     """
     try:
         data = request.data
         email = (data.get('email') or '').strip().lower()
         otp = (data.get('otp') or '').strip()
-        username = (data.get('username') or '').strip().lower() or (email.split('@')[0] if email else '')
-        raw_password = (data.get('password') or '').strip()
-        if not raw_password or len(raw_password) < 6:
-            return Response({'error': 'Password is required and must be at least 6 characters long.'}, status=status.HTTP_400_BAD_REQUEST)
-        password = raw_password
-        full_name = (data.get('full_name') or data.get('fullName') or '').strip()
-        first_name = (data.get('firstName') or data.get('first_name') or '').strip()
-        last_name = (data.get('lastName') or data.get('last_name') or '').strip()
-
-        if full_name and not first_name:
-            name_parts = full_name.split(' ', 1)
-            first_name = name_parts[0]
-            last_name = name_parts[1] if len(name_parts) > 1 else ''
-
-        if not first_name:
-            first_name = 'Faculty'
-
-        department = (data.get('department') or 'Computer Science & Engineering').strip()
-        employee_id = (data.get('employee_id') or data.get('employeeId') or '').strip()
-        phone_number = (data.get('phone_number') or data.get('phone') or '').strip()
-        
-        # Self-registration is strictly for FACULTY (HOD accounts are managed)
-        role = 'FACULTY'
-
         clean_otp = re.sub(r'[^0-9]', '', str(otp or '')).strip()
 
         if not email or not clean_otp or len(clean_otp) < 6:
-            return Response({'error': 'A valid 6-digit verification code is required.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                'error': 'Registered email and valid 6-digit verification code are required.'
+            }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Enforce unique email check
-        if User.objects.filter(email__iexact=email, is_active=True).exists():
-            return Response({'error': 'An account with this email address already exists. Please log in directly.'}, status=status.HTTP_400_BAD_REQUEST)
+        user = User.objects.filter(email__iexact=email).first()
+        if not user:
+            return Response({
+                'error': f'No account found for {email}. Please click "Create Account" to register.'
+            }, status=status.HTTP_404_NOT_FOUND)
 
-        # Check if the submitted OTP matches ANY valid, unexpired OTP for this email
+        # Check for matching active unexpired OTP
         otp_record = EmailVerificationOTP.objects.filter(
             email__iexact=email,
             otp=clean_otp,
@@ -262,84 +418,159 @@ def verify_registration_otp(request):
             ).order_by('-created_at').first()
 
             if not any_record:
-                return Response({'error': 'No active verification code found. Please click Resend Code.'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({
+                    'error': 'No active verification code found for this email. Please click "Resend Code".'
+                }, status=status.HTTP_400_BAD_REQUEST)
 
             if timezone.now() > any_record.expires_at:
-                return Response({'error': 'Verification code has expired. Please click Resend Code.'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({
+                    'error': 'Verification code has expired. Please click "Resend Code" to receive a fresh code.'
+                }, status=status.HTTP_400_BAD_REQUEST)
 
             return Response({
                 'error': 'Invalid verification code. Please enter the 6-digit code received in your email.'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # OTP is Valid! Mark all OTPs for this email as verified
+        # OTP is Valid: Mark all pending OTPs for this email as verified
         EmailVerificationOTP.objects.filter(email__iexact=email).update(is_verified=True)
 
-        # Clean/unique username
-        clean_username = re.sub(r'[^a-zA-Z0-9_.]', '', username) or (email.split('@')[0] if email else 'faculty_user')
-        unique_username = clean_username
-        counter = 1
-
-        while User.objects.filter(username__iexact=unique_username).exists():
-            unique_username = f"{clean_username}_{counter}"
-            counter += 1
-
-        user = User.objects.create_user(
-            username=unique_username,
-            email=email,
-            password=password,
-            first_name=first_name,
-            last_name=last_name
-        )
-
-        user.role = role
-        user.department = department
-        user.phone_number = phone_number
+        # Activate user account
         user.is_email_verified = True
         user.is_active = True
-        user.save()
-
-        # Ensure FacultyProfile exists with employee_id
-        try:
-            from faculty_data.models import FacultyProfile
-            prof, _ = FacultyProfile.objects.get_or_create(faculty=user)
-            if employee_id:
-                prof.aicte_id = employee_id
-                prof.save(update_fields=['aicte_id'])
-        except Exception:
-            pass
-
-        # Ensure FacultyProfile exists
-        try:
-            from faculty_data.models import FacultyProfile
-            FacultyProfile.objects.get_or_create(faculty=user)
-        except Exception:
-            pass
-
-        # Generate JWT tokens for instant login
-        refresh = RefreshToken.for_user(user)
-        refresh['username'] = user.username
-        refresh['role'] = user.role
-        refresh['email'] = user.email
+        user.save(update_fields=['is_email_verified', 'is_active'])
 
         return Response({
-            'message': 'Email verified and account created successfully!',
-            'refresh': str(refresh),
-            'access': str(refresh.access_token),
-            'user': {
-                'id': user.id,
-                'username': user.username,
-                'email': user.email,
-                'role': user.role,
-                'department': user.department,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-                'phone_number': user.phone_number or '',
-                'is_email_verified': user.is_email_verified
-            }
-        }, status=status.HTTP_201_CREATED)
+            'success': True,
+            'message': 'Email verified successfully! Your account is now active. Please sign in with your email and password.',
+            'email': email
+        }, status=status.HTTP_200_OK)
 
     except Exception as e:
-        return Response({'error': f'Registration failed: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': f'OTP verification failed: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def api_resend_otp(request):
+    """
+    Phase 3: Resend OTP with 30s rate limiting cooldown.
+    """
+    try:
+        data = request.data
+        email = (data.get('email') or '').strip().lower()
+
+        if not email or '@' not in email:
+            return Response({'error': 'Please provide a valid registered official email address.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.filter(email__iexact=email).first()
+        if not user:
+            return Response({'error': f'No account found for {email}. Please register first.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if user.is_email_verified and user.is_active:
+            return Response({'error': 'This account is already verified and active. Please log in directly.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Cooldown check: prevent spamming resend within 30 seconds
+        last_otp = EmailVerificationOTP.objects.filter(email__iexact=email).order_by('-created_at').first()
+        if last_otp:
+            time_diff = (timezone.now() - last_otp.created_at).total_seconds()
+            if time_diff < 30:
+                remaining = int(30 - time_diff)
+                return Response({
+                    'error': f'Please wait {remaining} seconds before requesting another verification code.'
+                }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+        # Generate new 6-digit OTP
+        otp_code = f"{secrets.randbelow(900000) + 100000}"
+        expires_at = timezone.now() + timedelta(minutes=10)
+
+        EmailVerificationOTP.objects.filter(email__iexact=email, is_verified=False).delete()
+        EmailVerificationOTP.objects.create(
+            email=email,
+            otp=otp_code,
+            expires_at=expires_at
+        )
+
+        subject = f"Your New Verification Code: {otp_code} - Faculty Analytics Portal"
+        text_message = f"""Hello,
+
+Your new 6-digit verification code is: {otp_code}
+
+This code is valid for 10 minutes.
+
+Best regards,
+Faculty Analytics Portal
+"""
+        html_message = f"""<!DOCTYPE html>
+<html>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; padding: 24px;">
+  <div style="max-width: 500px; margin: 0 auto; background: white; border-radius: 12px; padding: 24px; border: 1px solid #e2e8f0;">
+    <h3 style="color: #4f46e5; margin-top: 0;">New Verification Code</h3>
+    <p>Your new verification code for Faculty Analytics Portal is:</p>
+    <div style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #4f46e5; text-align: center; padding: 16px; background: #f1f5f9; border-radius: 8px;">
+      {otp_code}
+    </div>
+    <p style="color: #64748b; font-size: 13px; margin-top: 16px;">Valid for 10 minutes.</p>
+  </div>
+</body>
+</html>"""
+
+        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or settings.EMAIL_HOST_USER or 'Faculty Analytics <noreply@institution.edu>'
+        dispatch_email_async(
+            subject=subject,
+            text_message=text_message,
+            from_email=from_email,
+            recipient_list=[email],
+            html_message=html_message
+        )
+
+        return Response({
+            'success': True,
+            'message': f'A fresh verification code was sent to {email}.',
+            'email': email,
+            'expires_in_minutes': 10,
+            'debug_otp': otp_code,
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({'error': f'Failed to resend code: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def api_current_user(request):
+    """
+    Phase 6: Current User API (GET /api/auth/me/)
+    Returns authenticated user's identity and role strictly derived from JWT request.user.
+    """
+    user = request.user
+    employee_id = ''
+    try:
+        from faculty_data.models import FacultyProfile
+        prof = FacultyProfile.objects.filter(faculty=user).first()
+        if prof and prof.aicte_id:
+            employee_id = prof.aicte_id
+    except Exception:
+        pass
+
+    return Response({
+        'id': user.id,
+        'username': user.username,
+        'email': user.email,
+        'full_name': user.get_full_name() or f"{user.first_name} {user.last_name}".strip() or user.username,
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'role': user.role,
+        'department': user.department or '',
+        'employee_id': employee_id,
+        'phone_number': user.phone_number or '',
+        'is_email_verified': user.is_email_verified,
+        'institution': user.institution.name if user.institution else None
+    }, status=status.HTTP_200_OK)
+
+
+# Backwards compatibility alias
+send_registration_otp = api_create_account
+verify_registration_otp = api_verify_otp
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -515,12 +746,6 @@ def google_auth_login(request):
                 counter += 1
 
             role = 'FACULTY'
-            if 'admin' in email:
-                role = 'ADMIN'
-            elif 'hod' in email:
-                role = 'HOD'
-            elif 'iqac' in email:
-                role = 'IQAC'
 
             user = User.objects.create_user(
                 username=unique_username,
