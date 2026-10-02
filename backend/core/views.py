@@ -66,8 +66,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         if not password:
             raise serializers.ValidationError("Password is required.")
 
-        # Normalised email lookup
-        user = User.objects.filter(email__iexact=clean_email).first()
+        # Normalised email or username lookup
+        user = User.objects.filter(Q(email__iexact=clean_email) | Q(username__iexact=clean_email)).first()
 
         if not user:
             raise serializers.ValidationError(
@@ -146,7 +146,7 @@ def api_auth_login(request):
     if not password:
         return Response({'error': 'Password is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    user = User.objects.filter(email__iexact=raw_email).first()
+    user = User.objects.filter(Q(email__iexact=raw_email) | Q(username__iexact=raw_email)).first()
 
     if not user:
         return Response(
@@ -216,18 +216,18 @@ def api_create_account(request):
         password = (data.get('password') or '').strip()
         confirm_password = (data.get('confirm_password') or data.get('confirmPassword') or '').strip()
 
-        # Phase 2 Validation
-        if not full_name:
-            return Response({'error': 'Full Name is required.'}, status=status.HTTP_400_BAD_REQUEST)
-
+        # Smart validation and fallbacks
         if not email or '@' not in email:
             return Response({'error': 'A valid official email address is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        if not full_name:
+            full_name = email.split('@')[0].replace('.', ' ').replace('_', ' ').title()
+
         if not employee_id:
-            return Response({'error': 'Employee ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+            employee_id = f"EMP-{secrets.randbelow(90000) + 10000}"
 
         if not department:
-            return Response({'error': 'Academic Department is required.'}, status=status.HTTP_400_BAD_REQUEST)
+            department = 'Computer Science & Engineering'
 
         if not password or len(password) < 6:
             return Response({'error': 'Password is required and must be at least 6 characters long.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -238,14 +238,7 @@ def api_create_account(request):
         # Check existing account
         existing_user = User.objects.filter(email__iexact=email).first()
         if existing_user:
-            if existing_user.is_email_verified and existing_user.is_active:
-                # Account already exists and is active — guide user to sign in
-                return Response({
-                    'error': 'An account with this email address already exists. Please sign in with your password, or use "Forgot Password" to reset it.',
-                    'sign_in_redirect': True,
-                    'email': email,
-                }, status=status.HTTP_400_BAD_REQUEST)
-            # Unverified account exists: update details and reset password so user can complete OTP
+            # Update user details and reset password so user can complete OTP verification
             name_parts = full_name.split(' ', 1)
             existing_user.first_name = name_parts[0]
             existing_user.last_name = name_parts[1] if len(name_parts) > 1 else ''
@@ -253,7 +246,6 @@ def api_create_account(request):
             existing_user.set_password(password)
             existing_user.is_email_verified = False
             existing_user.is_active = False
-            existing_user.role = 'FACULTY'
             existing_user.save()
             user = existing_user
         else:
@@ -438,10 +430,28 @@ def api_verify_otp(request):
         user.is_active = True
         user.save(update_fields=['is_email_verified', 'is_active'])
 
+        refresh = RefreshToken.for_user(user)
+        refresh['username'] = user.username
+        refresh['role'] = user.role
+        refresh['email'] = user.email
+
         return Response({
             'success': True,
             'message': 'Email verified successfully! Your account is now active. Please sign in with your email and password.',
-            'email': email
+            'email': email,
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+            'user': {
+                'id': user.id,
+                'email': user.email,
+                'username': user.username,
+                'full_name': user.get_full_name() or f"{user.first_name} {user.last_name}".strip() or user.username,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'role': user.role,
+                'department': user.department or '',
+                'is_email_verified': True,
+            }
         }, status=status.HTTP_200_OK)
 
     except Exception as e:

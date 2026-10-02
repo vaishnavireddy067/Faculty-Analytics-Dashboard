@@ -515,7 +515,18 @@ const Login = () => {
           'Content-Type': 'application/json',
           'Bypass-Tunnel-Reminder': 'true',
         },
-        body: JSON.stringify({ email: regEmail, username: regUsername }),
+        body: JSON.stringify({
+          full_name: regFullName,
+          fullName: regFullName,
+          email: regEmail,
+          employee_id: regEmpId || `EMP-${Date.now().toString().slice(-5)}`,
+          employeeId: regEmpId || `EMP-${Date.now().toString().slice(-5)}`,
+          department: regDept,
+          password: regPass,
+          confirm_password: regConfirmPass,
+          confirmPassword: regConfirmPass,
+          username: regUsername
+        }),
       }).catch(() => null);
 
       if (response && response.ok) {
