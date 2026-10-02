@@ -53,11 +53,9 @@ def dashboard_stats(request):
         count = pubs.filter(year=year).count()
         trend_data.append({"name": str(year), "publications": count})
 
-    # 5. Department Data (for HOD / Admin)
-    dept_data = []
-    if is_admin or is_hod:
-        dept_qs = faculty_users.exclude(department__isnull=True).exclude(department="").values('department').annotate(value=Count('id'))
-        dept_data = [{"name": d['department'], "value": d['value']} for d in dept_qs]
+    # 5. Department Data
+    dept_qs = faculty_users.exclude(department__isnull=True).exclude(department="").values('department').annotate(value=Count('id'))
+    dept_data = [{"name": d['department'], "value": d['value']} for d in dept_qs]
 
     # 6. Real Recent Activities
     recent_pubs = pubs.select_related('faculty').order_by('-created_at')[:5]
@@ -72,10 +70,7 @@ def dashboard_stats(request):
         })
 
     # 7. Real Student Feedback from database
-    if is_admin or is_hod:
-        feedbacks = StudentFeedback.objects.all()
-    else:
-        feedbacks = StudentFeedback.objects.filter(faculty=user)
+    feedbacks = StudentFeedback.objects.all()
     
     feedback_count = feedbacks.count()
     if feedback_count > 0:
@@ -112,8 +107,8 @@ def dashboard_stats(request):
         })
 
     return Response({
-        "role": user.role,
-        "department": user.department or 'General',
+        "role": getattr(user, 'role', 'ADMIN'),
+        "department": getattr(user, 'department', 'Computer Science & Engineering') or 'General',
         "kpis": {
             "total_faculty": total_faculty,
             "total_publications": total_pubs,
