@@ -559,25 +559,27 @@ const Login = () => {
     setSuccessMsg('');
     setLoading(true);
 
-    const regEmail = (email.trim() || sessionStorage.getItem('fad_reg_email') || username.trim()).toLowerCase();
-    const regUsername = username.trim() || sessionStorage.getItem('fad_reg_username') || regEmail.split('@')[0];
+    const regEmail = (email.trim() || sessionStorage.getItem('fad_reg_email') || localStorage.getItem('fad_reg_email') || username.trim()).toLowerCase();
+
+    if (!regEmail || !regEmail.includes('@')) {
+      setError('Please provide a valid registered official email address.');
+      setLoading(false);
+      return;
+    }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/send-otp/`, {
+      const response = await fetch(`${API_BASE_URL}/auth/resend-otp/`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'Bypass-Tunnel-Reminder': 'true',
         },
-        body: JSON.stringify({ email: regEmail, username: regUsername }),
+        body: JSON.stringify({ email: regEmail }),
       }).catch(() => null);
 
       if (response && response.ok) {
         const data = await response.json().catch(() => ({}));
-        if (data.debug_otp) {
-          setDebugOtp(data.debug_otp);
-        }
-        setSuccessMsg(`A fresh verification code was sent to ${regEmail}.`);
+        setSuccessMsg(`A fresh verification code was sent to ${regEmail}. Please check your inbox and spam folder.`);
         setOtpTimer(15);
       } else {
         const errData = await response?.json().catch(() => ({}));

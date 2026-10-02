@@ -37,8 +37,10 @@ def dispatch_email_async(subject, text_message, from_email, recipient_list, html
                 fail_silently=False
             )
             logger.info(f"Email successfully dispatched to {recipient_list}")
+            print(f"[EMAIL DISPATCH] Successfully dispatched email to {recipient_list}")
         except Exception as e:
             logger.warning(f"Background email delivery notification for {recipient_list}: {e}")
+            print(f"[EMAIL DISPATCH WARNING] Delivery issue for {recipient_list}: {e}")
 
     thread = threading.Thread(target=_send, daemon=True)
     thread.start()
@@ -485,15 +487,12 @@ def api_resend_otp(request):
         if not user:
             return Response({'error': f'No account found for {email}. Please register first.'}, status=status.HTTP_404_NOT_FOUND)
 
-        if user.is_email_verified and user.is_active:
-            return Response({'error': 'This account is already verified and active. Please log in directly.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Cooldown check: prevent spamming resend within 30 seconds
+        # Cooldown check: prevent spamming resend within 10 seconds
         last_otp = EmailVerificationOTP.objects.filter(email__iexact=email).order_by('-created_at').first()
         if last_otp:
             time_diff = (timezone.now() - last_otp.created_at).total_seconds()
-            if time_diff < 30:
-                remaining = int(30 - time_diff)
+            if time_diff < 10:
+                remaining = int(10 - time_diff)
                 return Response({
                     'error': f'Please wait {remaining} seconds before requesting another verification code.'
                 }, status=status.HTTP_429_TOO_MANY_REQUESTS)
