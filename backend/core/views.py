@@ -388,25 +388,35 @@ def api_verify_otp(request):
                 'error': 'Registered email and valid 6-digit verification code are required.'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        user = User.objects.filter(email__iexact=email).first()
+        user = User.objects.filter(Q(email__iexact=email) | Q(username__iexact=email)).first()
         if not user:
             return Response({
                 'error': f'No account found for {email}. Please click "Create Account" to register.'
             }, status=status.HTTP_404_NOT_FOUND)
 
-        # Check for matching active unexpired OTP
+        # Check for matching active or recently issued OTP for this email (valid within 30 minutes)
         otp_record = EmailVerificationOTP.objects.filter(
             email__iexact=email,
             otp=clean_otp,
-            is_verified=False,
-            expires_at__gte=timezone.now()
+            created_at__gte=timezone.now() - timedelta(minutes=30)
         ).first()
+
+        if not otp_record and user.email:
+            otp_record = EmailVerificationOTP.objects.filter(
+                email__iexact=user.email,
+                otp=clean_otp,
+                created_at__gte=timezone.now() - timedelta(minutes=30)
+            ).first()
 
         if not otp_record:
             any_record = EmailVerificationOTP.objects.filter(
-                email__iexact=email,
-                is_verified=False
+                email__iexact=email
             ).order_by('-created_at').first()
+
+            if not any_record and user.email:
+                any_record = EmailVerificationOTP.objects.filter(
+                    email__iexact=user.email
+                ).order_by('-created_at').first()
 
             if not any_record:
                 return Response({

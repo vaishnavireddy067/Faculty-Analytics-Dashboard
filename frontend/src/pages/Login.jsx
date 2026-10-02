@@ -499,8 +499,8 @@ const Login = () => {
     setUsername(regUsername);
     setRegisteredPassword(regPass);
 
-    // Persist securely in sessionStorage
     sessionStorage.setItem('fad_reg_email', regEmail);
+    localStorage.setItem('fad_reg_email', regEmail);
     sessionStorage.setItem('fad_reg_fullname', regFullName);
     sessionStorage.setItem('fad_reg_empid', regEmpId);
     sessionStorage.setItem('fad_reg_dept', regDept);
@@ -597,7 +597,7 @@ const Login = () => {
     setSuccessMsg('');
     setLoading(true);
 
-    const regEmail = (email.trim() || sessionStorage.getItem('fad_reg_email') || username.trim()).toLowerCase();
+    const regEmail = (email.trim() || sessionStorage.getItem('fad_reg_email') || localStorage.getItem('fad_reg_email') || username.trim()).toLowerCase();
     const regFullName = fullName.trim() || sessionStorage.getItem('fad_reg_fullname') || 'Faculty';
     const regEmpId = employeeId.trim() || sessionStorage.getItem('fad_reg_empid') || '';
     const regDept = department.trim() || sessionStorage.getItem('fad_reg_dept') || 'Computer Science & Engineering';
