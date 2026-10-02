@@ -1,21 +1,50 @@
 import axios from 'axios';
 
+/**
+ * Resolves the backend API base URL.
+ *
+ * Priority:
+ * 1. VITE_API_BASE_URL env var (always wins if set and non-localhost)
+ * 2. Local dev: if running on localhost/127.0.0.1, target Django on :8000
+ * 3. Deployed frontend on Vercel/Netlify: use Render backend URL
+ * 4. Fallback: hardcoded Render backend
+ *
+ * NOTE: Never falls back to window.location.origin — that would route API
+ * calls to the Vite static server on other devices/phones/browsers.
+ */
 export const getApiBaseUrl = () => {
-  const envUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL;
-  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
-    return envUrl.replace(/\/$/, '');
-  }
-  if (typeof window !== 'undefined' && window.location) {
-    const hostname = window.location.hostname;
-    // When running on Vercel or cloud static hosting, point to the live Render backend
-    if (hostname.includes('vercel.app') || hostname.includes('netlify.app')) {
-      return (envUrl && !envUrl.includes('localhost')) ? envUrl.replace(/\/$/, '') : 'https://faculty-analytics-backend.onrender.com';
+  const envUrl = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '').trim().replace(/\/$/, '');
+
+  // If explicitly configured and pointing to a real backend, use it
+  if (envUrl && envUrl !== 'http://localhost:8000' && envUrl !== 'http://127.0.0.1:8000') {
+    if (!envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+      return envUrl;
     }
-    // In local development, LAN, or Cloudflare tunnel, route through window.location.origin
-    return window.location.origin;
   }
-  // Production default (Render backend)
-  return 'https://faculty-analytics-backend.onrender.com';
+
+  if (typeof window !== 'undefined' && window.location) {
+    const { hostname, port } = window.location;
+
+    // Local development machine (localhost or LAN IP like 192.168.x.x, 10.x.x.x)
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://127.0.0.1:8000';
+    }
+    if (/^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(hostname)) {
+      return `http://${hostname}:8000`;
+    }
+
+    // Deployed on Vercel or Netlify → point to real Render backend
+    if (hostname.includes('vercel.app') || hostname.includes('netlify.app')) {
+      return envUrl || 'https://faculty-analytics-backend.onrender.com';
+    }
+
+    // Cloudflare tunnel or any other domain: use the env var or Render fallback
+    // NEVER use window.location.origin here — it would route to the static host
+    return envUrl || 'https://faculty-analytics-backend.onrender.com';
+  }
+
+  // SSR / non-browser fallback
+  return envUrl || 'https://faculty-analytics-backend.onrender.com';
 };
 
 export const BASE_URL = getApiBaseUrl();
@@ -31,86 +60,7 @@ export const axiosInstance = axios.create({
   timeout: 10000,
 });
 
-axiosInstance.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('access_token');
-    if (token && !config.headers['Authorization']) {
-      config.headers['Authorization'] = `Bearer ${token}`;
-    }
-    config.headers['Bypass-Tunnel-Reminder'] = 'true';
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-let isRefreshing = false;
-let failedQueue = [];
-
-const processQueue = (error, token = null) => {
-  failedQueue.forEach((prom) => {
-    if (error) {
-      prom.reject(error);
-    } else {
-      prom.resolve(token);
-    }
-  });
-  failedQueue = [];
-};
-
-axiosInstance.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      const refreshToken = localStorage.getItem('refresh_token');
-      if (!refreshToken || refreshToken.startsWith('fad_') || refreshToken.startsWith('google_')) {
-        return Promise.reject(error);
-      }
-
-      if (isRefreshing) {
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        })
-          .then((token) => {
-            originalRequest.headers['Authorization'] = `Bearer ${token}`;
-            return axiosInstance(originalRequest);
-          })
-          .catch((err) => Promise.reject(err));
-      }
-
-      originalRequest._retry = true;
-      isRefreshing = true;
-
-      try {
-        const res = await axios.post(`${API_BASE_URL}/token/refresh/`, {
-          refresh: refreshToken,
-        });
-        const newAccess = res.data.access;
-        localStorage.setItem('access_token', newAccess);
-        if (res.data.refresh) {
-          localStorage.setItem('refresh_token', res.data.refresh);
-        }
-        axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${newAccess}`;
-        processQueue(null, newAccess);
-        originalRequest.headers['Authorization'] = `Bearer ${newAccess}`;
-        return axiosInstance(originalRequest);
-      } catch (refreshErr) {
-        processQueue(refreshErr, null);
-        return Promise.reject(refreshErr);
-      } finally {
-        isRefreshing = false;
-      }
-    }
-    return Promise.reject(error);
-  }
-);
-
-const getAuthHeaders = () => {
-  const token = localStorage.getItem('access_token');
-  return {
-    'Authorization': token ? `Bearer ${token}` : '',
-  };
-};
+const getAuthHeaders = () => ({});
 
 const getInitialProfileForUser = () => {
   let userInfo = {};
@@ -621,19 +571,18 @@ const handleMockFallback = (endpoint, options = {}) => {
 };
 
 export const fetchAPI = async (endpoint, options = {}) => {
-  const token = localStorage.getItem('access_token');
   const headers = {
-    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
     ...options.headers,
   };
 
   if (!(options.body instanceof FormData)) {
     headers['Content-Type'] = 'application/json';
   }
+  headers['Bypass-Tunnel-Reminder'] = 'true';
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s for cloud cold boot
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
@@ -643,52 +592,8 @@ export const fetchAPI = async (endpoint, options = {}) => {
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      if (response.status === 401) {
-        // Attempt Token Refresh
-        const refreshToken = localStorage.getItem('refresh_token');
-        if (refreshToken && !refreshToken.startsWith('fad_')) {
-          try {
-            const refreshRes = await fetch(`${API_BASE_URL}/token/refresh/`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ refresh: refreshToken }),
-            });
-            if (refreshRes.ok) {
-              const refreshData = await refreshRes.json();
-              if (refreshData.access) {
-                localStorage.setItem('access_token', refreshData.access);
-                if (refreshData.refresh) {
-                  localStorage.setItem('refresh_token', refreshData.refresh);
-                }
-                // Retry original request with new token
-                const retryHeaders = {
-                  ...headers,
-                  'Authorization': `Bearer ${refreshData.access}`,
-                };
-                const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
-                  ...options,
-                  headers: retryHeaders,
-                });
-                if (retryResponse.ok) {
-                  return retryResponse.status === 204 ? null : await retryResponse.json();
-                }
-              }
-            }
-          } catch (refreshErr) {
-            console.warn('[FAD Auth] Token refresh failed:', refreshErr);
-          }
-        }
-        // If refresh token fails or is invalid, clear stale auth and redirect to login
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        localStorage.removeItem('current_user_email');
-        localStorage.removeItem('current_user_info');
-        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-          window.location.href = '/login';
-        }
-      }
       const errorData = await response.json().catch(() => ({}));
-      const errMsg = errorData.detail || errorData.error || (errorData.non_field_errors ? errorData.non_field_errors[0] : null) || `API error ${response.status}`;
+      const errMsg = errorData.detail || errorData.error || `API error ${response.status}`;
       throw new Error(errMsg);
     }
 
@@ -742,14 +647,6 @@ export const facultyService = {
     body: JSON.stringify({ type, count }),
   }),
   getHealth: () => fetchAPI('/health/'),
-  sendRegistrationOtp: (data) => fetchAPI('/auth/send-otp/', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }),
-  verifyRegistrationOtp: (data) => fetchAPI('/auth/verify-otp/', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }),
 };
 
 const api = {
@@ -769,6 +666,10 @@ const api = {
     const res = await fetchAPI(endpoint, { method: 'DELETE', ...options });
     return res && typeof res === 'object' && !Array.isArray(res) ? { data: res, ...res } : { data: res };
   },
+};
+
+export const getCurrentUser = async () => {
+  return await fetchAPI('/auth/me/');
 };
 
 export default api;

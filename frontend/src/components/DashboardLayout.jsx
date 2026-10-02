@@ -78,37 +78,34 @@ const DashboardLayout = () => {
           setUsername(userEmail.split('@')[0]);
         }
 
-        const res = await fetch(`${API_BASE_URL}/faculty/profile/`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
+        const res = await fetch(`${API_BASE_URL}/auth/me/`, {
+          headers: { 
+            'Content-Type': 'application/json',
+            'Bypass-Tunnel-Reminder': 'true'
+          }
         }).catch(() => null);
         
         if (res && res.ok) {
           const data = await res.json().catch(() => null);
-          if (data && data.username) {
-            setUsername(data.username);
-          }
-          if (data && data.role) {
-            setUserRole(data.role.toUpperCase());
+          if (data) {
+            if (data.full_name || data.first_name || data.username) {
+              setUsername(data.full_name || data.first_name || data.username);
+            }
+            if (data.role) {
+              const verifiedRole = data.role.toUpperCase();
+              setUserRole(verifiedRole);
+              localStorage.setItem('user_role', verifiedRole);
+            }
           }
         }
       } catch (err) {
-        console.warn('Profile load silent fallback:', err);
+        console.warn('Session verification fallback:', err);
       }
     };
     fetchProfile();
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('current_user_email');
-    localStorage.removeItem('current_user_info');
-    navigate('/login');
-  };
-
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
-
-  const isHodOrAdmin = userRole === 'HOD' || userRole === 'ADMIN' || userRole === 'SUPERADMIN';
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-slate-100 transition-colors">
@@ -144,17 +141,13 @@ const DashboardLayout = () => {
 
         <nav className="flex-1 px-4 py-4 space-y-1.5 overflow-y-auto">
           <span className="px-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
-            {isHodOrAdmin ? 'HOD Workflows' : 'Faculty Workflows'}
+            Workflows & Submissions
           </span>
           <NavItem to="/dashboard" icon={<LayoutDashboard size={18} />} label="Dashboard" onClick={toggleMobileMenu} />
-          
-          {/* Role-tailored Monthly Submission link */}
-          {isHodOrAdmin ? (
-            <NavItem to="/monthly-reports" icon={<Layers size={18} />} label="HOD Review & Tracker" onClick={toggleMobileMenu} badge="HOD" />
-          ) : (
-            <NavItem to="/monthly-submission" icon={<Send size={18} />} label="My Monthly Submission" onClick={toggleMobileMenu} badge="Active" />
-          )}
-
+          <NavItem to="/monthly-submission" icon={<Send size={18} />} label="Monthly Submission" onClick={toggleMobileMenu} badge="Active" />
+          <NavItem to="/monthly-reports" icon={<Layers size={18} />} label="Department Review & Tracker" onClick={toggleMobileMenu} badge="Consolidation" />
+          <NavItem to="/hod-consolidation" icon={<Layers size={18} />} label="Consolidation Hub" onClick={toggleMobileMenu} badge="1-Click" />
+          <NavItem to="/iqac-report" icon={<FileText size={18} />} label="IQAC Master Report" onClick={toggleMobileMenu} badge="Official" />
           <NavItem to="/ai-copilot" icon={<Sparkles size={18} />} label="AI Co-Pilot" onClick={toggleMobileMenu} badge="AI" />
           <NavItem to="/profile" icon={<UserCircle size={18} />} label="My Profile" onClick={toggleMobileMenu} />
           <NavItem to="/cv-generator" icon={<FileText size={18} />} label="CV Generator" onClick={toggleMobileMenu} badge="New" />
@@ -164,14 +157,6 @@ const DashboardLayout = () => {
 
           <div className="pt-3 mt-3 border-t border-gray-100 dark:border-slate-800">
             <span className="px-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Accreditation & Analytics</span>
-            
-            {/* HOD Consolidation & IQAC Master Report visible ONLY to HOD / Admin */}
-            {isHodOrAdmin && (
-              <>
-                <NavItem to="/hod-consolidation" icon={<Layers size={18} />} label="HOD Consolidation" onClick={toggleMobileMenu} badge="1-Click" />
-                <NavItem to="/iqac-report" icon={<FileText size={18} />} label="IQAC Master Report" onClick={toggleMobileMenu} badge="Official" />
-              </>
-            )}
 
             <NavItem to="/pbas-appraisal" icon={<ClipboardCheck size={18} />} label="PBAS / CAS Appraisal" onClick={toggleMobileMenu} />
             <NavItem to="/department-comparison" icon={<Layers size={18} />} label="Department Radar" onClick={toggleMobileMenu} />
@@ -258,52 +243,53 @@ const DashboardLayout = () => {
             </div>
 
             {/* User Profile Avatar */}
-            <div className="relative">
-              <div 
-                className="flex items-center space-x-2.5 cursor-pointer py-1.5 px-2 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-gray-200 dark:hover:border-slate-700" 
-                onClick={() => setIsProfileOpen(!isProfileOpen)}
-              >
-                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center font-bold text-xs shadow-sm ring-2 ring-white dark:ring-slate-900">
-                  {username ? (username.charAt(0).toUpperCase() === 'A' ? 'AV' : username.slice(0, 2).toUpperCase()) : 'FA'}
-                </div>
-                <div className="hidden sm:block text-left">
-                  <span className="text-xs font-bold text-gray-800 dark:text-slate-100 block leading-tight truncate max-w-[110px]">
-                    {username?.includes('@') 
-                      ? username.split('@')[0].replace(/\d+$/, '').replace(/[._-]/g, ' ').split(' ').filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') || username
-                      : username}
-                  </span>
-                  <span className="text-[10px] text-gray-400 dark:text-slate-400 block leading-none mt-0.5">Faculty / Lead</span>
-                </div>
-              </div>
+            {(() => {
+              const displayUsername = typeof username === 'string' ? username : String(username || 'Faculty');
+              return (
+                <div className="relative">
+                  <div 
+                    id="user-profile-menu-trigger"
+                    className="flex items-center space-x-2.5 cursor-pointer py-1.5 px-2 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-gray-200 dark:hover:border-slate-700" 
+                    onClick={() => setIsProfileOpen(!isProfileOpen)}
+                  >
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center font-bold text-xs shadow-sm ring-2 ring-white dark:ring-slate-900">
+                      {displayUsername.slice(0, 2).toUpperCase() || 'FA'}
+                    </div>
+                    <div className="hidden sm:block text-left">
+                      <span className="text-xs font-bold text-gray-800 dark:text-slate-100 block leading-tight truncate max-w-[110px]">
+                        {displayUsername.includes('@') 
+                          ? displayUsername.split('@')[0].replace(/\d+$/, '').replace(/[._-]/g, ' ').split(' ').filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') || displayUsername
+                          : displayUsername}
+                      </span>
+                      <span className="text-[10px] text-gray-400 dark:text-slate-400 block leading-none mt-0.5">Faculty / Lead</span>
+                    </div>
+                  </div>
 
-              {isProfileOpen && (
-                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-800 py-2 z-50 animate-in fade-in slide-in-from-top-2">
-                  <div className="px-4 py-2.5 border-b border-gray-100 dark:border-slate-800">
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Signed in as</p>
-                    <p className="text-sm font-bold text-gray-900 dark:text-white truncate mt-0.5">{username}</p>
-                  </div>
-                  <div className="py-1 text-xs">
-                    <NavLink to="/profile" onClick={() => setIsProfileOpen(false)} className="flex items-center px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
-                      <UserCircle size={16} className="mr-2" /> My Profile
-                    </NavLink>
-                    <NavLink to="/cv-generator" onClick={() => setIsProfileOpen(false)} className="flex items-center px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
-                      <FileText size={16} className="mr-2" /> Academic CV Builder
-                    </NavLink>
-                    <NavLink to="/pbas-appraisal" onClick={() => setIsProfileOpen(false)} className="flex items-center px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
-                      <ClipboardCheck size={16} className="mr-2" /> Annual PBAS Score
-                    </NavLink>
-                    <NavLink to="/settings" onClick={() => setIsProfileOpen(false)} className="flex items-center px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
-                      <Settings size={16} className="mr-2" /> Settings & 2FA
-                    </NavLink>
-                  </div>
-                  <div className="border-t border-gray-100 dark:border-slate-800 pt-1">
-                    <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors flex items-center">
-                      Log out
-                    </button>
-                  </div>
+                  {isProfileOpen && (
+                    <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-800 py-2 z-50 animate-in fade-in slide-in-from-top-2">
+                      <div className="px-4 py-2.5 border-b border-gray-100 dark:border-slate-800">
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Signed in as</p>
+                        <p className="text-sm font-bold text-gray-900 dark:text-white truncate mt-0.5">{displayUsername}</p>
+                      </div>
+                      <div className="py-1 text-xs">
+                        <NavLink to="/profile" onClick={() => setIsProfileOpen(false)} className="flex items-center px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+                          <UserCircle size={16} className="mr-2" /> My Profile
+                        </NavLink>
+                        <NavLink to="/cv-generator" onClick={() => setIsProfileOpen(false)} className="flex items-center px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+                          <FileText size={16} className="mr-2" /> Academic CV Builder
+                        </NavLink>
+                        <NavLink to="/pbas-appraisal" onClick={() => setIsProfileOpen(false)} className="flex items-center px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+                          <ClipboardCheck size={16} className="mr-2" /> Annual PBAS Score
+                        </NavLink>
+                        <NavLink to="/settings" onClick={() => setIsProfileOpen(false)} className="flex items-center px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+                          <Settings size={16} className="mr-2" /> Settings & 2FA
+                        </NavLink>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              );
+            })()}
           </div>
         </header>
 

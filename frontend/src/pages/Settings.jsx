@@ -1,14 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { fetchAPI } from '../services/api';
-import { User, Mail, Building, Key, Save, CheckCircle, RefreshCw, Link as LinkIcon } from 'lucide-react';
+import { User, Mail, Building, Save, CheckCircle, RefreshCw, Link as LinkIcon } from 'lucide-react';
 import api from '../services/api';
 
 const Settings = () => {
   const [formData, setFormData] = useState({
     email: '',
     department: '',
-    password: '',
-    confirmPassword: ''
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -42,11 +40,6 @@ const Settings = () => {
     e.preventDefault();
     setMessage('');
     setError('');
-    
-    if (formData.password && formData.password !== formData.confirmPassword) {
-      setError("Passwords do not match.");
-      return;
-    }
 
     setSaving(true);
     try {
@@ -54,9 +47,6 @@ const Settings = () => {
         email: formData.email,
         department: formData.department,
       };
-      if (formData.password) {
-        payload.password = formData.password;
-      }
       
       await fetchAPI('/faculty/settings/', {
         method: 'PATCH',
@@ -64,7 +54,6 @@ const Settings = () => {
       });
       
       setMessage('Settings updated successfully!');
-      setFormData(prev => ({ ...prev, password: '', confirmPassword: '' }));
     } catch (err) {
       setError(err.message || 'Failed to update settings.');
     } finally {
@@ -168,43 +157,6 @@ const Settings = () => {
                 <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
                 {syncing ? 'Syncing Data...' : 'Sync Now'}
               </button>
-            </div>
-
-            <h3 className="text-lg font-bold text-gray-900 mb-4 mt-8 border-b pb-2">Change Password</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">New Password (optional)</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Key size={18} className="text-gray-400" />
-                  </div>
-                  <input 
-                    type="password" 
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all" 
-                    placeholder="••••••••"
-                  />
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Key size={18} className="text-gray-400" />
-                  </div>
-                  <input 
-                    type="password" 
-                    name="confirmPassword"
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                    className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all" 
-                    placeholder="••••••••"
-                  />
-                </div>
-              </div>
             </div>
 
             <div className="pt-6 flex justify-end">

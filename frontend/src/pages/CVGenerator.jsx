@@ -37,7 +37,7 @@ const CVGenerator = () => {
     try {
       const [prof, pubs, pats, grnts, rols, fdpList] = await Promise.all([
         fetch(`${API_BASE_URL}/faculty/profile/`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
+          headers: { 'Content-Type': 'application/json' }
         }).then(r => r.ok ? r.json() : null).catch(() => null),
         facultyService.getAll('publications').catch(() => []),
         facultyService.getAll('patents').catch(() => []),
