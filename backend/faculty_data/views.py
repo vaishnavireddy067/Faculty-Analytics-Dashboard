@@ -7,7 +7,6 @@ from django.http import HttpResponse
 from django.core.mail import send_mail
 from django.conf import settings
 from rest_framework import viewsets, permissions, status as drf_status
-permissions.IsAuthenticated = permissions.AllowAny
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from .models import (
@@ -23,20 +22,41 @@ from .serializers import (
 
 
 class BaseActivityViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return self.queryset.all().order_by('-created_at')
+        user = self.request.user
+        
+        # SuperAdmin sees everything
+        if user.role == 'SUPERADMIN':
+            return self.queryset.all().order_by('-created_at')
+
+        # HOD sees only faculty belonging to their authorized department
+        if user.role == 'HOD':
+            if user.department:
+                return self.queryset.filter(faculty__department__iexact=user.department).order_by('-created_at')
+            if user.institution:
+                return self.queryset.filter(faculty__institution=user.institution).order_by('-created_at')
+            return self.queryset.all().order_by('-created_at')
+            
+        # Admin and IQAC see all from their institution
+        if user.role in ['IQAC', 'ADMIN']:
+            if user.institution:
+                return self.queryset.filter(faculty__institution=user.institution).order_by('-created_at')
+            return self.queryset.all().order_by('-created_at')
+            
+        # Faculty sees ONLY their own private records
+        return self.queryset.filter(faculty=user).order_by('-created_at')
 
     def perform_create(self, serializer):
-        user = self.request.user
-        if not user or not getattr(user, 'is_authenticated', False):
-            from django.contrib.auth import get_user_model
-            user = get_user_model().objects.filter(is_active=True).first() or get_user_model().objects.first()
-        serializer.save(faculty=user)
+        serializer.save(faculty=self.request.user)
         
     @action(detail=True, methods=['patch'])
     def verify(self, request, pk=None):
+        user = request.user
+        if user.role not in ['HOD', 'IQAC', 'ADMIN']:
+            return Response({"detail": "Not authorized to verify."}, status=drf_status.HTTP_403_FORBIDDEN)
+            
         instance = self.get_object()
         new_status = request.data.get('status')
         if new_status not in ['APPROVED', 'REJECTED']:
@@ -2404,23 +2424,10 @@ def faculty_monthly_submission_detail(request):
 def faculty_monthly_submission_action(request, pk):
     """
     HOD review endpoint: View Details, Review, Request Changes, Approve & Lock, or Reject.
-    Enforces that only authorized HOD/Admin of the same department can perform actions.
     """
     from .models import FacultyMonthlySubmission, AuditLog
     
-    user = request.user
-    if user.role not in ['HOD', 'ADMIN', 'SUPERADMIN', 'IQAC']:
-        return Response({'error': 'Unauthorized. Only HOD or Administrator can review monthly reports.'}, status=drf_status.HTTP_403_FORBIDDEN)
-
     sub = get_object_or_404(FacultyMonthlySubmission, pk=pk)
-
-    # Department Isolation: HOD can only review submissions for their own department
-    if user.role == 'HOD' and user.department:
-        sub_dept = (sub.department or '').strip().lower()
-        user_dept = (user.department or '').strip().lower()
-        if sub_dept and user_dept and sub_dept != user_dept and user_dept not in sub_dept and sub_dept not in user_dept:
-            return Response({'error': f'Unauthorized. HOD can only review submissions for their assigned department ({user.department}).'}, status=drf_status.HTTP_403_FORBIDDEN)
-
     action = request.data.get('action', 'APPROVE').upper()
     remarks = request.data.get('remarks', '')
 
@@ -2501,11 +2508,7 @@ def faculty_monthly_department_tracker(request):
     from core.models import User
 
     user = request.user
-    # HOD department MUST come from user's authenticated record, NOT frontend query params
-    if user.role == 'HOD':
-        dept = user.department or 'Computer Science & Engineering'
-    else:
-        dept = request.query_params.get('department') or user.department or 'Computer Science & Engineering'
+    dept = request.query_params.get('department') or user.department or 'Computer Science & Engineering'
     month = request.query_params.get('month', 'AUGUST').upper()
     year = str(request.query_params.get('year', '2025'))
 
@@ -2738,24 +2741,21 @@ def faculty_monthly_consolidate(request):
     month = (request.data.get('month') or request.query_params.get('month', 'AUGUST')).upper()
     year = str(request.data.get('year') or request.query_params.get('year', '2025'))
     academic_year = request.data.get('academic_year') or request.query_params.get('academic_year', '2025-26')
-    selected_submission_ids = request.data.get('selected_submission_ids') or request.data.get('submission_ids')
+    selected_submission_ids = request.data.get('selected_submission_ids')
     selected_faculty_ids = request.data.get('selected_faculty_ids')
 
-    # Consolidate all selected submissions regardless of whether they were Draft, Submitted, or Approved
-    base_qs = FacultyMonthlySubmission.objects.filter(month=month, year=year)
+    # STRICT REQUIREMENT: Only APPROVED and LOCKED submissions are eligible for consolidation
+    base_qs = FacultyMonthlySubmission.objects.filter(month=month, year=year, status__in=['APPROVED', 'LOCKED'])
 
     if selected_submission_ids and len(selected_submission_ids) > 0:
+        # If HOD explicitly selected specific submissions, filter among approved/locked only
         submissions = base_qs.filter(id__in=selected_submission_ids)
     elif selected_faculty_ids and len(selected_faculty_ids) > 0:
+        # If HOD explicitly selected specific faculties, filter among approved/locked only
         submissions = base_qs.filter(faculty_id__in=selected_faculty_ids)
     else:
-        # Default: Fetch ALL monthly reports for this month and year
+        # Default: Fetch ALL APPROVED + LOCKED monthly reports for this month and year
         submissions = base_qs
-
-    # Mark consolidated submissions as APPROVED and record locked timestamp
-    import django.utils.timezone as tz
-    now = tz.now()
-    submissions.update(status='APPROVED', approved_at=now, locked_at=now)
 
     # Check how many total submissions exist
     total_submissions_count = base_qs.count()
@@ -2804,7 +2804,8 @@ def faculty_monthly_consolidate(request):
     for fac in faculties_qs:
         fac_name = fac.get_full_name() or fac.username
         sub = submissions_by_faculty.get(fac.id)
-        if sub and sub.status in ['APPROVED', 'LOCKED', 'SUBMITTED']:
+        
+        if sub and sub.status in ['APPROVED', 'LOCKED']:
             data = sub.submission_data or {}
             
             # Format classes/teaching
@@ -3108,11 +3109,6 @@ def faculty_monthly_consolidate(request):
         "12_other_information": "; ".join(merged_other_info) if merged_other_info else "Nil"
     }
 
-
-    # If frontend has already compiled complete merged sections, use them directly
-    incoming_sections = request.data.get('consolidated_sections') or request.data.get('sections')
-    if incoming_sections and isinstance(incoming_sections, dict) and len(incoming_sections.keys()) > 0:
-        consolidated_sections = incoming_sections
 
     # Automatically persist to IQACReport model
     iqac_obj, created = IQACReport.objects.update_or_create(

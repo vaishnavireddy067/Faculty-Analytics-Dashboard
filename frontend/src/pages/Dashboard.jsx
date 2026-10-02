@@ -126,18 +126,18 @@ const Dashboard = () => {
     total: 0,
     max: 110
   };
-  const badges = Array.isArray(data?.badges) ? data.badges : [];
-  const trend_data = Array.isArray(data?.trend_data) ? data.trend_data : [
+  const badges = data?.badges || [];
+  const trend_data = data?.trend_data || [
     { name: String(currentYear - 2), publications: 0 },
     { name: String(currentYear - 1), publications: 0 },
     { name: String(currentYear), publications: 0 }
   ];
-  const dept_data = Array.isArray(data?.dept_data) ? data.dept_data : [
+  const dept_data = data?.dept_data || [
     { name: data?.department || 'CSE', value: 0 }
   ];
-  const recent_activities = Array.isArray(data?.recent_activities) ? data.recent_activities : [];
-  const feedbackData = (data?.feedback && typeof data.feedback === 'object') ? data.feedback : { average_rating: null, total_count: 0, positive_pct: 0, recent: [] };
-  const deadlines = Array.isArray(data?.deadlines) ? data.deadlines : [];
+  const recent_activities = data?.recent_activities || [];
+  const feedbackData = data?.feedback || { average_rating: null, total_count: 0, positive_pct: 0, recent: [] };
+  const deadlines = data?.deadlines || [];
   const isFaculty = role === 'FACULTY';
   const isFreshAccount = isFaculty && kpis.total_publications === 0 && kpis.total_patents === 0 && (kpis.total_grants_amount || 0) === 0;
 
@@ -469,7 +469,7 @@ const Dashboard = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {(Array.isArray(feedbackData?.recent) ? feedbackData.recent : []).map((fb) => (
+                {feedbackData.recent.map((fb) => (
                   <div key={fb.id} className="bg-gray-50 dark:bg-slate-800 p-4 rounded-xl border border-gray-100 dark:border-slate-700">
                     <div className="flex text-amber-400 mb-2">
                       {[...Array(5)].map((_, i) => (

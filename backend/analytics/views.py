@@ -1,6 +1,6 @@
 from django.http import HttpResponse
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny, AllowAny as IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from django.db.models import Sum, Count, Avg
 from django.utils import timezone
@@ -13,23 +13,35 @@ from faculty_data.models import Publication, Patent, Grant, Activity, Book, Stud
 from core.models import User
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def dashboard_stats(request):
     user = request.user
-    if not user or not getattr(user, 'is_authenticated', False):
-        user = User.objects.filter(is_active=True).first() or User.objects.first()
+    is_hod = user.role == 'HOD'
+    is_admin = user.role == 'ADMIN'
 
-    # Open access: aggregate all institutional records for comprehensive dashboard view
-    faculty_users = User.objects.all()
-    pubs = Publication.objects.all()
-    patents = Patent.objects.all()
-    grants = Grant.objects.all()
+    # Filter base querysets with strict data isolation
+    if is_admin:
+        faculty_users = User.objects.filter(role='FACULTY')
+        pubs = Publication.objects.all()
+        patents = Patent.objects.all()
+        grants = Grant.objects.all()
+    elif is_hod:
+        faculty_users = User.objects.filter(role='FACULTY', department=user.department)
+        pubs = Publication.objects.filter(faculty__department=user.department)
+        patents = Patent.objects.filter(faculty__department=user.department)
+        grants = Grant.objects.filter(faculty__department=user.department)
+    else:
+        # Faculty sees ONLY their own records
+        faculty_users = User.objects.filter(id=user.id)
+        pubs = Publication.objects.filter(faculty=user)
+        patents = Patent.objects.filter(faculty=user)
+        grants = Grant.objects.filter(faculty=user)
 
     # 1. KPI Cards Data
     total_pubs = pubs.count()
     total_patents = patents.count()
     total_grants = grants.aggregate(total=Sum('amount'))['total'] or 0
-    total_faculty = faculty_users.count() or 1
+    total_faculty = faculty_users.count() if (is_admin or is_hod) else 1
 
     # 2. Dynamic Automated API Score (Calculated from real DB records)
     research_score = min(50, total_pubs * 10 + total_patents * 15 + (10 if total_grants > 0 else 0))
@@ -53,9 +65,11 @@ def dashboard_stats(request):
         count = pubs.filter(year=year).count()
         trend_data.append({"name": str(year), "publications": count})
 
-    # 5. Department Data
-    dept_qs = faculty_users.exclude(department__isnull=True).exclude(department="").values('department').annotate(value=Count('id'))
-    dept_data = [{"name": d['department'], "value": d['value']} for d in dept_qs]
+    # 5. Department Data (for HOD / Admin)
+    dept_data = []
+    if is_admin or is_hod:
+        dept_qs = faculty_users.exclude(department__isnull=True).exclude(department="").values('department').annotate(value=Count('id'))
+        dept_data = [{"name": d['department'], "value": d['value']} for d in dept_qs]
 
     # 6. Real Recent Activities
     recent_pubs = pubs.select_related('faculty').order_by('-created_at')[:5]
@@ -70,7 +84,10 @@ def dashboard_stats(request):
         })
 
     # 7. Real Student Feedback from database
-    feedbacks = StudentFeedback.objects.all()
+    if is_admin or is_hod:
+        feedbacks = StudentFeedback.objects.all()
+    else:
+        feedbacks = StudentFeedback.objects.filter(faculty=user)
     
     feedback_count = feedbacks.count()
     if feedback_count > 0:
@@ -107,8 +124,8 @@ def dashboard_stats(request):
         })
 
     return Response({
-        "role": getattr(user, 'role', 'ADMIN'),
-        "department": getattr(user, 'department', 'Computer Science & Engineering') or 'General',
+        "role": user.role,
+        "department": user.department or 'General',
         "kpis": {
             "total_faculty": total_faculty,
             "total_publications": total_pubs,

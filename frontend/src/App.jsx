@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import DashboardLayout from './components/DashboardLayout';
 import Dashboard from './pages/Dashboard';
+import Login from './pages/Login';
 import FacultyProfile from './pages/FacultyProfile';
 import DataEntry from './pages/DataEntry';
 import Verification from './pages/Verification';
@@ -23,17 +24,27 @@ import CollaborationGraph from './pages/CollaborationGraph';
 import AuditLogs from './pages/AuditLogs';
 import BulkDataManagement from './pages/BulkDataManagement';
 import IQACMonthlyReport from './pages/IQACMonthlyReport';
-import ErrorBoundary from './components/ErrorBoundary';
+import MonthlyReportHub from './pages/MonthlyReportHub';
+
+// A simple Protected Route wrapper
+const ProtectedRoute = ({ children }) => {
+  const token = localStorage.getItem('access_token');
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+};
 
 function App() {
   return (
     <Router>
-      <ErrorBoundary>
-        <div className="min-h-screen bg-gray-50 text-gray-900 font-sans">
+      <div className="min-h-screen bg-gray-50 text-gray-900 font-sans">
         <Routes>
-          {/* Main Application - Direct Access without Login */}
-          <Route element={<DashboardLayout />}>
-            <Route path="/" element={<Dashboard />} />
+          {/* Public Routes */}
+          <Route path="/login" element={<Login />} />
+          
+          {/* Protected Routes (Wrapped in Layout) */}
+          <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/profile" element={<FacultyProfile />} />
             <Route path="/cv-generator" element={<CVGenerator />} />
@@ -52,6 +63,7 @@ function App() {
             <Route path="/hod-consolidation" element={<IQACMonthlyReport />} />
             <Route path="/iqac-report" element={<IQACMonthlyReport />} />
             <Route path="/iqac-monthly-report" element={<IQACMonthlyReport />} />
+            <Route path="/monthly-report-hub" element={<MonthlyReportHub />} />
             <Route path="/settings" element={<Settings />} />
 
             <Route path="/admin-dashboard" element={<AdminDashboard />} />
@@ -65,12 +77,10 @@ function App() {
           </Route>
 
 
-          {/* Default Redirect directly to Dashboard */}
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          {/* Default Redirect */}
+          <Route path="/" element={<Navigate to="/login" replace />} />
         </Routes>
       </div>
-      </ErrorBoundary>
     </Router>
   );
 }
