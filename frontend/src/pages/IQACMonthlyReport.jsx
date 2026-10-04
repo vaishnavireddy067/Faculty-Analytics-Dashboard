@@ -42,7 +42,7 @@ const EditableCell = React.memo(({
   if (!isEditing) {
     return (
       <span className="whitespace-pre-wrap break-words block min-h-[16px]">
-        {value ? value : '-'}
+        {value ? value : ''}
       </span>
     );
   }
@@ -171,7 +171,15 @@ const IQACMonthlyReport = () => {
 
     // 2. Fetch from localStorage
     try {
-      const allLocal = JSON.parse(localStorage.getItem('fad_registered_monthly_subs') || '[]');
+      let allLocal = JSON.parse(localStorage.getItem('fad_registered_monthly_subs') || '[]');
+      const dummyEmails = [
+        'hod_audit@example.com', 'hod@example.com', 'admin@example.com', 
+        'fac_a@example.com', 'fac_b@example.com', 'test_audit_faculty@example.com', 
+        'faculty_a@test.com', 'faculty_b@test.com', 'freshfaculty@test.com'
+      ];
+      allLocal = allLocal.filter(s => !dummyEmails.includes(s.email?.toLowerCase()));
+      localStorage.setItem('fad_registered_monthly_subs', JSON.stringify(allLocal));
+
       const matchingLocal = allLocal.filter(s => s.month === month && s.year === year);
       matchingLocal.forEach(loc => {
         if (!list.some(item => item.email === loc.email || item.id === loc.faculty_id)) {
@@ -194,97 +202,7 @@ const IQACMonthlyReport = () => {
       });
     } catch (e) {}
 
-    // 3. If still empty, provide 3 authentic sample faculty submissions matching user's PDF records
-    if (list.length === 0) {
-      list = [
-        {
-          id: 'sub_swathi',
-          faculty_name: 'Mrs. Swathi Sugur',
-          email: 'swathi.ds@institution.edu',
-          department: 'Computer Science & Engineering (Data Science)',
-          designation: 'Assistant Professor',
-          status: 'SUBMITTED',
-          submitted_at: '28-08-2026 14:30',
-          counts: { events: 1, certifications: 1, achievements: 1 },
-          sections: {
-            "1_student_events": [
-              { s_no: 1, name: "The Art of programming in C", association: "-", level: "Department level", duration: "1 day (03-08-2026)", chief_guest: "Mr. A. Narender", honorarium: "-", misc_expenses: "-", target_students: "III DS-A,B and III AI&DS" }
-            ],
-            "5_student_achievements": {
-              a_curricular: [
-                { s_no: 1, roll_no: "245U1A6745", name: "G.PRANEETH", year_sem: "III/I", event: "EUREKA pitching competetion", organized_by: "E Cell & R&D", duration: "1 day (27-08-2026)", prizes: "Cash prize (1000/-)" },
-                { s_no: 2, roll_no: "245U1A6750", name: "J.BHAVANI", year_sem: "III/I", event: "EUREKA pitching competetion", organized_by: "E Cell & R&D", duration: "1 day (27-08-2026)", prizes: "Cash prize (1000/-)" }
-              ],
-              c_online_certifications: [
-                { s_no: 1, roll_no: "All students of DS-A,B", name: "-", year_sem: "III/I", course_name: "Introduction of Data Science", organized_by: "Mrs.Swathi Sugur", duration: "7 HOURS", grade_secured: "Online certification course" }
-              ]
-            }
-          }
-        },
-        {
-          id: 'sub_jagadeeshwar',
-          faculty_name: 'Mr. V. Jagadeeshwar Reddy',
-          email: 'jagadeeshwar.aids@institution.edu',
-          department: 'AI & DS',
-          designation: 'Assistant Professor',
-          status: 'SUBMITTED',
-          submitted_at: '28-08-2026 16:45',
-          counts: { events: 1, fdps: 1, achievements: 2, placements: 5 },
-          sections: {
-            "1_student_events": [
-              { s_no: 1, name: "KRITHI MEDHA data intelligence logo launch", association: "-", level: "Department level", duration: "1 day (08-08-2026)", chief_guest: "Mr.P.Nageshwara Reddy, Mr.Shaik Abdul Nabi", honorarium: "-", misc_expenses: "-", target_students: "All year students of AI& DS and CSE(DS)" }
-            ],
-            "5_student_achievements": {
-              a_curricular: [
-                { s_no: 1, roll_no: "245U1A6767", name: "K.A.VAISHNAVI", year_sem: "III/I", event: "HakIT * MRDU 26 24 hours national hackathon", organized_by: "Mallareddy University", duration: "22-08-2026 to 23-08-2026", prizes: "Participation Certificate" }
-              ],
-              d_placements: {
-                ds_byd: [
-                  { s_no: 1, name: "CHANDU PRAKASH", roll_no: "235U1A6712", date_of_appointment: "17-08-2026" },
-                  { s_no: 2, name: "D. SRINIVAS", roll_no: "235U1A6718", date_of_appointment: "17-08-2026" },
-                  { s_no: 3, name: "G. NIKHIL REDDY", roll_no: "235U1A6725", date_of_appointment: "17-08-2026" },
-                  { s_no: 4, name: "KALAL HARSHAVARDHAN GOUD", roll_no: "235U1A6730", date_of_appointment: "17-08-2026" },
-                  { s_no: 5, name: "KALKI KARTHIK", roll_no: "235U1A6731", date_of_appointment: "17-08-2026" }
-                ],
-                aids_byd: [
-                  { s_no: 1, name: "ANANTHUNE ADITHYA", roll_no: "235U1A7202", date_of_appointment: "17-08-2026" },
-                  { s_no: 2, name: "APPALA RANJITH", roll_no: "235U1A7204", date_of_appointment: "17-08-2026" }
-                ]
-              }
-            },
-            "6_faculty_achievements": {
-              g_workshops_attended: [
-                { s_no: 1, faculty_name: "Mr.V.Jagadeeshwar Reddy", program_name: "Adaptive Intelligent circuits for edge AI Devices", organized_by: "AVNIET", duration: "One week (17-08-2026 to 22-08-2026)" }
-              ]
-            }
-          }
-        },
-        {
-          id: 'sub_nageshwara',
-          faculty_name: 'Dr. P. Nageshwara Reddy',
-          email: 'nageshwara.research@institution.edu',
-          department: 'Computer Science & Engineering',
-          designation: 'Professor & Research Head',
-          status: 'APPROVED',
-          submitted_at: '27-08-2026 11:20',
-          counts: { events: 2, publications: 1, patents: 1 },
-          sections: {
-            "1_student_events": [
-              { s_no: 1, name: "Orientation day", association: "-", level: "College level", duration: "1 day (05-08-2026)", chief_guest: "Mr.A.V.N Reddy", honorarium: "-", misc_expenses: "-", target_students: "Newly joined first year students" },
-              { s_no: 2, name: "Technical event under Krithi medha Automation Bot", association: "-", level: "Department level", duration: "1 day (08-08-2026)", chief_guest: "Mr.P.Nageshwara Reddy", honorarium: "-", misc_expenses: "-", target_students: "All year students of AI& DS and CSE(DS)" }
-            ],
-            "6_faculty_achievements": {
-              a_journal_publications: [
-                { s_no: 1, authors: "Dr. P. Nageshwara Reddy et al.", title: "Scalable Deep Learning Frameworks in Intelligent Edge Computing", journal: "IEEE Transactions on Computational Science", volume_issue_year: "Vol. 14, Issue 3, pp. 210-224, 2025", indexing: "SCI / Scopus" }
-              ],
-              c_patents: [
-                { s_no: 1, authors: "Dr. P. Nageshwara Reddy", title: "Automated Crop Monitoring System using Edge Sensors and UAVs", agency: "Indian Patent Office", filing_no_year: "202541098231, 2025", published_or_granted: "Published" }
-              ]
-            }
-          }
-        }
-      ];
-    }
+    // If empty, keep list empty (no dummy submissions)
 
     setFacultySubmissions(list);
     // Select all by default
@@ -542,90 +460,47 @@ const IQACMonthlyReport = () => {
     }
   };
 
-  // Exact sample data matching AVNIET IQAC Report PDF
+  // Reset all sections to empty
   const handleAutoFillPdfSampleData = () => {
     setReportData(prev => ({
       ...prev,
       sections: {
-        ...(prev?.sections || {}),
-        "1_student_events": [
-          { s_no: 1, name: "The Art of programming in C", association: "-", level: "Department level", duration: "1 day (03-08-2026)", chief_guest: "Mr.A.Narender", honorarium: "-", misc_expenses: "-", target_students: "III DS-A,B and III AI&DS" },
-          { s_no: 2, name: "Orientation day", association: "-", level: "College level", duration: "1 day (05-08-2026)", chief_guest: "Mr.A.V.N Reddy", honorarium: "-", misc_expenses: "-", target_students: "Newly joined first year students" },
-          { s_no: 3, name: "KRITHI MEDHA data intelligence logo launch", association: "-", level: "Department level", duration: "1 day (08-08-2026)", chief_guest: "Mr.P.Nageshwara Reddy, Mr.Shaik Abdul Nabi", honorarium: "-", misc_expenses: "-", target_students: "All year students of AI& DS and CSE(DS)" },
-          { s_no: 4, name: "Technical event under Krithi medha Automation Bot", association: "-", level: "Department level", duration: "1 day (08-08-2026)", chief_guest: "Mr.P.Nageshwara Reddy", honorarium: "-", misc_expenses: "-", target_students: "All year students of AI& DS and CSE(DS)" },
-          { s_no: 5, name: "Independence Day celebrations", association: "-", level: "College level", duration: "15-08-2026", chief_guest: "Mr.P.Nageshwara Reddy", honorarium: "-", misc_expenses: "-", target_students: "All Branches students and Faculty" },
-          { s_no: 6, name: "Tree Plantation program", association: "NSS", level: "College level", duration: "29-08-2026", chief_guest: "Mr.P.Nageshwara Reddy", honorarium: "-", misc_expenses: "-", target_students: "All Branches students and Faculty" }
-        ],
+        "1_student_events": [],
+        "2_faculty_events": [],
+        "3_value_added_courses": [],
+        "4_advanced_learners": [],
         "5_student_achievements": {
-          ...(prev?.sections?.["5_student_achievements"] || {}),
-          "a_curricular": [
-            { s_no: 1, roll_no: "245U1A6745", name: "G.PRANEETH", year_sem: "III/I", event: "EUREKA pitching competetion", organized_by: "E Cell & R&D", duration: "1 day (27-08-2026)", prizes: "Cash prize (1000/-)" },
-            { s_no: 2, roll_no: "245U1A6750", name: "J.BHAVANI", year_sem: "III/I", event: "EUREKA pitching competetion", organized_by: "E Cell & R&D", duration: "1 day (27-08-2026)", prizes: "Cash prize (1000/-)" },
-            { s_no: 3, roll_no: "245U1A6705", name: "A.RUTHVIK", year_sem: "III/I", event: "EUREKA pitching competetion", organized_by: "E Cell & R&D", duration: "1 day (27-08-2026)", prizes: "Cash prize (1000/-)" },
-            { s_no: 4, roll_no: "245U1A6767", name: "K.A.VAISHNAVI", year_sem: "III/I", event: "HakIT * MRDU 26 24 hours national hackathon", organized_by: "Mallareddy University", duration: "22-08-2026 to 23-08-2026", prizes: "-" },
-            { s_no: 5, roll_no: "245U1A7235", name: "MD SAIF", year_sem: "III/I", event: "HakIT * MRDU 26 24 hours national hackathon", organized_by: "Mallareddy University", duration: "22-08-2026 to 23-08-2026", prizes: "-" },
-            { s_no: 6, roll_no: "255U1A6731", name: "Divya deepika", year_sem: "II/I", event: "HakIT * MRDU 26 24 hours national hackathon", organized_by: "Mallareddy University", duration: "22-08-2026 to 23-08-2026", prizes: "-" },
-            { s_no: 7, roll_no: "255U1A6704", name: "Nerlekar Anvishree", year_sem: "II/I", event: "HakIT * MRDU 26 24 hours national hackathon", organized_by: "Mallareddy University", duration: "22-08-2026 to 23-08-2026", prizes: "-" }
-          ],
-          "c_online_certifications": [
-            { s_no: 1, roll_no: "All students of DS-A,B", name: "-", year_sem: "III/I", course_name: "Introduction of Data Science", organized_by: "Mrs.Swathi Sugur", duration: "7 HOURS", grade: "Online certification course" },
-            { s_no: 2, roll_no: "All students of DS-A, AI&DS", name: "-", year_sem: "III/I", course_name: "Data Mining", organized_by: "Mrs.Revathi Durgam", duration: "10 HOURS", grade: "Online certification course" }
-          ],
+          "a_curricular": [],
+          "b_extracurricular": [],
+          "c_online_certifications": [],
           "d_placements": {
-            "ds_byd": [
-              { s_no: 1, name: "CHANDU PRAKASH", roll_no: "235U1A6712", date: "17-08-2026" },
-              { s_no: 2, name: "D. SRINIVAS", roll_no: "235U1A6718", date: "17-08-2026" },
-              { s_no: 3, name: "G. NIKHIL REDDY", roll_no: "235U1A6725", date: "17-08-2026" },
-              { s_no: 4, name: "KALAL HARSHAVARDHAN GOUD", roll_no: "235U1A6730", date: "17-08-2026" },
-              { s_no: 5, name: "KALKI KARTHIK", roll_no: "235U1A6731", date: "17-08-2026" },
-              { s_no: 6, name: "K SIDDARTH REDDY", roll_no: "235U1A6735", date: "17-08-2026" },
-              { s_no: 7, name: "MD.Matheen", roll_no: "235U1A6745", date: "17-08-2026" },
-              { s_no: 8, name: "ARAVIND REDDY", roll_no: "235U1A6749", date: "17-08-2026" },
-              { s_no: 9, name: "R.AKASH", roll_no: "235U1A6751", date: "17-08-2026" },
-              { s_no: 10, name: "V. KARTHIK GOUD", roll_no: "235U1A6762", date: "17-08-2026" },
-              { s_no: 11, name: "M VENKAT KALYAN", roll_no: "235U1A6765", date: "17-08-2026" }
-            ],
-            "aids_byd": [
-              { s_no: 1, name: "ANANTHUNE ADITHYA", roll_no: "235U1A7202", date: "17-08-2026" },
-              { s_no: 2, name: "APPALA RANJITH", roll_no: "235U1A7204", date: "17-08-2026" },
-              { s_no: 3, name: "B.NITHIN", roll_no: "235U1A7206", date: "17-08-2026" },
-              { s_no: 4, name: "B.AKUL REDDY", roll_no: "235U1A7209", date: "17-08-2026" },
-              { s_no: 5, name: "CH.NANDU", roll_no: "235U1A7215", date: "17-08-2026" },
-              { s_no: 6, name: "CHOPPADANDI PRANITH", roll_no: "235U1A7216", date: "17-08-2026" },
-              { s_no: 7, name: "D.PRANEETH", roll_no: "235U1A7217", date: "17-08-2026" },
-              { s_no: 8, name: "G .ARJUN KUMAR", roll_no: "235U1A7220", date: "17-08-2026" },
-              { s_no: 9, name: "G NARSIMHA REDDY", roll_no: "235U1A7222", date: "17-08-2026" },
-              { s_no: 10, name: "G.SIVAPRASANTH REDDY", roll_no: "235U1A7227", date: "17-08-2026" },
-              { s_no: 11, name: "G.ADITHYA VARDHAN", roll_no: "235U1A7229", date: "17-08-2026" },
-              { s_no: 12, name: "K. RAJKUMAR", roll_no: "235U1A7231", date: "17-08-2026" },
-              { s_no: 13, name: "MARAM ROHITH REDDY", roll_no: "235U1A7239", date: "17-08-2026" },
-              { s_no: 14, name: "SRAVAN KUMAR", roll_no: "235U1A7240", date: "17-08-2026" },
-              { s_no: 15, name: "M.AKHIL REDDY", roll_no: "235U1A7242", date: "17-08-2026" },
-              { s_no: 16, name: "MUDU NAGESHWARA RAO", roll_no: "235U1A7243", date: "17-08-2026" },
-              { s_no: 17, name: "N PAVAN KUMAR REDDY", roll_no: "235U1A7244", date: "17-08-2026" },
-              { s_no: 18, name: "N.SAI KIRAN", roll_no: "235U1A7246", date: "17-08-2026" },
-              { s_no: 19, name: "P GOUTHAM GOUD", roll_no: "235U1A7248", date: "17-08-2026" },
-              { s_no: 20, name: "P.CHARAN REDDY", roll_no: "235U1A7250", date: "17-08-2026" },
-              { s_no: 21, name: "P. PRANAY CHANDRA", roll_no: "235U1A7251", date: "17-08-2026" },
-              { s_no: 22, name: "P.MADHU", roll_no: "235U1A7252", date: "17-08-2026" },
-              { s_no: 23, name: "MUZAMMIL SHAIK", roll_no: "235U1A7258", date: "17-08-2026" },
-              { s_no: 24, name: "TANNIRU VENU", roll_no: "235U1A7261", date: "17-08-2026" },
-              { s_no: 25, name: "U ANJANIPRASAD", roll_no: "235U1A7262", date: "17-08-2026" },
-              { s_no: 26, name: "DHARAVATH VIJAY KUMAR", roll_no: "245U5A7201", date: "17-08-2026" },
-              { s_no: 27, name: "KUNDARAPU SIDDHARTHA", roll_no: "245U5A7204", date: "17-08-2026" }
-            ]
+            "ds_byd": [],
+            "aids_byd": []
           }
         },
         "6_faculty_achievements": {
-          ...(prev?.sections?.["6_faculty_achievements"] || {}),
-          "g_workshops_attended": [
-            { s_no: 1, faculty_name: "Mr.V.Jagadeeshwar Reddy", program: "Adaptive Intelligent circuits for edge AI Devices", organized_by: "AVNIET", duration: "One week (17-08-2026 to 22-08-2026)" }
-          ]
-        }
+          "a_journal_publications": [],
+          "b_conference_publications": [],
+          "c_patents": [],
+          "d_inhouse_projects": [],
+          "e_funded_projects": [],
+          "f_workshops_organized": [],
+          "g_workshops_attended": [],
+          "h_certifications_completed": [],
+          "i_books_published": [],
+          "j_resource_person": [],
+          "k_awards": []
+        },
+        "7_non_teaching_training": [],
+        "8_infrastructure_investment": [],
+        "9_mous_signed": [],
+        "10_alumni_activities": "",
+        "11_parent_teacher_meetings": "",
+        "12_other_information": ""
       }
     }));
-    setSaveSuccess("⚡ Auto-filled exact sample tables matching official AVNIET IQAC Report!");
-    setTimeout(() => setSaveSuccess(''), 5000);
+    setSaveSuccess("All sections cleared to empty tables.");
+    setTimeout(() => setSaveSuccess(''), 4000);
   };
 
   // Load archived reports list from DB
@@ -809,10 +684,10 @@ const IQACMonthlyReport = () => {
     });
   }, []);
 
-  // Helper to ensure any empty table has editable rows when Live Editor is ON
+  // Helper to ensure any empty table has editable rows when Live Editor is ON or in Faculty Mode
   const getRows = (list, defaultCount = 2) => {
     if (Array.isArray(list) && list.length > 0) return list;
-    if (isEditing) {
+    if (isEditing || roleMode === 'FACULTY') {
       return Array.from({ length: defaultCount }, (_, idx) => ({ s_no: idx + 1 }));
     }
     return [];
@@ -965,7 +840,7 @@ const IQACMonthlyReport = () => {
   );
 
   return (
-    <ReportEditorContext.Provider value={{ isEditing, updateNestedCell }}>
+    <ReportEditorContext.Provider value={{ isEditing: isEditing || roleMode === 'FACULTY', updateNestedCell }}>
       <div className="max-w-7xl mx-auto space-y-6 p-4 md:p-6 print:p-0 print:m-0 print:max-w-full">
       {/* 🌟 Top Action & Filter Bar (Hidden on Print) */}
       <div className="print:hidden bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
@@ -1404,7 +1279,7 @@ const IQACMonthlyReport = () => {
               onClick={handleAutoFillPdfSampleData}
               className="px-3 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 border border-indigo-300 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 transition cursor-pointer"
             >
-              📋 Fill Sample Data
+              🧹 Reset to Empty
             </button>
             <button
               onClick={handleSubmitToHod}

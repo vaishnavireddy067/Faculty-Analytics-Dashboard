@@ -3,7 +3,7 @@ import {
   Share2, Users, Search, Sparkles, Filter, RefreshCw,
   BookOpen, Award, Layers, Zap, Info
 } from 'lucide-react';
-import { facultyService } from '../services/api';
+import api, { facultyService } from '../services/api';
 
 const CollaborationGraph = () => {
   const [loading, setLoading] = useState(false);
@@ -13,44 +13,66 @@ const CollaborationGraph = () => {
   const [hoveredNode, setHoveredNode] = useState(null);
   const canvasRef = useRef(null);
 
-  // High-fidelity nodes with generous spacing
-  const [nodes, setNodes] = useState([
-    { id: 1, name: 'Dr. Vaishnavi Anugu', dept: 'CSE', domain: 'AI/ML', papers: 18, citations: 340, x: 380, y: 220, r: 28, color: '#4f46e5' },
-    { id: 2, name: 'Dr. Rajesh Sharma', dept: 'CSE', domain: 'AI/ML', papers: 14, citations: 280, x: 180, y: 130, r: 24, color: '#6366f1' },
-    { id: 3, name: 'Dr. Priya Kulkarni', dept: 'ECE', domain: 'IoT & Edge', papers: 12, citations: 190, x: 580, y: 140, r: 22, color: '#06b6d4' },
-    { id: 4, name: 'Dr. Suresh Verma', dept: 'IT', domain: 'Cybersecurity', papers: 15, citations: 240, x: 170, y: 350, r: 23, color: '#8b5cf6' },
-    { id: 5, name: 'Dr. Sneha Reddy', dept: 'CSE', domain: 'Data Science', papers: 11, citations: 160, x: 440, y: 370, r: 22, color: '#ec4899' },
-    { id: 6, name: 'Dr. Anand Kumar', dept: 'MECH', domain: 'Robotics', papers: 9, citations: 120, x: 670, y: 300, r: 20, color: '#10b981' },
-    { id: 7, name: 'Dr. Kavita Nair', dept: 'ECE', domain: 'VLSI', papers: 10, citations: 140, x: 70, y: 230, r: 20, color: '#f59e0b' }
-  ]);
-
-  const [links] = useState([
-    { source: 1, target: 2, weight: 6, title: 'Deep Learning in Health' },
-    { source: 1, target: 3, weight: 4, title: 'Edge AI Sensors' },
-    { source: 1, target: 5, weight: 5, title: 'Medical Big Data' },
-    { source: 2, target: 4, weight: 3, title: 'Secure Federated Learning' },
-    { source: 3, target: 6, weight: 4, title: 'Autonomous Drone Telemetry' },
-    { source: 4, target: 5, weight: 2, title: 'Blockchain Anomaly Detection' },
-    { source: 2, target: 7, weight: 3, title: 'Neuromorphic Hardware' }
-  ]);
+  // Live nodes & links initialized clean
+  const [nodes, setNodes] = useState([]);
+  const [links, setLinks] = useState([]);
 
   const draggingNodeRef = useRef(null);
   const dragOffsetRef = useRef({ x: 0, y: 0 });
 
+  const fetchNetwork = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get('/faculty/analytics/network/');
+      const rawNodes = res?.data?.nodes || [];
+      const rawEdges = res?.data?.edges || [];
+
+      const width = 760;
+      const height = 480;
+      const cx = width / 2;
+      const cy = height / 2;
+      const radius = Math.min(cx, cy) - 90;
+
+      const positionedNodes = rawNodes.map((n, idx) => {
+        const angle = rawNodes.length > 0 ? (idx / rawNodes.length) * 2 * Math.PI : 0;
+        return {
+          ...n,
+          x: cx + radius * Math.cos(angle),
+          y: cy + radius * Math.sin(angle),
+          r: 22 + Math.min(10, (n.papers || 0)),
+          color: n.color || '#4f46e5'
+        };
+      });
+
+      setNodes(positionedNodes);
+      setLinks(rawEdges.map(e => ({
+        source: e.from || e.source,
+        target: e.to || e.target,
+        weight: e.value || e.weight || 1,
+        title: e.title || 'Co-authorship'
+      })));
+
+      if (positionedNodes.length > 0) {
+        setSelectedNode(positionedNodes[0]);
+      } else {
+        setSelectedNode(null);
+      }
+    } catch (err) {
+      console.error("Failed to load collaboration network", err);
+      setNodes([]);
+      setLinks([]);
+      setSelectedNode(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    setSelectedNode(nodes[0]);
+    fetchNetwork();
   }, []);
 
   const resetLayout = () => {
-    setNodes([
-      { id: 1, name: 'Dr. Vaishnavi Anugu', dept: 'CSE', domain: 'AI/ML', papers: 18, citations: 340, x: 380, y: 220, r: 28, color: '#4f46e5' },
-      { id: 2, name: 'Dr. Rajesh Sharma', dept: 'CSE', domain: 'AI/ML', papers: 14, citations: 280, x: 180, y: 130, r: 24, color: '#6366f1' },
-      { id: 3, name: 'Dr. Priya Kulkarni', dept: 'ECE', domain: 'IoT & Edge', papers: 12, citations: 190, x: 580, y: 140, r: 22, color: '#06b6d4' },
-      { id: 4, name: 'Dr. Suresh Verma', dept: 'IT', domain: 'Cybersecurity', papers: 15, citations: 240, x: 170, y: 350, r: 23, color: '#8b5cf6' },
-      { id: 5, name: 'Dr. Sneha Reddy', dept: 'CSE', domain: 'Data Science', papers: 11, citations: 160, x: 440, y: 370, r: 22, color: '#ec4899' },
-      { id: 6, name: 'Dr. Anand Kumar', dept: 'MECH', domain: 'Robotics', papers: 9, citations: 120, x: 670, y: 300, r: 20, color: '#10b981' },
-      { id: 7, name: 'Dr. Kavita Nair', dept: 'ECE', domain: 'VLSI', papers: 10, citations: 140, x: 70, y: 230, r: 20, color: '#f59e0b' }
-    ]);
+    fetchNetwork();
   };
 
   // Canvas Renderer with Crisp DPI, Drag & Drop, and Clean Non-Overlapping Badges
@@ -95,6 +117,17 @@ const CollaborationGraph = () => {
           ctx.arc(x, y, 1.2, 0, Math.PI * 2);
           ctx.fill();
         }
+      }
+
+      if (nodes.length === 0) {
+        ctx.fillStyle = '#64748b';
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('No cross-discipline collaborations recorded yet.', width / 2, height / 2 - 10);
+        ctx.font = '12px sans-serif';
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillText('Official co-authored publications will dynamically appear here.', width / 2, height / 2 + 15);
+        return;
       }
 
       // 2. Draw Links

@@ -522,12 +522,7 @@ const handleMockFallback = (endpoint, options = {}) => {
 
   // 11. Audit Logs
   if (cleanEndpoint.includes('/audit-logs')) {
-    return [
-      { id: 1, action: 'PUBLICATION_CREATED', target_activity: 'Deep Learning in Healthcare (SCI Index)', performed_by: 'vaishnavi_anugu', user_role: 'FACULTY', timestamp: '2026-09-24 14:15:20', details: 'Uploaded proof PDF and verified DOI 10.1109/TKDE.2025.' },
-      { id: 2, action: 'VERIFICATION_APPROVED', target_activity: 'Grant: Trustworthy AI Models ₹45.0L', performed_by: 'hod_cse', user_role: 'HOD', timestamp: '2026-09-24 11:30:12', details: 'Verified sanction order from DST-SERB.' },
-      { id: 3, action: 'ROLE_ASSIGNED', target_activity: 'FacultyRole: IQAC Department Incharge', performed_by: 'principal_admin', user_role: 'ADMIN', timestamp: '2026-09-23 16:45:00', details: 'Assigned for Academic Year 2025-26.' },
-      { id: 4, action: 'CERTIFICATE_UPLOADED', target_activity: 'ATAL FDP on Generative AI & LLMs', performed_by: 'vaishnavi_anugu', user_role: 'FACULTY', timestamp: '2026-09-22 09:20:45', details: '5-Day FDP Certificate verified via AI OCR.' }
-    ];
+    return [];
   }
 
   // 12. AI Copilot Helpers
@@ -735,6 +730,12 @@ export const facultyService = {
   getNAACCriterion3: (dept) => fetchAPI(`/faculty/reports/naac-ssr-criterion3/${dept ? `?department=${dept}` : ''}`),
   getPBASScore: (year = '2025-26') => fetchAPI(`/faculty/pbas-score/?year=${year}`),
   getAuditLogs: () => fetchAPI('/faculty/audit-logs/'),
+  deleteAuditLog: (id) => fetchAPI(`/faculty/audit-logs/${id}/`, {
+    method: 'DELETE',
+  }),
+  clearAuditLogs: () => fetchAPI('/faculty/audit-logs/clear/', {
+    method: 'POST',
+  }),
   getDepartmentComparison: () => fetchAPI('/faculty/department-comparison/'),
   getCollaborationNetwork: () => fetchAPI('/faculty/analytics/network/'),
   bulkImport: (type, count = 5) => fetchAPI('/faculty/bulk-import/', {

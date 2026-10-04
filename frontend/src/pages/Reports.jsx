@@ -34,80 +34,21 @@ const Reports = () => {
       setReportData(data);
     } catch (err) {
       console.error('Failed to fetch consolidated report', err);
-      // Fallback mock report data
       setReportData({
         academic_year: academicYear,
         department: selectedDept,
-        faculty_reports: [
-          {
-            faculty_id: 1,
-            faculty_name: 'Dr. Anitha',
-            department: selectedDept === 'ALL' ? 'CSE' : selectedDept,
-            academic_year: academicYear,
-            publications: 8,
-            patents: 2,
-            fdps: 5,
-            certifications: 4,
-            grants_lakhs: 4.0,
-            consultancy: 2,
-            student_guidance: 6,
-            college_responsibilities: 'Exam Coordinator, IQAC Coordinator',
-            roles_list: ['Exam Coordinator', 'IQAC Coordinator'],
-            awards: 3,
-            student_feedback: '4.6/5',
-            api_score: 156.0,
-            verified_documents: 18
-          },
-          {
-            faculty_id: 2,
-            faculty_name: 'Dr. Ravi',
-            department: selectedDept === 'ALL' ? 'CSE' : selectedDept,
-            academic_year: academicYear,
-            publications: 6,
-            patents: 1,
-            fdps: 7,
-            certifications: 3,
-            grants_lakhs: 2.5,
-            consultancy: 1,
-            student_guidance: 4,
-            college_responsibilities: 'NSS Coordinator',
-            roles_list: ['NSS Coordinator'],
-            awards: 2,
-            student_feedback: '4.4/5',
-            api_score: 135.0,
-            verified_documents: 14
-          },
-          {
-            faculty_id: 3,
-            faculty_name: 'Dr. Priya',
-            department: selectedDept === 'ALL' ? 'CSE' : selectedDept,
-            academic_year: academicYear,
-            publications: 10,
-            patents: 3,
-            fdps: 4,
-            certifications: 5,
-            grants_lakhs: 6.0,
-            consultancy: 3,
-            student_guidance: 8,
-            college_responsibilities: 'Placement Coordinator, Cultural Coordinator',
-            roles_list: ['Placement Coordinator', 'Cultural Coordinator'],
-            awards: 4,
-            student_feedback: '4.8/5',
-            api_score: 180.0,
-            verified_documents: 22
-          }
-        ],
+        faculty_reports: [],
         department_totals: {
-          publications: 24,
-          patents: 6,
-          fdps: 16,
-          certifications: 12,
-          grants_lakhs: 12.5,
-          consultancy: 6,
-          student_guidance: 18,
-          awards: 9,
-          api_score_total: 471.0,
-          verified_docs: 54
+          publications: 0,
+          patents: 0,
+          fdps: 0,
+          certifications: 0,
+          grants_lakhs: 0.0,
+          consultancy: 0,
+          student_guidance: 0,
+          awards: 0,
+          api_score_total: 0.0,
+          verified_docs: 0
         }
       });
     } finally {
@@ -297,7 +238,15 @@ const Reports = () => {
         {/* Consolidated Report Matrix Table */}
         {reportLoading ? (
           <div className="p-12 text-center text-gray-500 dark:text-slate-400">Loading consolidated faculty report...</div>
-        ) : reportData && reportData.faculty_reports ? (
+        ) : !reportData || !reportData.faculty_reports || reportData.faculty_reports.length === 0 ? (
+          <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 text-gray-500 dark:text-slate-400">
+            <FileSpreadsheet size={36} className="mx-auto mb-3 opacity-30 text-indigo-500" />
+            <h4 className="text-base font-bold text-gray-800 dark:text-slate-200">No Consolidated Submissions Found</h4>
+            <p className="text-xs text-gray-400 mt-1 max-w-md mx-auto">
+              No faculty records for {selectedDept} ({academicYear}). Once faculty submit verified publications, patents, and activities, the official merged matrix will appear here.
+            </p>
+          </div>
+        ) : (
           <div className="space-y-6">
             <div className="overflow-x-auto rounded-2xl border border-gray-200 dark:border-slate-800">
               <table className="w-full text-xs text-left">
@@ -335,11 +284,11 @@ const Reports = () => {
                       <td className="p-3.5">{fac.student_guidance}</td>
                       <td className="p-3.5 font-medium">
                         <span className="px-2 py-1 rounded bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-700">
-                          {fac.college_responsibilities || 'Exam Coordinator, IQAC Coordinator'}
+                          {fac.college_responsibilities || 'None Recorded'}
                         </span>
                       </td>
                       <td className="p-3.5 font-semibold">{fac.awards}</td>
-                      <td className="p-3.5 font-semibold text-amber-600">{fac.student_feedback}</td>
+                      <td className="p-3.5 font-semibold text-amber-600">{fac.student_feedback || 'N/A'}</td>
                       <td className="p-3.5 font-extrabold text-indigo-600 dark:text-indigo-400">{fac.api_score}</td>
                       <td className="p-3.5 font-bold text-emerald-600">
                         <span className="inline-flex items-center">
@@ -360,9 +309,9 @@ const Reports = () => {
                       <td className="p-3.5 text-emerald-600">₹{reportData.department_totals.grants_lakhs}L</td>
                       <td className="p-3.5">{reportData.department_totals.consultancy}</td>
                       <td className="p-3.5">{reportData.department_totals.student_guidance}</td>
-                      <td className="p-3.5 text-gray-500 italic">Department Coordinator Roles Active</td>
+                      <td className="p-3.5 text-gray-500 italic">-</td>
                       <td className="p-3.5">{reportData.department_totals.awards}</td>
-                      <td className="p-3.5 text-amber-600">4.6/5 Avg</td>
+                      <td className="p-3.5 text-amber-600">-</td>
                       <td className="p-3.5 text-indigo-600">{reportData.department_totals.api_score_total}</td>
                       <td className="p-3.5 text-emerald-600">{reportData.department_totals.verified_docs}</td>
                     </tr>
@@ -371,7 +320,7 @@ const Reports = () => {
               </table>
             </div>
           </div>
-        ) : null}
+        )}
       </div>
 
       {/* Standard Compliance Reports Section */}

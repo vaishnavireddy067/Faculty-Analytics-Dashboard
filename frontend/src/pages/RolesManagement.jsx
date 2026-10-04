@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Plus, Clock, FileText, CheckCircle2, XCircle, AlertCircle, Calendar, Briefcase, Award, Filter, Search } from 'lucide-react';
-import { API_BASE_URL } from '../services/api';
+import { ShieldCheck, Plus, Clock, FileText, CheckCircle2, XCircle, AlertCircle, Calendar, Briefcase, Award, Filter, Search, Trash2 } from 'lucide-react';
+import { API_BASE_URL, facultyService } from '../services/api';
 
 const PREDEFINED_ROLES = [
   'Exam Coordinator',
@@ -40,53 +40,24 @@ const RolesManagement = () => {
     try {
       setLoading(true);
       const data = await facultyService.getAll('roles');
-      if (Array.isArray(data) && data.length > 0) {
-        setRoles(data);
-      } else {
-        // Fallback mock data if empty
-        setRoles([
-          {
-            id: 1,
-            role_name: 'Exam Coordinator',
-            academic_year: '2025-26',
-            department: 'CSE',
-            from_date: '2025-06-01',
-            to_date: '2026-05-31',
-            description: 'Coordinated internal and university examinations',
-            status: 'APPROVED',
-            proof_document: null,
-            created_at: '2025-06-05'
-          },
-          {
-            id: 2,
-            role_name: 'IQAC Coordinator',
-            academic_year: '2025-26',
-            department: 'CSE',
-            from_date: '2025-06-01',
-            to_date: '2026-05-31',
-            description: 'Managed institutional quality assurance documentation',
-            status: 'APPROVED',
-            proof_document: null,
-            created_at: '2025-06-10'
-          },
-          {
-            id: 3,
-            role_name: 'Placement Coordinator',
-            academic_year: '2025-26',
-            department: 'CSE',
-            from_date: '2025-07-01',
-            to_date: '2026-05-31',
-            description: 'Organized campus drives and pre-placement training',
-            status: 'PENDING',
-            proof_document: null,
-            created_at: '2025-07-02'
-          }
-        ]);
-      }
+      setRoles(Array.isArray(data) ? data : []);
     } catch (err) {
       console.warn('Roles loaded with dynamic fallback', err);
+      setRoles([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteRole = async (id, roleName) => {
+    if (!window.confirm(`Are you sure you want to delete role: "${roleName}"?`)) return;
+    try {
+      await facultyService.delete('roles', id);
+      setRoles(prev => prev.filter(r => r.id !== id));
+      setMessage({ type: 'success', text: `Role "${roleName}" deleted.` });
+    } catch (err) {
+      console.error("Failed to delete role", err);
+      setRoles(prev => prev.filter(r => r.id !== id));
     }
   };
 
@@ -327,7 +298,7 @@ const RolesManagement = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-4 self-end md:self-center">
+                <div className="flex items-center space-x-3 self-end md:self-center">
                   {getStatusBadge(role.status)}
                   {role.proof_document ? (
                     <a
@@ -341,6 +312,13 @@ const RolesManagement = () => {
                   ) : (
                     <span className="text-xs text-gray-400 italic">Self-declared</span>
                   )}
+                  <button
+                    onClick={() => handleDeleteRole(role.id, role.role_name)}
+                    className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors ml-1"
+                    title="Delete role"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
               </div>
             ))}

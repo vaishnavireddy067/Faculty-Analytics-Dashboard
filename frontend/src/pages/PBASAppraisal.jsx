@@ -21,44 +21,45 @@ const PBASAppraisal = () => {
       const res = await facultyService.getPBASScore(academicYear);
       setPbasData(res);
     } catch (err) {
-      console.error(err);
-      // High-quality fallback data
+      console.error("Failed to fetch PBAS score", err);
+      const userEmail = localStorage.getItem('current_user_email') || '';
+      const userName = localStorage.getItem('current_user_name') || userEmail.split('@')[0] || 'Faculty';
       setPbasData({
-        faculty_name: 'Dr. Vaishnavi Anugu',
-        department: 'Computer Science & Engineering',
+        faculty_name: userName,
+        department: localStorage.getItem('user_department') || 'Computer Science & Engineering',
         academic_year: academicYear,
         category_1: {
           name: 'Teaching, Learning & Evaluation Related Activities',
-          score: 92.0,
+          score: 0.0,
           max_score: 100,
           min_required: 80,
-          status: 'Achieved'
+          status: 'Pending Entries'
         },
         category_2: {
           name: 'Professional Development & Institutional Governance',
-          score: 46.0,
+          score: 0.0,
           max_score: 50,
           min_required: 35,
-          status: 'Achieved'
+          status: 'Pending Entries'
         },
         category_3: {
           name: 'Research, Publications & Academic Contributions',
-          score: 110.0,
+          score: 0.0,
           breakdown: {
-            publications: 60.0,
-            patents: 30.0,
-            books: 10.0,
-            consultancies: 5.0,
-            grants: 5.0
+            publications: 0.0,
+            patents: 0.0,
+            books: 0.0,
+            consultancies: 0.0,
+            grants: 0.0
           },
           min_required: 50,
-          status: 'Achieved'
+          status: 'Pending Entries'
         },
-        total_pbas_score: 248.0,
+        total_pbas_score: 0.0,
         cas_promotion_assessment: {
-          next_target_level: 'Stage 3 (Assistant Prof Selection Grade)',
-          is_eligible: true,
-          recommendation: 'Eligible for Career Advancement Scheme (CAS) Stage 3 Promotion. Minimum threshold of 200 points met.'
+          next_target_level: 'Stage 2 (Assistant Prof Senior Scale)',
+          is_eligible: false,
+          recommendation: 'Log verified publications, patents, and teaching activities to calculate CAS eligibility score.'
         }
       });
     } finally {
@@ -66,9 +67,9 @@ const PBASAppraisal = () => {
     }
   };
 
-  const cat1 = pbasData?.category_1 || { score: 90, min_required: 80, max_score: 100 };
-  const cat2 = pbasData?.category_2 || { score: 45, min_required: 35, max_score: 50 };
-  const cat3 = pbasData?.category_3 || { score: 110, min_required: 50 };
+  const cat1 = pbasData?.category_1 || { score: 0, min_required: 80, max_score: 100 };
+  const cat2 = pbasData?.category_2 || { score: 0, min_required: 35, max_score: 50 };
+  const cat3 = pbasData?.category_3 || { score: 0, min_required: 50 };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">

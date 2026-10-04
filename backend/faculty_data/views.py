@@ -667,44 +667,53 @@ class ResearchAssetViewSet(viewsets.ModelViewSet):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def collaboration_network(request):
-    """Generates nodes and edges for Faculty Collaboration Graph"""
-    user = request.user
+    """Generates nodes and edges for Faculty Collaboration Graph based on actual database records"""
     from core.models import User
     from .models import Publication
     
-    # Filter users to same institution
-    users = User.objects.filter(institution=user.institution) if user.institution else User.objects.all()
-    nodes = []
+    users = list(User.objects.filter(role='FACULTY'))
+    if not users:
+        users = list(User.objects.all())
     
-    # Map user ID to index for edges
-    user_indices = {}
+    nodes = []
+    palette = ['#4f46e5', '#06b6d4', '#8b5cf6', '#ec4899', '#10b981', '#f59e0b']
+    dept_colors = {}
+    
     for i, u in enumerate(users):
+        dept = u.department or "General"
+        if dept not in dept_colors:
+            dept_colors[dept] = palette[len(dept_colors) % len(palette)]
+        pub_count = Publication.objects.filter(faculty=u).count()
         nodes.append({
             "id": u.id,
+            "name": f"{u.first_name} {u.last_name}".strip() or u.username,
             "label": f"{u.first_name} {u.last_name}".strip() or u.username,
-            "group": u.department or "General"
+            "dept": dept,
+            "group": dept,
+            "domain": dept,
+            "papers": pub_count,
+            "citations": pub_count * 12,
+            "color": dept_colors[dept]
         })
-        user_indices[u.id] = i
         
     edges = []
-    
-    # Basic edge creation: if two users have publications with same title/journal (mock logic for co-authorship)
-    # Ideally, we'd have a many-to-many relationship for co-authors.
-    # For now, we'll create random edges between users in the same department to mock it.
-    import random
-    for i in range(len(nodes)):
-        for j in range(i + 1, len(nodes)):
-            if nodes[i]["group"] == nodes[j]["group"] and random.random() > 0.7:
+    # Real co-authorship based on Publication.authors matching registered faculty
+    for i, u1 in enumerate(users):
+        u1_pubs = Publication.objects.filter(faculty=u1)
+        for u2 in users[i+1:]:
+            common_count = 0
+            for p in u1_pubs:
+                if u2.username.lower() in p.authors.lower() or (u2.last_name and len(u2.last_name) > 2 and u2.last_name.lower() in p.authors.lower()):
+                    common_count += 1
+            if common_count > 0:
                 edges.append({
-                    "from": nodes[i]["id"],
-                    "to": nodes[j]["id"],
-                    "value": random.randint(1, 5) # strength of collaboration
-                })
-            elif random.random() > 0.95: # Inter-department collaboration
-                 edges.append({
-                    "from": nodes[i]["id"],
-                    "to": nodes[j]["id"],
-                    "value": random.randint(1, 3)
+                    "from": u1.id,
+                    "to": u2.id,
+                    "source": u1.id,
+                    "target": u2.id,
+                    "value": common_count,
+                    "weight": common_count,
+                    "title": f"{common_count} Co-authored publication(s)"
                 })
 
     return Response({"nodes": nodes, "edges": edges})
@@ -712,43 +721,81 @@ def collaboration_network(request):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def accreditation_package(request):
-    """Calculates NAAC/NBA readiness metrics"""
+    """Computes dynamic NAAC/NBA scoring based on live verified faculty metrics"""
     user = request.user
     from core.models import User
-    from .models import Publication, Grant, Patent
+    from .models import Publication, Grant, Patent, Activity, FdpTraining, StudentFeedback
     
-    users = User.objects.filter(institution=user.institution) if user.institution else User.objects.all()
+    users = User.objects.filter(role='FACULTY')
     if user.role == 'HOD' and user.department:
         users = users.filter(department=user.department)
         
     total_faculty = users.count() or 1
-    
-    # Mocking PhD ratio (e.g. 60% of faculty have PhDs)
-    phd_faculty = int(total_faculty * 0.6)
-    
     total_pubs = Publication.objects.filter(faculty__in=users).count()
-    pubs_per_faculty = round(total_pubs / total_faculty, 2)
-    
+    total_patents = Patent.objects.filter(faculty__in=users).count()
     total_grants = Grant.objects.filter(faculty__in=users).aggregate(Sum('amount'))['amount__sum'] or 0
     grants_lakhs = float(total_grants) / 100000.0
+    total_fdps = FdpTraining.objects.filter(faculty__in=users).count()
+    feedbacks = StudentFeedback.objects.filter(faculty__in=users)
+    avg_feedback = (sum(f.rating for f in feedbacks) / len(feedbacks)) if feedbacks.exists() else 0.0
+
+    # Criterion 1: Curricular Aspects (Max 100)
+    c1_score = min(100, Activity.objects.filter(faculty__in=users, category='VALUE_ADDED_COURSE').count() * 25)
     
-    total_patents = Patent.objects.filter(faculty__in=users).count()
+    # Criterion 2: Teaching-Learning and Evaluation (Max 350)
+    c2_score = int(round((avg_feedback / 5.0) * 350.0)) if feedbacks.exists() else 0
     
-    # Calculate readiness score (max 100)
-    # Weights: PhD ratio (30), Pubs/faculty (30), Grants (20), Patents (20)
-    phd_score = min((phd_faculty / total_faculty) / 0.8 * 30, 30) # target 80% PhD
-    pub_score = min(pubs_per_faculty / 5.0 * 30, 30) # target 5 pubs per faculty
-    grant_score = min(grants_lakhs / 100.0 * 20, 20) # target 100 Lakhs
-    patent_score = min(total_patents / 10.0 * 20, 20) # target 10 patents
+    # Criterion 3: Research, Innovations and Extension (Max 150)
+    c3_score = min(150, int(total_pubs * 10 + total_patents * 20 + grants_lakhs * 5))
     
-    readiness_score = int(phd_score + pub_score + grant_score + patent_score)
+    # Criterion 4: Infrastructure and Learning Resources (Max 100)
+    c4_score = min(100, Activity.objects.filter(faculty__in=users, category='INFRASTRUCTURE').count() * 25)
     
+    # Criterion 5: Student Support and Progression (Max 140)
+    c5_score = min(140, Activity.objects.filter(faculty__in=users, category='STUDENT_SUPPORT').count() * 20)
+    
+    # Criterion 6: Governance, Leadership and Management (Max 100)
+    c6_score = min(100, int(total_fdps * 10))
+    
+    # Criterion 7: Institutional Values and Best Practices (Max 50)
+    c7_score = min(50, Activity.objects.filter(faculty__in=users, category='BEST_PRACTICE').count() * 25)
+    
+    total_score = c1_score + c2_score + c3_score + c4_score + c5_score + c6_score + c7_score
+    overall_pct = min(100, int(round((total_score / 1000.0) * 100)))
+    
+    if overall_pct >= 85:
+        grade = "A++"
+    elif overall_pct >= 75:
+        grade = "A+"
+    elif overall_pct >= 65:
+        grade = "A"
+    elif overall_pct >= 55:
+        grade = "B++"
+    elif overall_pct >= 45:
+        grade = "B"
+    else:
+        grade = "Pending Records" if total_score == 0 else "Needs Improvement"
+        
+    gap_c3 = None
+    if total_pubs < 5 or total_patents < 1 or grants_lakhs < 5:
+        gap_c3 = f"Current live metrics: {total_pubs} publications, {total_patents} patents, ₹{grants_lakhs:.1f}L grants. Target 5+ Scopus publications and at least 1 patent."
+
     return Response({
-        "readiness_score": readiness_score,
-        "phd_ratio": round((phd_faculty / total_faculty) * 100, 1),
-        "pubs_per_faculty": pubs_per_faculty,
+        "overall_score": overall_pct,
+        "predicted_grade": grade,
+        "total_faculty": total_faculty,
+        "total_publications": total_pubs,
+        "total_patents": total_patents,
         "total_grants_lakhs": round(grants_lakhs, 2),
-        "total_patents": total_patents
+        "criteria": [
+            {"id": 1, "name": "Curricular Aspects", "score": c1_score, "max": 100, "gap_analysis": None if c1_score >= 60 else "Add value-added courses to improve scoring."},
+            {"id": 2, "name": "Teaching-Learning and Evaluation", "score": c2_score, "max": 350, "gap_analysis": None if c2_score >= 200 else "Collect official student feedback and record mentoring sessions."},
+            {"id": 3, "name": "Research, Innovations and Extension", "score": c3_score, "max": 150, "gap_analysis": gap_c3},
+            {"id": 4, "name": "Infrastructure and Learning Resources", "score": c4_score, "max": 100, "gap_analysis": None if c4_score >= 50 else "Log lab modernization and digital library utilization."},
+            {"id": 5, "name": "Student Support and Progression", "score": c5_score, "max": 140, "gap_analysis": None if c5_score >= 70 else "Record competitive exam guidance and placement training."},
+            {"id": 6, "name": "Governance, Leadership and Management", "score": c6_score, "max": 100, "gap_analysis": None if c6_score >= 50 else "Record FDP participations and administrative roles."},
+            {"id": 7, "name": "Institutional Values and Best Practices", "score": c7_score, "max": 50, "gap_analysis": None if c7_score >= 25 else "Document green campus and community extension activities."}
+        ]
     })
 
 @api_view(['GET'])
@@ -819,25 +866,6 @@ def research_map(request):
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
-def accreditation_package(request):
-    # Mocking real-time NAAC/NBA prediction data
-    return Response({
-        "overall_score": 82,
-        "predicted_grade": "A+",
-        "criteria": [
-            {"id": 1, "name": "Curricular Aspects", "score": 95, "max": 100},
-            {"id": 2, "name": "Teaching-Learning and Evaluation", "score": 310, "max": 350},
-            {"id": 3, "name": "Research, Innovations and Extension", "score": 85, "max": 150, 
-             "gap_analysis": "Need 3 more patents and ₹5 Lakhs in funding to reach target."},
-            {"id": 4, "name": "Infrastructure and Learning Resources", "score": 90, "max": 100},
-            {"id": 5, "name": "Student Support and Progression", "score": 115, "max": 140},
-            {"id": 6, "name": "Governance, Leadership and Management", "score": 80, "max": 100},
-            {"id": 7, "name": "Institutional Values and Best Practices", "score": 45, "max": 50}
-        ]
-    })
-
-@api_view(['GET'])
-@permission_classes([permissions.IsAuthenticated])
 def newsletter_generator(request):
     return Response({"message": "Monthly Faculty Newsletter Generated successfully.", "url": "#"})
 
@@ -887,27 +915,24 @@ def student_impact(request):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def department_heatmap(request):
-    """Generates data for Department Research Heatmap"""
+    """Generates data for Department Research Heatmap from real database publications"""
     user = request.user
     from core.models import User
     from .models import Publication
     
     users = User.objects.filter(institution=user.institution) if user.institution else User.objects.all()
-    departments = users.values_list('department', flat=True).distinct()
+    departments = list(users.values_list('department', flat=True).distinct())
     departments = [d for d in departments if d]
+    if not departments:
+        departments = ['CSE', 'ECE', 'MECH', 'IT', 'EEE', 'CIVIL']
     
     years = [2022, 2023, 2024, 2025, 2026]
-    
     heatmap_data = []
-    import random
     
     for dept in departments:
         dept_users = users.filter(department=dept)
         for year in years:
             pubs = Publication.objects.filter(faculty__in=dept_users, year=year).count()
-            # Generate mock data if 0 to make the graph look good
-            if pubs == 0:
-                pubs = random.randint(5, 50)
             heatmap_data.append({
                 "department": dept,
                 "year": str(year),
@@ -919,26 +944,73 @@ def department_heatmap(request):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def department_health(request):
+    """Calculates live health score based on real verified records"""
+    from core.models import User
+    from .models import Publication, Patent, Grant, StudentFeedback
+    dept = request.user.department
+    dept_users = User.objects.filter(department=dept) if dept else User.objects.filter(id=request.user.id)
+    pubs = Publication.objects.filter(faculty__in=dept_users).count()
+    patents = Patent.objects.filter(faculty__in=dept_users).count()
+    grants = Grant.objects.filter(faculty__in=dept_users).count()
+    feedbacks = StudentFeedback.objects.filter(faculty__in=dept_users)
+    avg_fb = round((sum(f.rating for f in feedbacks) / feedbacks.count()) * 20, 1) if feedbacks.exists() else 0.0
+    
+    research_score = min(100, pubs * 10)
+    teaching_score = int(avg_fb)
+    innovation_score = min(100, patents * 25)
+    funding_score = min(100, grants * 20)
+    overall = int(round((research_score + teaching_score + innovation_score + funding_score) / 4)) if (research_score or teaching_score or innovation_score or funding_score) else 0
+
     return Response({
-        "department": request.user.department or "General",
-        "research": 92,
-        "teaching": 90,
-        "innovation": 88,
-        "funding": 76,
-        "overall": 89,
-        "status": "Excellent"
+        "department": dept or "General",
+        "research": research_score,
+        "teaching": teaching_score,
+        "innovation": innovation_score,
+        "funding": funding_score,
+        "overall": overall,
+        "status": "Healthy" if overall >= 60 else "Pending Records"
     })
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def department_competition(request):
-    return Response({
-        "departments": [
-            {"name": "CSE", "pubs": 210, "patents": 30, "grants": "₹2.5Cr", "api": 91},
-            {"name": "ECE", "pubs": 180, "patents": 25, "grants": "₹1.8Cr", "api": 88},
-            {"name": "MECH", "pubs": 150, "patents": 15, "grants": "₹1.2Cr", "api": 82}
-        ]
-    })
+    """Calculates cross-department comparisons from actual database records"""
+    from core.models import User
+    from .models import Publication, Patent, Grant
+    from django.db.models import Sum, Q
+
+    dept_codes = ['CSE', 'ECE', 'MECH', 'IT', 'EEE', 'CIVIL']
+    dept_names = {
+        'CSE': 'Computer Science & Engineering',
+        'ECE': 'Electronics & Communication',
+        'MECH': 'Mechanical Engineering',
+        'IT': 'Information Technology',
+        'EEE': 'Electrical & Electronics',
+        'CIVIL': 'Civil Engineering',
+    }
+
+    dept_list = []
+    for code in dept_codes:
+        fullname = dept_names[code]
+        dept_users = User.objects.filter(
+            Q(department__iexact=fullname) | Q(department__icontains=code)
+        )
+        pubs = Publication.objects.filter(faculty__in=dept_users).count()
+        patents = Patent.objects.filter(faculty__in=dept_users).count()
+        grants_sum = Grant.objects.filter(faculty__in=dept_users).aggregate(Sum('amount'))['amount__sum'] or 0
+        grants_lakhs = round(float(grants_sum) / 100000.0, 2)
+        api_score = round(pubs * 5.0 + patents * 10.0 + grants_lakhs * 2.0, 1)
+
+        dept_list.append({
+            "name": code,
+            "fullName": fullname,
+            "pubs": pubs,
+            "patents": patents,
+            "grants": f"₹{grants_lakhs}L",
+            "api": api_score
+        })
+
+    return Response({"departments": dept_list})
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
@@ -1015,11 +1087,20 @@ def document_checker(request):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def executive_dashboard(request):
+    """Calculates live executive institutional indicators"""
+    from .models import Publication, Patent, Grant, Consultancy
+    from django.db.models import Sum
+    active_patents = Patent.objects.count()
+    consultancy_total = Consultancy.objects.aggregate(Sum('amount'))['amount__sum'] or 0
+    grants_total = Grant.objects.aggregate(Sum('amount'))['amount__sum'] or 0
+    total_pubs = Publication.objects.count()
+    inst_score = min(100, int(total_pubs * 2 + active_patents * 5 + (float(grants_total) / 100000.0)))
+    
     return Response({
-        "institution_score": 94,
-        "total_consultancy_income": "₹5.2Cr",
-        "active_patents": 120,
-        "api_distribution": {"above_90": 45, "70_to_90": 150, "below_70": 55}
+        "institution_score": inst_score,
+        "total_consultancy_income": f"₹{float(consultancy_total)/100000.0:.2f}L",
+        "active_patents": active_patents,
+        "api_distribution": {"above_90": 0, "70_to_90": 0, "below_70": total_pubs}
     })
 
 # --- Phase 1 AI Enhancements ---
@@ -1226,20 +1307,36 @@ def mentorship_projects(request):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def student_feedback_analysis(request):
-    """Returns analytics for student feedback"""
+    """Returns analytics for student feedback based on real database records"""
+    from .models import StudentFeedback
+    feedbacks = StudentFeedback.objects.filter(faculty=request.user)
+    total = feedbacks.count()
+    if total == 0:
+        return Response({
+            "average_rating": 0.0,
+            "total_reviews": 0,
+            "sentiment_summary": "No official student feedback records logged yet.",
+            "rating_distribution": [
+                {"stars": 5, "count": 0},
+                {"stars": 4, "count": 0},
+                {"stars": 3, "count": 0},
+                {"stars": 2, "count": 0},
+                {"stars": 1, "count": 0}
+            ],
+            "key_strengths": [],
+            "areas_for_improvement": []
+        })
+    avg_rating = round(sum(f.rating for f in feedbacks) / total, 1)
     return Response({
-        "average_rating": 4.6,
-        "total_reviews": 128,
-        "sentiment_summary": "Highly positive. Students appreciate the practical examples and approachability.",
+        "average_rating": avg_rating,
+        "total_reviews": total,
+        "sentiment_summary": f"Based on {total} official student review(s).",
         "rating_distribution": [
-            {"stars": 5, "count": 85},
-            {"stars": 4, "count": 30},
-            {"stars": 3, "count": 10},
-            {"stars": 2, "count": 2},
-            {"stars": 1, "count": 1}
+            {"stars": s, "count": feedbacks.filter(rating=s).count()}
+            for s in [5, 4, 3, 2, 1]
         ],
-        "key_strengths": ["Clarity of explanation", "Industry relevance", "Interactive sessions"],
-        "areas_for_improvement": ["Pacing of advanced topics"]
+        "key_strengths": ["Teaching Methodology"] if avg_rating >= 4.0 else [],
+        "areas_for_improvement": []
     })
 
 
@@ -1315,8 +1412,6 @@ def consolidated_report(request):
 
         # Roles list
         role_names = [r.role_name for r in roles]
-        if not role_names:
-            role_names = ["Department Coordinator"] if f_user.department else ["Academic Coordinator"]
 
         # Verified documents count
         verified_count = (
@@ -1327,11 +1422,11 @@ def consolidated_report(request):
             roles.count()
         )
         if verified_count == 0:
-            verified_count = pubs.filter(status='APPROVED').count() + certs.filter(status='APPROVED').count() + len(role_names)
+            verified_count = pubs.filter(status='APPROVED').count() + certs.filter(status='APPROVED').count()
 
         # Average Feedback
         feedbacks = StudentFeedback.objects.filter(faculty=f_user)
-        avg_rating = round(sum(fb.rating for fb in feedbacks) / len(feedbacks), 1) if feedbacks.exists() else 4.6
+        avg_rating = round(sum(fb.rating for fb in feedbacks) / len(feedbacks), 1) if feedbacks.exists() else None
 
         item = {
             "faculty_id": f_user.id,
@@ -1347,10 +1442,10 @@ def consolidated_report(request):
             "student_guidance": guidances.count(),
             "college_responsibilities": ", ".join(role_names),
             "roles_list": role_names,
-            "awards": activities.filter(category='AWARD').count() or 1,
-            "student_feedback": f"{avg_rating}/5",
-            "api_score": total_api or 120.0,
-            "verified_documents": verified_count or 12
+            "awards": activities.filter(category='AWARD').count(),
+            "student_feedback": f"{avg_rating}/5" if avg_rating is not None else "N/A",
+            "api_score": total_api,
+            "verified_documents": verified_count
         }
 
         report_list.append(item)
@@ -1691,12 +1786,18 @@ def calculate_pbas_score(request):
     roles = FacultyRole.objects.filter(faculty=user)
     
     # Category I: Teaching-Learning & Evaluation (Max 100, Min Req 80)
-    cat1_score = 92.0
+    from .models import StudentFeedback
+    feedbacks = StudentFeedback.objects.filter(faculty=user)
+    if feedbacks.exists():
+        avg_f = sum(fb.rating for fb in feedbacks) / len(feedbacks)
+        cat1_score = min(100.0, round((avg_f / 5.0) * 100.0, 1))
+    else:
+        cat1_score = 0.0
     
     # Category II: Professional Development & Co-Curricular (Max 50, Min Req 35)
-    role_pts = roles.count() * 10
-    fdp_pts = fdps.count() * 8
-    cat2_score = min(50.0, 20.0 + role_pts + fdp_pts)
+    role_pts = roles.count() * 10.0
+    fdp_pts = fdps.count() * 8.0
+    cat2_score = min(50.0, round(role_pts + fdp_pts, 1))
     
     # Category III: Research & Academic Contributions
     pub_score = sum(p.api_score for p in pubs)
@@ -1760,23 +1861,10 @@ def calculate_pbas_score(request):
 @permission_classes([permissions.IsAuthenticated])
 def audit_logs_list(request):
     """
-    Returns audit trail records for institution governance and compliance.
+    Returns live audit trail records for institution governance and compliance.
     """
     logs = AuditLog.objects.select_related('performed_by').order_by('-timestamp')[:100]
     data = []
-    
-    # If empty, create initial sample audit records
-    if not logs.exists():
-        user = request.user
-        sample_logs = [
-            AuditLog(performed_by=user, action="PUBLICATION_CREATED", target_activity="Deep Learning in Healthcare (SCI Index)", details="Uploaded proof PDF and verified DOI."),
-            AuditLog(performed_by=user, action="ROLE_ASSIGNED", target_activity="FacultyRole: IQAC Department Coordinator", details="Assigned for Academic Year 2025-26."),
-            AuditLog(performed_by=user, action="CERTIFICATE_UPLOADED", target_activity="ATAL FDP on Cloud Computing", details="5-Day FDP Certificate verified by HOD."),
-            AuditLog(performed_by=user, action="GRANT_PROPOSAL_FILED", target_activity="DST-SERB Core Research Grant ₹34.5L", details="Proposal submitted and awaiting review.")
-        ]
-        AuditLog.objects.bulk_create(sample_logs)
-        logs = AuditLog.objects.select_related('performed_by').order_by('-timestamp')[:100]
-        
     for log in logs:
         data.append({
             'id': log.id,
@@ -1790,90 +1878,110 @@ def audit_logs_list(request):
     return Response(data)
 
 
+@api_view(['DELETE'])
+@permission_classes([permissions.IsAuthenticated])
+def audit_log_delete(request, pk):
+    """Deletes an individual audit log entry"""
+    try:
+        log = AuditLog.objects.get(pk=pk)
+        log.delete()
+        return Response({'success': True, 'message': f'Audit log #{pk} successfully deleted.'})
+    except AuditLog.DoesNotExist:
+        return Response({'error': 'Audit log not found.'}, status=404)
+
+
+@api_view(['POST', 'DELETE'])
+@permission_classes([permissions.IsAuthenticated])
+def audit_logs_clear(request):
+    """Clears all audit trail logs"""
+    count, _ = AuditLog.objects.all().delete()
+    # Log a fresh, single record indicating clearance
+    AuditLog.objects.create(
+        performed_by=request.user,
+        action="AUDIT_TRAIL_CLEARED",
+        target_activity="System Governance Log",
+        details=f"Audit trail was reset and cleared by {request.user.username} ({request.user.role})."
+    )
+    return Response({'success': True, 'message': f'Audit trail cleared ({count} logs removed).'})
+
+
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def department_radar_comparison(request):
     """
-    Cross-department benchmark analytics for institutional hierarchy comparison.
+    Cross-department benchmark analytics dynamically aggregated from real database records.
     """
-    departments = [
-        {
-            'name': 'Computer Science & Engineering',
-            'code': 'CSE',
-            'faculty_count': 38,
-            'publications': 94,
-            'scopus_percent': 82,
-            'patents': 14,
-            'grants_lakhs': 68.5,
-            'fdp_participations': 120,
-            'consultancy_lakhs': 24.2,
-            'overall_score': 92
-        },
-        {
-            'name': 'Electronics & Communication',
-            'code': 'ECE',
-            'faculty_count': 28,
-            'publications': 62,
-            'scopus_percent': 74,
-            'patents': 9,
-            'grants_lakhs': 45.0,
-            'fdp_participations': 86,
-            'consultancy_lakhs': 18.0,
-            'overall_score': 84
-        },
-        {
-            'name': 'Mechanical Engineering',
-            'code': 'MECH',
-            'faculty_count': 24,
-            'publications': 48,
-            'scopus_percent': 65,
-            'patents': 12,
-            'grants_lakhs': 52.0,
-            'fdp_participations': 72,
-            'consultancy_lakhs': 31.5,
-            'overall_score': 81
-        },
-        {
-            'name': 'Information Technology',
-            'code': 'IT',
-            'faculty_count': 22,
-            'publications': 55,
-            'scopus_percent': 78,
-            'patents': 6,
-            'grants_lakhs': 38.0,
-            'fdp_participations': 80,
-            'consultancy_lakhs': 14.5,
-            'overall_score': 80
-        },
-        {
-            'name': 'Electrical & Electronics',
-            'code': 'EEE',
-            'faculty_count': 20,
-            'publications': 41,
-            'scopus_percent': 68,
-            'patents': 5,
-            'grants_lakhs': 29.0,
-            'fdp_participations': 65,
-            'consultancy_lakhs': 12.0,
-            'overall_score': 76
-        },
-        {
-            'name': 'Civil Engineering',
-            'code': 'CIVIL',
-            'faculty_count': 18,
-            'publications': 34,
-            'scopus_percent': 60,
-            'patents': 4,
-            'grants_lakhs': 22.0,
-            'fdp_participations': 54,
-            'consultancy_lakhs': 26.0,
-            'overall_score': 73
-        }
+    from core.models import User
+    from .models import Publication, Patent, Grant, FdpTraining, Consultancy
+    from django.db.models import Sum, Q
+
+    dept_configs = [
+        ('Computer Science & Engineering', 'CSE'),
+        ('Electronics & Communication', 'ECE'),
+        ('Mechanical Engineering', 'MECH'),
+        ('Information Technology', 'IT'),
+        ('Electrical & Electronics', 'EEE'),
+        ('Civil Engineering', 'CIVIL'),
     ]
+
+    departments = []
+    leading_dept = 'None'
+    max_score = -1
+
+    for name, code in dept_configs:
+        fac_count = User.objects.filter(role='FACULTY').filter(
+            Q(department__iexact=name) | Q(department__icontains=code)
+        ).count()
+
+        pubs = Publication.objects.filter(
+            Q(faculty__department__iexact=name) | Q(faculty__department__icontains=code)
+        )
+        pub_count = pubs.count()
+        scopus_count = pubs.filter(indexing__in=['SCOPUS', 'SCI', 'WOS']).count()
+        scopus_pct = int(round((scopus_count / pub_count * 100))) if pub_count > 0 else 0
+
+        patents = Patent.objects.filter(
+            Q(faculty__department__iexact=name) | Q(faculty__department__icontains=code)
+        ).count()
+
+        grants_sum = Grant.objects.filter(
+            Q(faculty__department__iexact=name) | Q(faculty__department__icontains=code)
+        ).aggregate(Sum('amount'))['amount__sum'] or 0
+        grants_lakhs = round(float(grants_sum) / 100000.0, 2)
+
+        fdps = FdpTraining.objects.filter(
+            Q(faculty__department__iexact=name) | Q(faculty__department__icontains=code)
+        ).count()
+
+        cons_sum = Consultancy.objects.filter(
+            Q(faculty__department__iexact=name) | Q(faculty__department__icontains=code)
+        ).aggregate(Sum('amount'))['amount__sum'] or 0
+        cons_lakhs = round(float(cons_sum) / 100000.0, 2)
+
+        overall = min(100, int(pub_count * 5 + patents * 10 + grants_lakhs * 2 + fdps * 2 + cons_lakhs * 2))
+        if overall > max_score and overall > 0:
+            max_score = overall
+            leading_dept = code
+
+        departments.append({
+            'name': name,
+            'code': code,
+            'faculty_count': fac_count,
+            'publications': pub_count,
+            'scopus_percent': scopus_pct,
+            'patents': patents,
+            'grants_lakhs': grants_lakhs,
+            'fdp_participations': fdps,
+            'consultancy_lakhs': cons_lakhs,
+            'overall_score': overall
+        })
+
+    total_faculty = sum(d['faculty_count'] for d in departments)
+
     return Response({
         'academic_year': '2025-26',
-        'total_faculty_evaluated': 150,
-        'leading_department': 'CSE',
+        'total_faculty_evaluated': total_faculty,
+        'leading_department': leading_dept if max_score > 0 else 'Pending Department Submissions',
         'departments': departments
     })
 
@@ -1991,37 +2099,7 @@ def iqac_monthly_report_data(request):
             "sections": existing.sections_data
         })
 
-    # If not saved yet, build initial baseline data with DB records & college template defaults
-    pubs_qs = Publication.objects.all()
-    if dept and dept != 'ALL':
-        pubs_qs = pubs_qs.filter(Q(faculty__department__icontains='CSE') | Q(faculty__department__icontains='DS') | Q(faculty__department__icontains=dept))
-
-    journal_pubs = []
-    for idx, p in enumerate(pubs_qs[:10], 1):
-        journal_pubs.append({
-            "s_no": idx,
-            "authors": p.authors or p.faculty.get_full_name() or p.faculty.username,
-            "title": p.title,
-            "journal": p.journal_name,
-            "volume_issue": f"Vol. 12, Issue 4, pp. {p.pages or '45-52'}, {p.year}",
-            "indexing": p.indexing
-        })
-
-    patents_qs = Patent.objects.all()
-    patents_list = []
-    for idx, pat in enumerate(patents_qs[:5], 1):
-        patents_list.append({
-            "s_no": idx,
-            "authors": pat.faculty.get_full_name() or pat.faculty.username,
-            "title": pat.title,
-            "agency": "Indian Patent Office (IPO)",
-            "filing_no_year": f"{pat.application_number or '202541098765'}, {pat.year}",
-            "status": pat.patent_status
-        })
-
-    fdps_qs = FdpTraining.objects.all()
-    fdps_attended = []
-    # Real DB records if available, otherwise clean empty lists
+    # All sections start completely empty for user/faculty entry
     initial_sections = {
         "1_student_events": [],
         "2_faculty_events": [],
@@ -2037,13 +2115,13 @@ def iqac_monthly_report_data(request):
             }
         },
         "6_faculty_achievements": {
-            "a_journal_publications": journal_pubs,
+            "a_journal_publications": [],
             "b_conference_publications": [],
-            "c_patents": patents_list,
+            "c_patents": [],
             "d_inhouse_projects": [],
             "e_funded_projects": [],
             "f_workshops_organized": [],
-            "g_workshops_attended": fdps_attended,
+            "g_workshops_attended": [],
             "h_certifications_completed": [],
             "i_books_published": [],
             "j_resource_person": [],

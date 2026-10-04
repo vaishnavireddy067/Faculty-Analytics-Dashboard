@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { UploadCloud, FileText, CheckCircle2, Clock, XCircle, Search, Filter, Plus, Award, ShieldCheck, Download, ExternalLink, Calendar, Building } from 'lucide-react';
-import { API_BASE_URL } from '../services/api';
+import { UploadCloud, FileText, CheckCircle2, Clock, XCircle, Search, Filter, Plus, Award, ShieldCheck, Download, ExternalLink, Calendar, Building, Trash2 } from 'lucide-react';
+import { API_BASE_URL, facultyService } from '../services/api';
 
 const CATEGORIES = [
   { key: 'ALL', label: 'All Certificates' },
@@ -34,55 +34,14 @@ const CertificatesManagement = () => {
     try {
       setLoading(true);
       const data = await facultyService.getAll('certificates');
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setCertificates(data);
       } else {
-        // Fallback mock initial certificates
-        setCertificates([
-          {
-            id: 1,
-            title: 'FDP on Artificial Intelligence & Deep Learning',
-            category: 'FDP',
-            issue_date: '2025-08-15',
-            issuing_organization: 'AICTE Training & Learning (ATAL) Academy',
-            academic_year: '2025-26',
-            status: 'APPROVED',
-            proof_document: null
-          },
-          {
-            id: 2,
-            title: 'International Conference on Computing Trends (ICCT)',
-            category: 'SEMINAR',
-            issue_date: '2025-07-20',
-            issuing_organization: 'IEEE Computer Society',
-            academic_year: '2025-26',
-            status: 'APPROVED',
-            proof_document: null
-          },
-          {
-            id: 3,
-            title: 'Best Researcher Award 2025',
-            category: 'AWARD',
-            issue_date: '2025-09-05',
-            issuing_organization: 'State Academic Council',
-            academic_year: '2025-26',
-            status: 'APPROVED',
-            proof_document: null
-          },
-          {
-            id: 4,
-            title: 'Cloud Infrastructure Workshop Certificate',
-            category: 'WORKSHOP',
-            issue_date: '2025-10-12',
-            issuing_organization: 'AWS Academy',
-            academic_year: '2025-26',
-            status: 'PENDING',
-            proof_document: null
-          }
-        ]);
+        setCertificates([]);
       }
     } catch (err) {
-      console.warn('Certificates loaded with dynamic fallback', err);
+      console.warn('Certificates load error', err);
+      setCertificates([]);
     } finally {
       setLoading(false);
     }
@@ -91,6 +50,20 @@ const CertificatesManagement = () => {
   useEffect(() => {
     fetchCertificates();
   }, []);
+
+  const handleDeleteCertificate = async (id, title, e) => {
+    e?.stopPropagation();
+    if (!window.confirm(`Are you sure you want to delete certificate: "${title}"?`)) return;
+    try {
+      await facultyService.delete('certificates', id);
+      setCertificates(prev => prev.filter(c => c.id !== id));
+      setMessage({ type: 'success', text: `Certificate "${title}" deleted.` });
+    } catch (err) {
+      console.error("Failed to delete certificate", err);
+      // Remove locally if mock/fallback
+      setCertificates(prev => prev.filter(c => c.id !== id));
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value, files } = e.target;
@@ -312,20 +285,29 @@ const CertificatesManagement = () => {
 
               <div className="pt-3 border-t border-gray-100 dark:border-slate-800 flex items-center justify-between">
                 <span className="text-xs text-gray-400 italic">Official Record</span>
-                {cert.proof_document ? (
-                  <a
-                    href={cert.proof_document}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
+                <div className="flex items-center space-x-2">
+                  {cert.proof_document ? (
+                    <a
+                      href={cert.proof_document}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
+                    >
+                      <ExternalLink size={14} className="mr-1" /> View PDF
+                    </a>
+                  ) : (
+                    <span className="inline-flex items-center text-xs font-semibold text-slate-400">
+                      <ShieldCheck size={14} className="mr-1 text-emerald-500" /> Verified
+                    </span>
+                  )}
+                  <button
+                    onClick={(e) => handleDeleteCertificate(cert.id, cert.title, e)}
+                    className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors ml-2"
+                    title="Delete certificate"
                   >
-                    <ExternalLink size={14} className="mr-1" /> View PDF
-                  </a>
-                ) : (
-                  <span className="inline-flex items-center text-xs font-semibold text-slate-400">
-                    <ShieldCheck size={14} className="mr-1 text-emerald-500" /> Verified Record
-                  </span>
-                )}
+                    <Trash2 size={15} />
+                  </button>
+                </div>
               </div>
             </div>
           ))}

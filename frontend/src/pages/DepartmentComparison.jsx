@@ -27,15 +27,15 @@ const DepartmentComparison = () => {
       console.error(e);
       setData({
         academic_year: '2025-26',
-        total_faculty_evaluated: 150,
-        leading_department: 'CSE',
+        total_faculty_evaluated: 0,
+        leading_department: 'Pending Department Submissions',
         departments: [
-          { name: 'Computer Science & Engineering', code: 'CSE', faculty_count: 38, publications: 94, scopus_percent: 82, patents: 14, grants_lakhs: 68.5, fdp_participations: 120, consultancy_lakhs: 24.2, overall_score: 92 },
-          { name: 'Electronics & Communication', code: 'ECE', faculty_count: 28, publications: 62, scopus_percent: 74, patents: 9, grants_lakhs: 45.0, fdp_participations: 86, consultancy_lakhs: 18.0, overall_score: 84 },
-          { name: 'Mechanical Engineering', code: 'MECH', faculty_count: 24, publications: 48, scopus_percent: 65, patents: 12, grants_lakhs: 52.0, fdp_participations: 72, consultancy_lakhs: 31.5, overall_score: 81 },
-          { name: 'Information Technology', code: 'IT', faculty_count: 22, publications: 55, scopus_percent: 78, patents: 6, grants_lakhs: 38.0, fdp_participations: 80, consultancy_lakhs: 14.5, overall_score: 80 },
-          { name: 'Electrical & Electronics', code: 'EEE', faculty_count: 20, publications: 41, scopus_percent: 68, patents: 5, grants_lakhs: 29.0, fdp_participations: 65, consultancy_lakhs: 12.0, overall_score: 76 },
-          { name: 'Civil Engineering', code: 'CIVIL', faculty_count: 18, publications: 34, scopus_percent: 60, patents: 4, grants_lakhs: 22.0, fdp_participations: 54, consultancy_lakhs: 26.0, overall_score: 73 }
+          { name: 'Computer Science & Engineering', code: 'CSE', faculty_count: 0, publications: 0, scopus_percent: 0, patents: 0, grants_lakhs: 0.0, fdp_participations: 0, consultancy_lakhs: 0.0, overall_score: 0 },
+          { name: 'Electronics & Communication', code: 'ECE', faculty_count: 0, publications: 0, scopus_percent: 0, patents: 0, grants_lakhs: 0.0, fdp_participations: 0, consultancy_lakhs: 0.0, overall_score: 0 },
+          { name: 'Mechanical Engineering', code: 'MECH', faculty_count: 0, publications: 0, scopus_percent: 0, patents: 0, grants_lakhs: 0.0, fdp_participations: 0, consultancy_lakhs: 0.0, overall_score: 0 },
+          { name: 'Information Technology', code: 'IT', faculty_count: 0, publications: 0, scopus_percent: 0, patents: 0, grants_lakhs: 0.0, fdp_participations: 0, consultancy_lakhs: 0.0, overall_score: 0 },
+          { name: 'Electrical & Electronics', code: 'EEE', faculty_count: 0, publications: 0, scopus_percent: 0, patents: 0, grants_lakhs: 0.0, fdp_participations: 0, consultancy_lakhs: 0.0, overall_score: 0 },
+          { name: 'Civil Engineering', code: 'CIVIL', faculty_count: 0, publications: 0, scopus_percent: 0, patents: 0, grants_lakhs: 0.0, fdp_participations: 0, consultancy_lakhs: 0.0, overall_score: 0 }
         ]
       });
     } finally {
@@ -45,55 +45,47 @@ const DepartmentComparison = () => {
 
   const departments = data?.departments || [];
 
-  // Normalized Radar Metrics (0 - 100)
+  // Dynamically compute KPIs from real data
+  const totalGrants = departments.reduce((acc, d) => acc + (Number(d.grants_lakhs) || 0), 0);
+  const totalPubs = departments.reduce((acc, d) => acc + (Number(d.publications) || 0), 0);
+  const totalPatents = departments.reduce((acc, d) => acc + (Number(d.patents) || 0), 0);
+  const avgScopus = totalPubs > 0
+    ? Math.round(departments.reduce((acc, d) => acc + ((d.publications || 0) * (d.scopus_percent || 0)), 0) / totalPubs)
+    : 0;
+
+  const topDept = [...departments].sort((a, b) => (b.overall_score || 0) - (a.overall_score || 0))[0];
+
+  // Dynamic Radar metrics from live data
   const radarData = [
     {
       metric: 'Research Papers',
-      CSE: 94,
-      ECE: 62,
-      MECH: 48,
-      IT: 55,
-      fullMark: 100
+      ...departments.reduce((acc, d) => ({ ...acc, [d.code]: d.publications || 0 }), {}),
+      fullMark: Math.max(...departments.map(d => d.publications || 0), 10)
     },
     {
       metric: 'Scopus Indexed %',
-      CSE: 82,
-      ECE: 74,
-      MECH: 65,
-      IT: 78,
+      ...departments.reduce((acc, d) => ({ ...acc, [d.code]: d.scopus_percent || 0 }), {}),
       fullMark: 100
     },
     {
       metric: 'Patents & IP',
-      CSE: 85,
-      ECE: 60,
-      MECH: 75,
-      IT: 45,
-      fullMark: 100
+      ...departments.reduce((acc, d) => ({ ...acc, [d.code]: d.patents || 0 }), {}),
+      fullMark: Math.max(...departments.map(d => d.patents || 0), 5)
     },
     {
       metric: 'Sponsored Grants',
-      CSE: 90,
-      ECE: 70,
-      MECH: 80,
-      IT: 60,
-      fullMark: 100
+      ...departments.reduce((acc, d) => ({ ...acc, [d.code]: d.grants_lakhs || 0 }), {}),
+      fullMark: Math.max(...departments.map(d => d.grants_lakhs || 0), 10)
     },
     {
       metric: 'Faculty FDPs',
-      CSE: 95,
-      ECE: 75,
-      MECH: 65,
-      IT: 70,
-      fullMark: 100
+      ...departments.reduce((acc, d) => ({ ...acc, [d.code]: d.fdp_participations || 0 }), {}),
+      fullMark: Math.max(...departments.map(d => d.fdp_participations || 0), 10)
     },
     {
       metric: 'Consultancy',
-      CSE: 75,
-      ECE: 60,
-      MECH: 90,
-      IT: 55,
-      fullMark: 100
+      ...departments.reduce((acc, d) => ({ ...acc, [d.code]: d.consultancy_lakhs || 0 }), {}),
+      fullMark: Math.max(...departments.map(d => d.consultancy_lakhs || 0), 10)
     }
   ];
 
@@ -126,24 +118,28 @@ const DepartmentComparison = () => {
       {/* Top KPI Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-gray-200 dark:border-slate-800 shadow-sm">
-          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Top Performing Department</span>
-          <h3 className="text-xl font-bold text-indigo-600 dark:text-indigo-400 mt-1">Computer Science (CSE)</h3>
-          <p className="text-xs text-gray-500 mt-0.5">Composite Score: 92/100</p>
+          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Leading Department</span>
+          <h3 className="text-xl font-bold text-indigo-600 dark:text-indigo-400 mt-1">
+            {topDept && topDept.overall_score > 0 ? `${topDept.name} (${topDept.code})` : 'Pending Submissions'}
+          </h3>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {topDept && topDept.overall_score > 0 ? `Composite Score: ${topDept.overall_score}/100` : 'No verified submissions yet'}
+          </p>
         </div>
         <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-gray-200 dark:border-slate-800 shadow-sm">
           <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Institutional Grants</span>
-          <h3 className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">₹254.5 Lakhs</h3>
-          <p className="text-xs text-gray-500 mt-0.5">Across 6 Departments</p>
+          <h3 className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">₹{totalGrants.toFixed(2)} Lakhs</h3>
+          <p className="text-xs text-gray-500 mt-0.5">Across {departments.length} Departments</p>
         </div>
         <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-gray-200 dark:border-slate-800 shadow-sm">
           <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Indexed Papers</span>
-          <h3 className="text-xl font-bold text-blue-600 dark:text-blue-400 mt-1">334 Publications</h3>
-          <p className="text-xs text-gray-500 mt-0.5">74% Average Scopus Indexing</p>
+          <h3 className="text-xl font-bold text-blue-600 dark:text-blue-400 mt-1">{totalPubs} Publications</h3>
+          <p className="text-xs text-gray-500 mt-0.5">{avgScopus}% Average Scopus Indexing</p>
         </div>
         <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-gray-200 dark:border-slate-800 shadow-sm">
           <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Patents Published/Granted</span>
-          <h3 className="text-xl font-bold text-purple-600 dark:text-purple-400 mt-1">50 Patents</h3>
-          <p className="text-xs text-gray-500 mt-0.5">18 Commercialized/Granted</p>
+          <h3 className="text-xl font-bold text-purple-600 dark:text-purple-400 mt-1">{totalPatents} Patents</h3>
+          <p className="text-xs text-gray-500 mt-0.5">Live database count</p>
         </div>
       </div>
 
@@ -154,7 +150,7 @@ const DepartmentComparison = () => {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-bold text-gray-900 dark:text-white text-base">Multi-Pillar Radar Benchmark</h3>
-              <p className="text-xs text-gray-500 dark:text-slate-400">Comparing CSE vs ECE vs MECH vs IT</p>
+              <p className="text-xs text-gray-500 dark:text-slate-400">Comparing live department metrics</p>
             </div>
             <span className="px-2 py-0.5 text-xs font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 rounded-lg">
               Radar View
@@ -166,10 +162,11 @@ const DepartmentComparison = () => {
               <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
                 <PolarGrid stroke="#cbd5e1" strokeDasharray="3 3" />
                 <PolarAngleAxis dataKey="metric" stroke="#64748b" tick={{ fontSize: 11 }} />
-                <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="#94a3b8" />
-                <Radar name="CSE" dataKey="CSE" stroke="#4f46e5" fill="#4f46e5" fillOpacity={0.4} />
-                <Radar name="ECE" dataKey="ECE" stroke="#06b6d4" fill="#06b6d4" fillOpacity={0.3} />
+                <PolarRadiusAxis angle={30} domain={[0, 'auto']} stroke="#94a3b8" />
+                <Radar name="CSE" dataKey="CSE" stroke="#4f46e5" fill="#4f46e5" fillOpacity={0.3} />
+                <Radar name="ECE" dataKey="ECE" stroke="#06b6d4" fill="#06b6d4" fillOpacity={0.25} />
                 <Radar name="MECH" dataKey="MECH" stroke="#10b981" fill="#10b981" fillOpacity={0.2} />
+                <Radar name="IT" dataKey="IT" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.2} />
                 <Legend />
                 <Tooltip />
               </RadarChart>

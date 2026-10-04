@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { fetchAPI, API_BASE_URL } from '../services/api';
+import { fetchAPI, API_BASE_URL, facultyService } from '../services/api';
 import { 
   Mail, Building, Award, BookOpen, Link as LinkIcon, FileText, 
   Users, RefreshCw, QrCode, Download, Target, TrendingUp, 
   Calendar, ChevronDown, Activity, Zap, CheckCircle2, 
-  Share2, ShieldCheck, Sparkles, ExternalLink, GraduationCap, Copy, Check
+  Share2, ShieldCheck, Sparkles, ExternalLink, GraduationCap, Copy, Check, Trash2
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts';
@@ -99,6 +99,54 @@ const FacultyProfile = () => {
     };
     loadProfile();
   }, []);
+
+  const handleDeletePublication = async (id, title, e) => {
+    e?.stopPropagation();
+    if (!window.confirm(`Are you sure you want to delete publication: "${title}"?`)) return;
+    try {
+      await facultyService.delete('publications', id);
+      setProfile(prev => ({
+        ...prev,
+        recent_publications: (prev.recent_publications || []).filter(p => p.id !== id),
+        counts: { ...prev.counts, publications: Math.max(0, (prev.counts?.publications || 1) - 1) }
+      }));
+    } catch (err) {
+      console.error("Failed to delete publication", err);
+      alert("Failed to delete publication.");
+    }
+  };
+
+  const handleDeletePatent = async (id, title, e) => {
+    e?.stopPropagation();
+    if (!window.confirm(`Are you sure you want to delete patent: "${title}"?`)) return;
+    try {
+      if (id) await facultyService.delete('patents', id);
+      setPatentsList(prev => prev.filter(p => (p.id ? p.id !== id : p.title !== title)));
+      setProfile(prev => ({
+        ...prev,
+        counts: { ...prev.counts, patents: Math.max(0, (prev.counts?.patents || 1) - 1) }
+      }));
+    } catch (err) {
+      console.error("Failed to delete patent", err);
+      alert("Failed to delete patent.");
+    }
+  };
+
+  const handleDeleteFdp = async (id, title, e) => {
+    e?.stopPropagation();
+    if (!window.confirm(`Are you sure you want to delete FDP training: "${title}"?`)) return;
+    try {
+      if (id) await facultyService.delete('fdp-trainings', id);
+      setFdpsList(prev => prev.filter(f => (f.id ? f.id !== id : f.program_title !== title)));
+      setProfile(prev => ({
+        ...prev,
+        counts: { ...prev.counts, fdps: Math.max(0, (prev.counts?.fdps || 1) - 1) }
+      }));
+    } catch (err) {
+      console.error("Failed to delete FDP", err);
+      alert("Failed to delete FDP.");
+    }
+  };
 
   if (loading) {
     return (
@@ -483,6 +531,13 @@ const FacultyProfile = () => {
                             <span className="text-gray-400 text-[11px]">Published: {pub.year || '2025'}</span>
                           </div>
                         </div>
+                        <button
+                          onClick={(e) => handleDeletePublication(pub.id, pub.title, e)}
+                          className="p-2 rounded-xl text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors opacity-80 group-hover:opacity-100"
+                          title="Delete this publication"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
                     ))
                   ) : (
@@ -510,6 +565,13 @@ const FacultyProfile = () => {
                             {patent.status || 'Published'}
                           </span>
                         </div>
+                        <button
+                          onClick={(e) => handleDeletePatent(patent.id, patent.title || patent.patent_title, e)}
+                          className="p-2 rounded-xl text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+                          title="Delete this patent"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
                     ))
                   ) : (
@@ -537,6 +599,13 @@ const FacultyProfile = () => {
                             Completed
                           </span>
                         </div>
+                        <button
+                          onClick={(e) => handleDeleteFdp(fdp.id, fdp.program_title || fdp.title, e)}
+                          className="p-2 rounded-xl text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+                          title="Delete this FDP"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
                     ))
                   ) : (

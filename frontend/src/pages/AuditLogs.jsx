@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   ShieldAlert, Clock, Search, Filter, Download, RefreshCw,
-  User, CheckCircle2, XCircle, FileText, Database, ShieldCheck
+  User, CheckCircle2, XCircle, FileText, Database, ShieldCheck, Trash2
 } from 'lucide-react';
 import { facultyService } from '../services/api';
 
@@ -21,16 +21,33 @@ const AuditLogs = () => {
       const data = await facultyService.getAuditLogs();
       setLogs(Array.isArray(data) ? data : []);
     } catch (e) {
-      console.error(e);
-      setLogs([
-        { id: 1, action: 'PUBLICATION_CREATED', target_activity: 'Deep Learning in Healthcare (SCI Index)', performed_by: 'vaishnavi_anugu', user_role: 'FACULTY', timestamp: '2026-09-22 14:15:20', details: 'Uploaded proof PDF and verified DOI 10.1109/TMI.2025.' },
-        { id: 2, action: 'VERIFICATION_APPROVED', target_activity: 'Grant: Trustworthy AI Models ₹35.0L', performed_by: 'hod_cse', user_role: 'HOD', timestamp: '2026-09-22 11:30:12', details: 'Verified sanction order from DST-SERB.' },
-        { id: 3, action: 'ROLE_ASSIGNED', target_activity: 'FacultyRole: IQAC Department Incharge', performed_by: 'principal_admin', user_role: 'ADMIN', timestamp: '2026-09-21 16:45:00', details: 'Assigned for Academic Year 2025-26.' },
-        { id: 4, action: 'CERTIFICATE_UPLOADED', target_activity: 'ATAL FDP on Cloud Computing', performed_by: 'rajesh_sharma', user_role: 'FACULTY', timestamp: '2026-09-21 09:20:45', details: '5-Day FDP Certificate verified via AI OCR.' },
-        { id: 5, action: 'BULK_IMPORT_PROCESSED', target_activity: 'Batch Publications Upload (12 rows)', performed_by: 'superadmin', user_role: 'SUPERADMIN', timestamp: '2026-09-20 18:10:00', details: 'Successfully imported 12 records via Excel Template.' }
-      ]);
+      console.error("Failed to fetch audit logs", e);
+      setLogs([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteLog = async (id, e) => {
+    e?.stopPropagation();
+    if (!window.confirm(`Are you sure you want to delete audit log #${id}?`)) return;
+    try {
+      await facultyService.deleteAuditLog(id);
+      setLogs(prev => prev.filter(l => l.id !== id));
+    } catch (err) {
+      console.error("Failed to delete audit log", err);
+      alert("Failed to delete log entry.");
+    }
+  };
+
+  const handleClearAll = async () => {
+    if (!window.confirm("Are you sure you want to permanently clear all audit trail records? This will delete all logged history.")) return;
+    try {
+      await facultyService.clearAuditLogs();
+      fetchLogs();
+    } catch (err) {
+      console.error("Failed to clear audit logs", err);
+      alert("Failed to clear audit trail.");
     }
   };
 
@@ -58,7 +75,7 @@ const AuditLogs = () => {
 
   const getBadgeColor = (action) => {
     if (action.includes('APPROVED') || action.includes('SUCCESS')) return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300';
-    if (action.includes('REJECTED') || action.includes('DELETE')) return 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300';
+    if (action.includes('REJECTED') || action.includes('DELETE') || action.includes('CLEARED')) return 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300';
     if (action.includes('ROLE') || action.includes('ADMIN')) return 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300';
     if (action.includes('BULK')) return 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300';
     return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300';
@@ -81,7 +98,7 @@ const AuditLogs = () => {
           </p>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={exportCSV}
             className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-sm shadow-md transition-all flex items-center space-x-2"
@@ -89,12 +106,22 @@ const AuditLogs = () => {
             <Download size={16} />
             <span>Export CSV</span>
           </button>
+          {logs.length > 0 && (
+            <button
+              onClick={handleClearAll}
+              className="px-4 py-2.5 bg-rose-600/80 hover:bg-rose-600 text-white font-semibold rounded-xl text-sm shadow-md transition-all flex items-center space-x-2"
+              title="Delete all audit records"
+            >
+              <Trash2 size={16} />
+              <span>Clear All Logs</span>
+            </button>
+          )}
           <button
             onClick={fetchLogs}
             className="p-2.5 bg-white/10 hover:bg-white/20 rounded-xl transition-all"
             title="Refresh Logs"
           >
-            <RefreshCw size={18} />
+            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
@@ -124,6 +151,7 @@ const AuditLogs = () => {
             <option value="APPROVED">Approvals & Verifications</option>
             <option value="ROLE">Role Changes</option>
             <option value="BULK">Batch Imports</option>
+            <option value="DELETE">Deleted Actions</option>
           </select>
         </div>
       </div>
@@ -139,13 +167,25 @@ const AuditLogs = () => {
                 <th className="p-3.5 font-bold">Action Type</th>
                 <th className="p-3.5 font-bold">Target Activity</th>
                 <th className="p-3.5 font-bold">Details</th>
+                <th className="p-3.5 font-bold text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
-              {filteredLogs.length === 0 ? (
+              {loading ? (
                 <tr>
-                  <td colSpan="5" className="p-8 text-center text-gray-400">
-                    No audit records match your search filter
+                  <td colSpan="6" className="p-10 text-center text-gray-400">
+                    <RefreshCw className="animate-spin h-6 w-6 mx-auto mb-2 text-indigo-500" />
+                    <span>Loading audit records...</span>
+                  </td>
+                </tr>
+              ) : filteredLogs.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="p-12 text-center text-gray-400">
+                    <ShieldAlert size={36} className="mx-auto mb-3 opacity-30 text-indigo-400" />
+                    <p className="font-semibold text-gray-700 dark:text-slate-300 text-sm">No audit records found</p>
+                    <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
+                      Official system activities (monthly submissions, approvals, role assignments) will automatically appear here once performed.
+                    </p>
                   </td>
                 </tr>
               ) : (
@@ -175,6 +215,15 @@ const AuditLogs = () => {
                     </td>
                     <td className="p-3.5 text-gray-500 dark:text-slate-400 max-w-xs truncate">
                       {log.details || '—'}
+                    </td>
+                    <td className="p-3.5 text-right whitespace-nowrap">
+                      <button
+                        onClick={(e) => handleDeleteLog(log.id, e)}
+                        className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors inline-flex items-center"
+                        title="Delete this audit record"
+                      >
+                        <Trash2 size={15} />
+                      </button>
                     </td>
                   </tr>
                 ))

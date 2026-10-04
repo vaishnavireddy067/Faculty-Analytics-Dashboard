@@ -57,40 +57,41 @@ const AccreditationPredictor = () => {
               <BarChart2 className="text-indigo-500" /> Criteria Breakdown
             </h2>
             <div className="space-y-6">
-              {(data?.criteria || [
-                { id: 1, name: 'Curricular Aspects', score: 85, max: 100, gap_analysis: 'Incorporate more value-added courses.' },
-                { id: 2, name: 'Teaching-Learning & Evaluation', score: 90, max: 100, gap_analysis: null },
-                { id: 3, name: 'Research, Innovations & Extension', score: 78, max: 100, gap_analysis: 'Increase Scopus Q1 journal publications and patents.' },
-                { id: 4, name: 'Infrastructure & Learning Resources', score: 88, max: 100, gap_analysis: null },
-                { id: 5, name: 'Student Support & Progression', score: 82, max: 100, gap_analysis: 'Expand alumni engagement and competitive exam guidance.' }
-              ]).map((criterion) => {
-                const percentage = Math.round((criterion.score / criterion.max) * 100);
-                let colorClass = "bg-emerald-500";
-                if (percentage < 60) colorClass = "bg-red-500";
-                else if (percentage < 80) colorClass = "bg-yellow-500";
+              {(data?.criteria || []).length === 0 ? (
+                <div className="text-center py-8 text-gray-400">
+                  <p className="text-sm">No accreditation metrics recorded yet.</p>
+                  <p className="text-xs mt-1">Official faculty publications, patents, and activities will generate live Criteria 1-7 scores.</p>
+                </div>
+              ) : (
+                (data?.criteria || []).map((criterion) => {
+                  const percentage = criterion.max > 0 ? Math.round((criterion.score / criterion.max) * 100) : 0;
+                  let colorClass = "bg-emerald-500";
+                  if (percentage < 60) colorClass = "bg-red-500";
+                  else if (percentage < 80) colorClass = "bg-yellow-500";
 
-                return (
-                  <div key={criterion.id} className="space-y-2">
-                    <div className="flex justify-between items-end">
-                      <h4 className="font-semibold text-gray-800">
-                        Criteria {criterion.id}: {criterion.name}
-                      </h4>
-                      <span className="text-sm font-bold text-gray-600">
-                        {criterion.score} / {criterion.max} pts
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-100 rounded-full h-2.5">
-                      <div className={`h-2.5 rounded-full ${colorClass}`} style={{ width: `${percentage}%` }}></div>
-                    </div>
-                    {criterion.gap_analysis && (
-                      <div className="flex items-start gap-2 mt-2 bg-rose-50 p-3 rounded-lg border border-rose-100">
-                        <AlertTriangle size={16} className="text-rose-500 mt-0.5 flex-shrink-0" />
-                        <p className="text-sm text-rose-700">{criterion.gap_analysis}</p>
+                  return (
+                    <div key={criterion.id} className="space-y-2">
+                      <div className="flex justify-between items-end">
+                        <h4 className="font-semibold text-gray-800">
+                          Criteria {criterion.id}: {criterion.name}
+                        </h4>
+                        <span className="text-sm font-bold text-gray-600">
+                          {criterion.score} / {criterion.max} pts
+                        </span>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+                      <div className="w-full bg-gray-100 rounded-full h-2.5">
+                        <div className={`h-2.5 rounded-full ${colorClass}`} style={{ width: `${percentage}%` }}></div>
+                      </div>
+                      {criterion.gap_analysis && (
+                        <div className="flex items-start gap-2 mt-2 bg-rose-50 p-3 rounded-lg border border-rose-100">
+                          <AlertTriangle size={16} className="text-rose-500 mt-0.5 flex-shrink-0" />
+                          <p className="text-sm text-rose-700">{criterion.gap_analysis}</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
@@ -103,9 +104,9 @@ const AccreditationPredictor = () => {
             <p className="text-indigo-100 text-sm mb-4">Focus on these areas to reach the A++ tier before the next cycle.</p>
             <ul className="space-y-3">
               {(data?.improvement_path || [
-                'Increase average publications per faculty to 2.5/year in indexed journals',
-                'Accelerate sponsored research proposals to DST, SERB, and AICTE schemes',
-                'Ensure 100% of faculty complete at least one 5-day ATAL/STTP FDP annually'
+                'Log verified publications in Scopus / SCI journals for official criterion credit',
+                'Upload registered patents and sponsored project sanction letters',
+                'Record completed FDPs and faculty leadership portfolios'
               ]).map((step, idx) => (
                 <li key={idx} className="flex items-start gap-2 text-sm bg-white/10 p-3 rounded-lg">
                   <CheckCircle size={16} className="text-emerald-300 flex-shrink-0 mt-0.5" />

@@ -145,21 +145,20 @@ const Heatmap = ({ data }) => {
 const Analytics = () => {
   const [rankings, setRankings] = useState([]);
   const [loading, setLoading] = useState(true);
-  // Mock data for graphs
-  const citationData = [
-    { year: '2022', citations: 120 },
-    { year: '2023', citations: 250 },
-    { year: '2024', citations: 450 },
-    { year: '2025', citations: 800 },
-    { year: '2026', citations: 1200 },
-  ];
+  const [citationData, setCitationData] = useState([
+    { year: '2022', citations: 0 },
+    { year: '2023', citations: 0 },
+    { year: '2024', citations: 0 },
+    { year: '2025', citations: 0 },
+    { year: '2026', citations: 0 },
+  ]);
 
-  const publicationData = [
-    { name: 'Scopus', value: 45 },
-    { name: 'SCI', value: 20 },
-    { name: 'Q1', value: 10 },
-    { name: 'Q2', value: 15 },
-  ];
+  const [publicationData, setPublicationData] = useState([
+    { name: 'Scopus', value: 0 },
+    { name: 'SCI', value: 0 },
+    { name: 'WOS', value: 0 },
+    { name: 'UGC-CARE', value: 0 },
+  ]);
 
   const [networkData, setNetworkData] = useState({ nodes: [], edges: [] });
   const [heatmapData, setHeatmapData] = useState([]);
@@ -169,20 +168,10 @@ const Analytics = () => {
       try {
         const res = await api.get('/faculty/analytics/ranking/');
         const rList = res?.data?.rankings || res?.rankings || res?.data || res || [];
-        setRankings(Array.isArray(rList) ? rList : [
-          { rank: 1, name: 'Dr. Vaishnavi Anugu', score: 96 },
-          { rank: 2, name: 'Dr. Rajesh Sharma', score: 88 },
-          { rank: 3, name: 'Dr. Priya Kulkarni', score: 82 },
-          { rank: 4, name: 'Dr. Suresh Verma', score: 79 }
-        ]);
+        setRankings(Array.isArray(rList) ? rList : []);
       } catch (error) {
         console.error("Error fetching rankings", error);
-        setRankings([
-          { rank: 1, name: 'Dr. Vaishnavi Anugu', score: 96 },
-          { rank: 2, name: 'Dr. Rajesh Sharma', score: 88 },
-          { rank: 3, name: 'Dr. Priya Kulkarni', score: 82 },
-          { rank: 4, name: 'Dr. Suresh Verma', score: 79 }
-        ]);
+        setRankings([]);
       } finally {
         setLoading(false);
       }
@@ -210,9 +199,40 @@ const Analytics = () => {
       }
     };
 
+    const fetchPublicationsStats = async () => {
+      try {
+        const res = await api.get('/faculty/publications/');
+        const pubs = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+        if (pubs.length > 0) {
+          const scopus = pubs.filter(p => p.indexing === 'SCOPUS').length;
+          const sci = pubs.filter(p => p.indexing === 'SCI').length;
+          const wos = pubs.filter(p => p.indexing === 'WOS').length;
+          const ugc = pubs.filter(p => p.indexing === 'UGC_CARE' || p.indexing === 'PEER_REVIEWED').length;
+          setPublicationData([
+            { name: 'Scopus', value: scopus },
+            { name: 'SCI', value: sci },
+            { name: 'WOS', value: wos },
+            { name: 'UGC-CARE', value: ugc },
+          ]);
+
+          const yearCounts = { '2022': 0, '2023': 0, '2024': 0, '2025': 0, '2026': 0 };
+          pubs.forEach(p => {
+            const yr = String(p.year || '');
+            if (yearCounts[yr] !== undefined) {
+              yearCounts[yr] += (p.citations || 1);
+            }
+          });
+          setCitationData(Object.keys(yearCounts).map(y => ({ year: y, citations: yearCounts[y] })));
+        }
+      } catch (e) {
+        console.error("Error fetching publications for analytics", e);
+      }
+    };
+
     fetchRankings();
     fetchNetwork();
     fetchHeatmap();
+    fetchPublicationsStats();
   }, []);
 
   return (
@@ -239,6 +259,12 @@ const Analytics = () => {
               {[1, 2, 3, 4].map(i => (
                 <div key={i} className="h-16 bg-gray-100 rounded-xl"></div>
               ))}
+            </div>
+          ) : rankings.length === 0 ? (
+            <div className="text-center py-8 text-gray-400">
+              <Award size={32} className="mx-auto mb-2 opacity-40 text-yellow-500" />
+              <p className="text-sm font-semibold text-gray-600">No faculty rankings yet</p>
+              <p className="text-xs text-gray-400 mt-1">Faculty with verified API scores will appear on the leaderboard.</p>
             </div>
           ) : (
             <div className="space-y-4">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Download, FileText, UploadCloud, Database, Presentation, FileCode2, Filter, X } from 'lucide-react';
+import { Search, Download, FileText, UploadCloud, Database, Presentation, FileCode2, Filter, X, Trash2 } from 'lucide-react';
 import api from '../services/api';
 
 const Repository = () => {
@@ -38,6 +38,17 @@ const Repository = () => {
       alert("Failed to upload asset");
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleDeleteAsset = async (id, title) => {
+    if (!window.confirm(`Are you sure you want to delete asset "${title}"?`)) return;
+    try {
+      await api.delete(`/faculty/repository/${id}/`);
+      setAssets(prev => prev.filter(a => a.id !== id));
+    } catch (err) {
+      console.error("Failed to delete asset", err);
+      setAssets(prev => prev.filter(a => a.id !== id));
     }
   };
 
@@ -149,16 +160,25 @@ const Repository = () => {
                   <span className="block font-medium text-gray-700">{asset.uploaded_by_name}</span>
                   <span className="text-xs">{new Date(asset.created_at).toLocaleDateString()}</span>
                 </div>
-                <a 
-                  href={asset.file} 
-                  download 
-                  target="_blank" 
-                  rel="noreferrer"
-                  className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                  title="Download"
-                >
-                  <Download size={20} />
-                </a>
+                <div className="flex items-center space-x-1">
+                  <a 
+                    href={asset.file} 
+                    download 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                    title="Download"
+                  >
+                    <Download size={18} />
+                  </a>
+                  <button 
+                    onClick={() => handleDeleteAsset(asset.id, asset.title)}
+                    className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                    title="Delete Asset"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
               </div>
             </div>
           ))}

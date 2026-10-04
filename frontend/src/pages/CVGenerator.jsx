@@ -46,36 +46,26 @@ const CVGenerator = () => {
         facultyService.getAll('fdp-training').catch(() => [])
       ]);
 
+      const currentEmail = localStorage.getItem('current_user_email') || '';
+      const currentRole = localStorage.getItem('user_role') || 'FACULTY';
+      const currentUserInfoStr = localStorage.getItem('current_user_info');
+      let localUserInfo = {};
+      try { localUserInfo = currentUserInfoStr ? JSON.parse(currentUserInfoStr) : {}; } catch (e) {}
+
       setProfileData(prof || {
-        first_name: 'Dr. Vaishnavi',
-        last_name: 'Anugu',
-        email: 'vaishnavi.anugu@institution.edu',
-        department: 'Computer Science & Engineering',
-        designation: 'Associate Professor & Research Lead',
-        aicte_id: 'AICTE-1-98742910',
-        address: 'Faculty Enclave, Hyderabad, India'
+        first_name: localUserInfo.first_name || localUserInfo.username || 'Faculty',
+        last_name: localUserInfo.last_name || '',
+        email: currentEmail,
+        department: localUserInfo.department || 'Computer Science & Engineering',
+        designation: localUserInfo.designation || (currentRole === 'HOD' ? 'Head of Department' : 'Faculty Member'),
+        aicte_id: localUserInfo.aicte_id || 'AICTE-REG-PENDING',
+        address: 'Telangana, India'
       });
-      setPublications(Array.isArray(pubs) && pubs.length ? pubs : [
-        { id: 1, title: 'Deep Residual Learning for Automated Medical Imaging Diagnosis', journal_name: 'IEEE Transactions on Medical Imaging', year: 2025, indexing: 'SCI', authors: 'Dr. Vaishnavi Anugu, R. Sharma', doi: '10.1109/TMI.2025.09214' },
-        { id: 2, title: 'Adaptive Transformer Attention in Edge IoT Healthcare Systems', journal_name: 'Elsevier Neural Networks', year: 2024, indexing: 'SCOPUS', authors: 'Dr. Vaishnavi Anugu, K. Raman', doi: '10.1016/j.neucom.2024.110' },
-        { id: 3, title: 'Federated Learning Protocols for Privacy-Preserving Smart Grids', journal_name: 'Springer Nature Computing', year: 2024, indexing: 'SCI', authors: 'Dr. Vaishnavi Anugu', doi: '10.1007/s11227-024-0589' }
-      ]);
-      setPatents(Array.isArray(pats) && pats.length ? pats : [
-        { id: 1, title: 'IoT-Based Real-time Biomedical Telemetry Device', patent_status: 'GRANTED', application_number: '202441098231', year: 2024 },
-        { id: 2, title: 'Autonomous Drone Routing Using Edge Deep Q-Networks', patent_status: 'PUBLISHED', application_number: '202541012389', year: 2025 }
-      ]);
-      setGrants(Array.isArray(grnts) && grnts.length ? grnts : [
-        { id: 1, project_title: 'Development of Trustworthy AI Models for Smart Campus Surveillance', funding_agency: 'DST-SERB Core Research Grant', amount: 3500000, year: 2024 },
-        { id: 2, project_title: 'Industry 4.0 Predictive Maintenance System', funding_agency: 'AICTE RPS Scheme', amount: 1850000, year: 2023 }
-      ]);
-      setRoles(Array.isArray(rols) && rols.length ? rols : [
-        { id: 1, role_name: 'IQAC Department Coordinator', academic_year: '2025-26', department: 'Computer Science' },
-        { id: 2, role_name: 'Head of AI & Innovation Center', academic_year: '2024-25', department: 'CSE' }
-      ]);
-      setFdps(Array.isArray(fdpList) && fdpList.length ? fdpList : [
-        { id: 1, title: 'AICTE ATAL FDP on Generative AI & Large Foundation Models', organization: 'IIT Madras', duration_days: 5, start_date: '2025-02-10' },
-        { id: 2, title: 'Advanced Research Methodologies & IPR Regulations', organization: 'NIT Warangal', duration_days: 6, start_date: '2024-11-15' }
-      ]);
+      setPublications(Array.isArray(pubs) ? pubs : []);
+      setPatents(Array.isArray(pats) ? pats : []);
+      setGrants(Array.isArray(grnts) ? grnts : []);
+      setRoles(Array.isArray(rols) ? rols : []);
+      setFdps(Array.isArray(fdpList) ? fdpList : []);
     } catch (e) {
       console.error(e);
     } finally {
@@ -295,27 +285,23 @@ const CVGenerator = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td className="p-2 border border-gray-200 font-semibold">Ph.D.</td>
-                      <td className="p-2 border border-gray-200">Computer Science & Engineering</td>
-                      <td className="p-2 border border-gray-200">National Institute of Technology (NIT)</td>
-                      <td className="p-2 border border-gray-200">2022</td>
-                      <td className="p-2 border border-gray-200">Awarded</td>
-                    </tr>
-                    <tr className="bg-gray-50/50">
-                      <td className="p-2 border border-gray-200 font-semibold">M.Tech</td>
-                      <td className="p-2 border border-gray-200">Software Engineering</td>
-                      <td className="p-2 border border-gray-200">JNTU College of Engineering</td>
-                      <td className="p-2 border border-gray-200">2017</td>
-                      <td className="p-2 border border-gray-200">8.8 CGPA (Distinction)</td>
-                    </tr>
-                    <tr>
-                      <td className="p-2 border border-gray-200 font-semibold">B.Tech</td>
-                      <td className="p-2 border border-gray-200">Information Technology</td>
-                      <td className="p-2 border border-gray-200">Osmania University</td>
-                      <td className="p-2 border border-gray-200">2014</td>
-                      <td className="p-2 border border-gray-200">81.4%</td>
-                    </tr>
+                    {profileData?.education && profileData.education.length > 0 ? (
+                      profileData.education.map((edu, idx) => (
+                        <tr key={idx} className={idx % 2 === 1 ? 'bg-gray-50/50' : ''}>
+                          <td className="p-2 border border-gray-200 font-semibold">{edu.degree}</td>
+                          <td className="p-2 border border-gray-200">{edu.specialization}</td>
+                          <td className="p-2 border border-gray-200">{edu.institute}</td>
+                          <td className="p-2 border border-gray-200">{edu.year}</td>
+                          <td className="p-2 border border-gray-200">{edu.grade}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="5" className="p-3 text-center text-gray-400 italic">
+                          No educational qualifications recorded yet. Update via My Profile.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </section>
@@ -327,22 +313,29 @@ const CVGenerator = () => {
                 <h2 className="text-sm font-bold text-indigo-900 uppercase tracking-wider border-b border-indigo-200 pb-1.5 mb-3">
                   2. Academic & Research Experience
                 </h2>
-                <div className="space-y-2 text-xs">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <strong className="text-slate-900">Associate Professor</strong> &bull; Department of CSE
-                      <p className="text-gray-600">Faculty Analytics Institute of Technology</p>
-                    </div>
-                    <span className="text-gray-500 font-medium">July 2022 – Present (4 Years)</span>
+                {profileData?.experience && profileData.experience.length > 0 ? (
+                  <div className="space-y-2 text-xs">
+                    {profileData.experience.map((exp, idx) => (
+                      <div key={idx} className="flex justify-between items-start">
+                        <div>
+                          <strong className="text-slate-900">{exp.designation}</strong> &bull; {exp.department}
+                          <p className="text-gray-600">{exp.organization}</p>
+                        </div>
+                        <span className="text-gray-500 font-medium">{exp.duration}</span>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <strong className="text-slate-900">Assistant Professor</strong> &bull; Department of Information Technology
-                      <p className="text-gray-600">VNR Vignana Jyothi Institute of Engineering and Technology</p>
+                ) : (
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <strong className="text-slate-900">{profileData?.designation || 'Faculty Member'}</strong> &bull; Department of {profileData?.department || 'Computer Science & Engineering'}
+                        <p className="text-gray-600">Active Faculty Member</p>
+                      </div>
+                      <span className="text-gray-500 font-medium">Current</span>
                     </div>
-                    <span className="text-gray-500 font-medium">Aug 2017 – June 2022 (5 Years)</span>
                   </div>
-                </div>
+                )}
               </section>
             )}
 
@@ -352,67 +345,83 @@ const CVGenerator = () => {
                 <h2 className="text-sm font-bold text-indigo-900 uppercase tracking-wider border-b border-indigo-200 pb-1.5 mb-3">
                   3. Refereed Journal Publications (SCI / Scopus / UGC CARE)
                 </h2>
-                <ol className="list-decimal list-inside space-y-2 text-xs leading-relaxed text-slate-800">
-                  {publications.map((pub, idx) => (
-                    <li key={pub.id || idx}>
-                      <strong>{pub.authors}</strong> ({pub.year}). "{pub.title}". <em>{pub.journal_name}</em>.
-                      <span className="ml-1 inline-block font-semibold text-indigo-700">[{pub.indexing} Indexed]</span>
-                      {pub.doi && <span className="text-gray-500 ml-1">DOI: {pub.doi}</span>}
-                    </li>
-                  ))}
-                </ol>
+                {publications.length > 0 ? (
+                  <ol className="list-decimal list-inside space-y-2 text-xs leading-relaxed text-slate-800">
+                    {publications.map((pub, idx) => (
+                      <li key={pub.id || idx}>
+                        <strong>{pub.authors}</strong> ({pub.year}). "{pub.title}". <em>{pub.journal_name}</em>.
+                        <span className="ml-1 inline-block font-semibold text-indigo-700">[{pub.indexing} Indexed]</span>
+                        {pub.doi && <span className="text-gray-500 ml-1">DOI: {pub.doi}</span>}
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <p className="text-xs text-gray-400 italic">No publications recorded yet. Add publications via Data Entry or Monthly Submission.</p>
+                )}
               </section>
             )}
 
             {/* Patents */}
-            {selectedSections.patents && patents.length > 0 && (
+            {selectedSections.patents && (
               <section className="mb-6">
                 <h2 className="text-sm font-bold text-indigo-900 uppercase tracking-wider border-b border-indigo-200 pb-1.5 mb-3">
                   4. Patents & Intellectual Property
                 </h2>
-                <ul className="list-disc list-inside space-y-1.5 text-xs text-slate-800">
-                  {patents.map((pat, idx) => (
-                    <li key={pat.id || idx}>
-                      <strong>{pat.title}</strong> — Status: <span className="font-semibold text-emerald-700">{pat.patent_status}</span> (App No: {pat.application_number || '202441098231'}, Year: {pat.year})
-                    </li>
-                  ))}
-                </ul>
+                {patents.length > 0 ? (
+                  <ul className="list-disc list-inside space-y-1.5 text-xs text-slate-800">
+                    {patents.map((pat, idx) => (
+                      <li key={pat.id || idx}>
+                        <strong>{pat.title}</strong> — Status: <span className="font-semibold text-emerald-700">{pat.patent_status}</span> (App No: {pat.application_number || 'N/A'}, Year: {pat.year})
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-gray-400 italic">No patents recorded yet.</p>
+                )}
               </section>
             )}
 
             {/* Sponsored Research Grants */}
-            {selectedSections.grants && grants.length > 0 && (
+            {selectedSections.grants && (
               <section className="mb-6">
                 <h2 className="text-sm font-bold text-indigo-900 uppercase tracking-wider border-b border-indigo-200 pb-1.5 mb-3">
                   5. Sponsored Research Grants & Projects
                 </h2>
-                <div className="space-y-2 text-xs">
-                  {grants.map((grnt, idx) => (
-                    <div key={grnt.id || idx} className="flex justify-between items-start border-l-2 border-indigo-500 pl-3">
-                      <div>
-                        <strong className="text-slate-900">{grnt.project_title}</strong>
-                        <p className="text-gray-600">Funding Agency: {grnt.funding_agency} ({grnt.year})</p>
+                {grants.length > 0 ? (
+                  <div className="space-y-2 text-xs">
+                    {grants.map((grnt, idx) => (
+                      <div key={grnt.id || idx} className="flex justify-between items-start border-l-2 border-indigo-500 pl-3">
+                        <div>
+                          <strong className="text-slate-900">{grnt.project_title}</strong>
+                          <p className="text-gray-600">Funding Agency: {grnt.funding_agency} ({grnt.year})</p>
+                        </div>
+                        <span className="font-bold text-indigo-900 whitespace-nowrap">₹{(Number(grnt.amount) / 100000).toFixed(2)} Lakhs</span>
                       </div>
-                      <span className="font-bold text-indigo-900 whitespace-nowrap">₹{(Number(grnt.amount) / 100000).toFixed(2)} Lakhs</span>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 italic">No research grants recorded yet.</p>
+                )}
               </section>
             )}
 
             {/* Roles & Governance */}
-            {selectedSections.roles && roles.length > 0 && (
+            {selectedSections.roles && (
               <section className="mb-6">
                 <h2 className="text-sm font-bold text-indigo-900 uppercase tracking-wider border-b border-indigo-200 pb-1.5 mb-3">
                   6. Institutional Governance & Administrative Responsibilities
                 </h2>
-                <ul className="list-disc list-inside space-y-1 text-xs text-slate-800">
-                  {roles.map((r, idx) => (
-                    <li key={r.id || idx}>
-                      <strong>{r.role_name}</strong> &bull; Academic Year {r.academic_year} ({r.department || 'Departmental'})
-                    </li>
-                  ))}
-                </ul>
+                {roles.length > 0 ? (
+                  <ul className="list-disc list-inside space-y-1 text-xs text-slate-800">
+                    {roles.map((r, idx) => (
+                      <li key={r.id || idx}>
+                        <strong>{r.role_name}</strong> &bull; Academic Year {r.academic_year} ({r.department || 'Departmental'})
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-gray-400 italic">No administrative roles recorded yet.</p>
+                )}
               </section>
             )}
 
