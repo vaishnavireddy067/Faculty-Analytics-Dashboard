@@ -35,14 +35,9 @@ const Login = () => {
   const [resetEmail, setResetEmail] = useState('');
   const [resetNewPass, setResetNewPass] = useState('');
 
-  // Redirect already-authenticated users away from Login page
-  useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    const storedRole = (localStorage.getItem('user_role') || 'FACULTY').toUpperCase();
-    if (token) {
-      window.location.replace(storedRole === 'HOD' ? '/monthly-reports' : '/dashboard');
-    }
-  }, []);
+  // Detect if user has an existing active session without force-redirecting
+  const hasExistingSession = Boolean(localStorage.getItem('access_token'));
+  const storedRole = (localStorage.getItem('user_role') || 'FACULTY').toUpperCase();
 
   // Clear inputs selectively based on view to avoid wiping email/pass on OTP verify
   useEffect(() => {
@@ -330,12 +325,26 @@ const Login = () => {
             localStorage.setItem('refresh_token', data.refresh || '');
             localStorage.setItem('current_user_email', data.user?.email || inputUser);
             
-            // Prioritize actual registered role from database (Strict Backend Authority)
-            const finalRole = (data.user?.role || 'FACULTY').toUpperCase();
+            // Strict role determination:
+            // If user clicked 'Head of Dept (HOD)', role is HOD.
+            // If user clicked 'Faculty', role is FACULTY.
+            const finalRole = (selectedRole === 'HOD' ? 'HOD' : 'FACULTY').toUpperCase();
             localStorage.setItem('user_role', finalRole);
 
+            if (data.access) {
+              fetch(`${API_BASE_URL}/auth/me/`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${data.access}`,
+                  'Content-Type': 'application/json',
+                  'Bypass-Tunnel-Reminder': 'true'
+                },
+                body: JSON.stringify({ role: finalRole })
+              }).catch(() => null);
+            }
+
             if (data.user) {
-              localStorage.setItem('current_user_info', JSON.stringify(data.user));
+              localStorage.setItem('current_user_info', JSON.stringify({ ...data.user, role: finalRole }));
             } else {
               localStorage.setItem('current_user_info', JSON.stringify({ email: inputUser, role: finalRole }));
             }
@@ -441,14 +450,14 @@ const Login = () => {
         localStorage.setItem(userDatastoreKey, JSON.stringify(initialStore));
       }
 
-      const finalRole = existingUser.role || selectedRole || 'FACULTY';
+      const finalRole = (selectedRole === 'HOD' ? 'HOD' : 'FACULTY').toUpperCase();
       localStorage.setItem('access_token', 'fad_auth_token_' + Date.now());
       localStorage.setItem('refresh_token', 'fad_auth_refresh_' + Date.now());
       localStorage.setItem('current_user_email', userEmail);
       localStorage.setItem('user_role', finalRole);
       localStorage.setItem('current_user_info', JSON.stringify({ ...existingUser, role: finalRole }));
 
-      window.location.replace('/dashboard');
+      window.location.replace(finalRole === 'HOD' ? '/monthly-reports' : '/dashboard');
     } catch (e) {
       console.error(e);
       setError('An error occurred during login. Please try again.');

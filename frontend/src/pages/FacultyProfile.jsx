@@ -744,37 +744,30 @@ const FacultyProfile = () => {
             </h3>
             <p className="text-xs text-gray-500 dark:text-slate-400 mb-4">Recommended peers in {departmentName} to co-author grants and papers.</p>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="flex items-center justify-between p-3.5 bg-white dark:bg-slate-800/80 rounded-2xl border border-indigo-50 dark:border-slate-700 shadow-xs">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 flex items-center justify-center font-bold text-xs">
-                    DR
+            {(advancedData?.collaborators && advancedData.collaborators.length > 0) ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {advancedData.collaborators.map((c, i) => (
+                  <div key={i} className="flex items-center justify-between p-3.5 bg-white dark:bg-slate-800/80 rounded-2xl border border-indigo-50 dark:border-slate-700 shadow-xs">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 flex items-center justify-center font-bold text-xs">
+                        {c.name ? c.name.split(' ').map(p => p[0]).join('').slice(0, 2) : 'PE'}
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-xs text-gray-900 dark:text-white">{c.name}</h4>
+                        <p className="text-[11px] text-gray-400">{departmentName} • {c.role || 'Research Peer'}</p>
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950 px-2 py-1 rounded-lg">
+                      {c.match || '90% Match'}
+                    </span>
                   </div>
-                  <div>
-                    <h4 className="font-bold text-xs text-gray-900 dark:text-white">Dr. D. Ramana</h4>
-                    <p className="text-[11px] text-gray-400">{departmentName} • Research Peer</p>
-                  </div>
-                </div>
-                <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950 px-2 py-1 rounded-lg">
-                  92% Match
-                </span>
+                ))}
               </div>
-
-              <div className="flex items-center justify-between p-3.5 bg-white dark:bg-slate-800/80 rounded-2xl border border-purple-50 dark:border-slate-700 shadow-xs">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 flex items-center justify-center font-bold text-xs">
-                    SK
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-xs text-gray-900 dark:text-white">Dr. S. Kulkarni</h4>
-                    <p className="text-[11px] text-gray-400">{departmentName} • Research Peer</p>
-                  </div>
-                </div>
-                <span className="text-[11px] font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950 px-2 py-1 rounded-lg">
-                  88% Match
-                </span>
+            ) : (
+              <div className="p-4 bg-white/60 dark:bg-slate-800/60 rounded-2xl border border-dashed border-gray-200 dark:border-slate-700 text-center text-xs text-gray-400 py-6">
+                No collaborator matches yet. Add publications or research domains to generate peer recommendations.
               </div>
-            </div>
+            )}
           </div>
 
         </div>

@@ -505,7 +505,12 @@ def voice_parse(request):
     """Voice Notes & Meeting Minutes Generator using Google Gemini"""
     text = request.data.get('text', '').strip()
     if not text:
-        text = "Faculty meeting discussed NBA criteria 3 compliance, syllabus revision for AI module, and assigned Dr. Sharma to organize 5-day ATAL FDP."
+        return Response({
+            "minutes": "No transcript or audio notes provided. Please paste meeting transcript or notes.",
+            "action_items": [],
+            "sentiment": "Neutral",
+            "key_decisions": []
+        })
 
     prompt = f"""You are an administrative meeting assistant for an engineering university.
 Extract formal meeting minutes and actionable tasks from the following text/transcript:
@@ -962,13 +967,20 @@ def growth_score(request):
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def team_builder(request):
+    user = request.user
+    dept = getattr(user, 'department', '')
+    from core.models import User
+    peers = User.objects.filter(department=dept).exclude(id=user.id)[:3] if dept else User.objects.exclude(id=user.id)[:3]
+    team = [{"name": user.get_full_name() or user.username, "role": "Lead", "expertise": f"{dept or 'Core'} Domain"}]
+    for p in peers:
+        team.append({
+            "name": p.get_full_name() or p.username,
+            "role": "Co-Investigator",
+            "expertise": f"{p.department or dept or 'Engineering'} Research"
+        })
     return Response({
-        "recommended_project": "AI-based Smart Agriculture",
-        "team": [
-            {"name": request.user.username, "role": "Lead", "expertise": "Machine Learning"},
-            {"name": "Dr. Smitha", "role": "Member", "expertise": "IoT & Sensors"},
-            {"name": "Prof. Alan", "role": "Member", "expertise": "Cloud Computing"}
-        ]
+        "recommended_project": f"Interdisciplinary {dept or 'Applied'} Research Initiative",
+        "team": team
     })
 
 @api_view(['GET'])
@@ -1004,12 +1016,13 @@ def publication_impact(request):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def research_map(request):
+    user = request.user
+    pubs = Publication.objects.filter(faculty=user)
+    if not pubs.exists():
+        return Response({"locations": []})
     return Response({
         "locations": [
-            {"country": "USA", "count": 12},
-            {"country": "UK", "count": 5},
-            {"country": "India", "count": 45},
-            {"country": "Australia", "count": 2}
+            {"country": "India", "count": pubs.count()}
         ]
     })
 
@@ -1054,11 +1067,17 @@ def workload_analyzer(request):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def student_impact(request):
+    user = request.user
+    from .models import StudentGuidance, StudentProject
+    guided = StudentGuidance.objects.filter(faculty=user).count()
+    projects = StudentProject.objects.filter(faculty=user)
+    completed = projects.filter(project_status='COMPLETED').count()
+    papers = sum(p.publications_count for p in projects)
     return Response({
-        "students_guided": 45,
-        "projects_completed": 12,
-        "papers_with_students": 5,
-        "startups_mentored": 1
+        "students_guided": guided,
+        "projects_completed": completed,
+        "papers_with_students": papers,
+        "startups_mentored": 0
     })
 
 @api_view(['GET'])
@@ -1210,20 +1229,6 @@ def plagiarism_scan(request):
         ]
     })
 
-@api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def voice_parse(request):
-    """AI Meeting Minutes Generator"""
-    # Mocking speech-to-text / text summarization
-    return Response({
-        "minutes": "1. Discussed the new curriculum for AI/ML.\n2. Agreed to procure 10 new GPUs.\n3. HoD requested faculty to submit grant proposals by next month.",
-        "action_items": [
-            "Dr. Smith to finalize AI/ML syllabus by Friday.",
-            "Admin to initiate GPU procurement.",
-            "All faculty to draft grant proposals."
-        ],
-        "sentiment": "Positive and Forward-looking"
-    })
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
@@ -1793,19 +1798,10 @@ def fetch_doi_metadata(request):
     except Exception as e:
         pass
 
-    # High-quality fallback for DOI demo
     return Response({
-        'success': True,
-        'doi': clean_doi,
-        'title': f"Deep Learning Architectures for Predictive Analytics: An Empirical Investigation ({clean_doi.split('/')[-1] if '/' in clean_doi else clean_doi})",
-        'journal_name': 'IEEE Transactions on Artificial Intelligence & Knowledge Systems',
-        'authors': f"{request.user.first_name or 'Dr. Faculty'}, S. Sharma, V. Kulkarni",
-        'year': 2025,
-        'indexing': 'SCI',
-        'issn_isbn': '2691-4581',
-        'pages': '114-128',
-        'publisher': 'IEEE Computer Society'
-    })
+        'success': False,
+        'message': f"Could not retrieve DOI metadata from CrossRef for '{clean_doi}'. Please enter publication details manually."
+    }, status=status.HTTP_404_NOT_FOUND)
 
 
 @api_view(['POST'])
@@ -1815,8 +1811,11 @@ def parse_certificate_ai(request):
     Google Gemini Smart AI Parser that extracts course/FDP metadata from certificate text.
     """
     raw_text = request.data.get('text', '') or request.data.get('title', '')
-    if not raw_text:
-        raw_text = "AICTE ATAL One Week Online FDP on Generative AI and Large Language Models conducted by IIT Madras from 10-02-2025 to 16-02-2025."
+    if not raw_text or not raw_text.strip():
+        return Response({
+            'success': False,
+            'message': 'No certificate text provided for parsing.'
+        }, status=status.HTTP_400_BAD_REQUEST)
 
     prompt = f"""Extract academic certificate information from the following text:
 '{raw_text}'

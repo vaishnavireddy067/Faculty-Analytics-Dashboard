@@ -163,26 +163,23 @@ const Analytics = () => {
   const [networkData, setNetworkData] = useState({ nodes: [], edges: [] });
   const [heatmapData, setHeatmapData] = useState([]);
   const [feedbackStats, setFeedbackStats] = useState({
-    average_rating: 4.32,
-    total_reviews: 48,
-    sentiment_summary: 'Overall Strongly Positive based on 48 student responses.',
+    average_rating: 0,
+    total_reviews: 0,
+    sentiment_summary: 'No official student feedback records logged yet.',
     metrics: {
-      teaching: 4.45,
-      communication: 4.21,
-      clarity: 4.38,
-      engagement: 4.17
+      teaching: 0,
+      communication: 0,
+      clarity: 0,
+      engagement: 0
     },
     rating_distribution: [
-      { stars: 5, count: 28 },
-      { stars: 4, count: 14 },
-      { stars: 3, count: 4 },
-      { stars: 2, count: 1 },
-      { stars: 1, count: 1 }
+      { stars: 5, count: 0 },
+      { stars: 4, count: 0 },
+      { stars: 3, count: 0 },
+      { stars: 2, count: 0 },
+      { stars: 1, count: 0 }
     ],
-    courses: [
-      { course: 'CS301: Machine Learning', count: 26, average: 4.42 },
-      { course: 'CS204: Design & Analysis of Algorithms', count: 22, average: 4.22 }
-    ]
+    courses: []
   });
 
   useEffect(() => {
@@ -255,7 +252,7 @@ const Analytics = () => {
       try {
         const res = await api.get('/faculty/analytics/feedback/');
         const data = res?.data || res;
-        if (data && (data.total_reviews > 0 || data.average_rating > 0)) {
+        if (data) {
           setFeedbackStats(data);
         }
       } catch (err) {
@@ -410,7 +407,7 @@ const Analytics = () => {
           </div>
           <div className="flex items-center gap-2 bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full text-xs font-semibold">
             <Sparkles size={14} />
-            <span>{feedbackStats.sentiment_summary || 'Sentiment: Strongly Positive'}</span>
+            <span>{feedbackStats.sentiment_summary || (feedbackStats.total_reviews > 0 ? 'Sentiment: Positive' : 'No Feedback Records')}</span>
           </div>
         </div>
 

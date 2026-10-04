@@ -141,7 +141,7 @@ const IQACMonthlyReport = () => {
     }
   }, [location.pathname, isHod]);
 
-  // Check if faculty already submitted for this period
+  // Check if faculty already submitted for this period and load their entered activities
   useEffect(() => {
     const userEmail = localStorage.getItem('current_user_email') || '';
     const key = `fad_sub_${department}_${month}_${year}_${userEmail}`;
@@ -149,16 +149,23 @@ const IQACMonthlyReport = () => {
     if (existing) {
       try {
         const parsed = JSON.parse(existing);
-        if (parsed.status === 'SUBMITTED') {
-          setSubmissionStatus('SUBMITTED');
-          setSubmittedAt(parsed.submitted_at || '');
+        setSubmissionStatus(parsed.status || 'SUBMITTED');
+        setSubmittedAt(parsed.submitted_at || '');
+        if (parsed.sections && roleMode === 'FACULTY') {
+          setReportData(prev => ({
+            ...prev,
+            sections: {
+              ...(prev?.sections || {}),
+              ...parsed.sections
+            }
+          }));
         }
       } catch (e) {}
     } else {
       setSubmissionStatus('PENDING');
       setSubmittedAt('');
     }
-  }, [department, month, year]);
+  }, [department, month, year, roleMode]);
 
   // Load faculty submissions for HOD portal
   const loadFacultySubmissions = useCallback(async () => {
@@ -261,6 +268,28 @@ const IQACMonthlyReport = () => {
 
     setFacultySubmissions(prev => prev.map(s => s.id === subId ? { ...s, status: 'APPROVED' } : s));
     setSaveSuccess("✅ Faculty submission accepted & approved!");
+    setTimeout(() => setSaveSuccess(''), 4000);
+  };
+
+  // Request changes from a faculty member
+  const handleRequestChanges = async (subId) => {
+    const reason = window.prompt("Enter requested changes or remarks for faculty:", "Please double check paper indexing and attach certificates.");
+    if (reason === null) return;
+    try {
+      await fetchAPI(`/faculty/monthly-submission/${subId}/action/`, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'REQUEST_CHANGES', remarks: reason })
+      }).catch(() => null);
+    } catch (e) {}
+
+    try {
+      const allSubs = JSON.parse(localStorage.getItem('fad_registered_monthly_subs') || '[]');
+      const updated = allSubs.map(s => (s.faculty_id === subId || s.email === subId || s.id === subId) ? { ...s, status: 'CHANGES_REQUESTED', remarks: reason } : s);
+      localStorage.setItem('fad_registered_monthly_subs', JSON.stringify(updated));
+    } catch (e) {}
+
+    setFacultySubmissions(prev => prev.map(s => s.id === subId ? { ...s, status: 'CHANGES_REQUESTED', remarks: reason } : s));
+    setSaveSuccess("⚠️ Revision requested from faculty. Status updated.");
     setTimeout(() => setSaveSuccess(''), 4000);
   };
 
@@ -1454,7 +1483,7 @@ const IQACMonthlyReport = () => {
                 disabled={loading || selectedSubIds.size === 0}
                 className="inline-flex items-center px-4 py-2.5 rounded-full bg-gradient-to-r from-[#6366f1] via-[#8b5cf6] to-[#a855f7] hover:opacity-95 text-white text-xs font-extrabold shadow-md shadow-purple-500/25 transition-all cursor-pointer disabled:opacity-50"
               >
-                <Sparkles size={16} className="mr-1.5" /> Auto-Merge Faculty Submissions
+                <Sparkles size={16} className="mr-1.5" /> Generate Consolidation (Auto-Merge)
               </button>
             </div>
           </div>
@@ -1506,18 +1535,21 @@ const IQACMonthlyReport = () => {
                           <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${
                             isAccepted 
                               ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' 
-                              : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                              : sub.status === 'CHANGES_REQUESTED'
+                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                              : 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300'
                           }`}>
-                            {isAccepted ? 'Accepted' : 'Submitted'}
+                            {isAccepted ? 'Approved' : sub.status === 'CHANGES_REQUESTED' ? 'Changes Requested' : 'Submitted'}
                           </span>
                         </div>
                         <p className="text-xs text-gray-500 dark:text-slate-400">
                           {sub.designation} • {sub.email} • Submitted: {sub.submitted_at}
+                          {sub.remarks && <span className="block text-amber-600 font-semibold mt-0.5">Note: {sub.remarks}</span>}
                         </p>
                       </div>
                     </div>
 
-                    {/* Right: Actions (Accept, Delete, View) */}
+                    {/* Right: Actions (Accept, Request Changes, Delete, View) */}
                     <div className="flex items-center space-x-2 self-end md:self-center">
                       {/* ACCEPT BUTTON */}
                       <button
@@ -1530,7 +1562,17 @@ const IQACMonthlyReport = () => {
                         }`}
                       >
                         <CheckCircle2 size={13} />
-                        <span>{isAccepted ? 'Accepted' : 'Accept'}</span>
+                        <span>{isAccepted ? 'Approved' : 'Approve'}</span>
+                      </button>
+
+                      {/* REQUEST CHANGES BUTTON */}
+                      <button
+                        onClick={() => handleRequestChanges(sub.id)}
+                        className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900 transition flex items-center gap-1 cursor-pointer"
+                        title="Request changes from faculty"
+                      >
+                        <AlertCircle size={13} />
+                        <span>Changes</span>
                       </button>
 
                       {/* DELETE BUTTON */}
@@ -1563,84 +1605,339 @@ const IQACMonthlyReport = () => {
 
       {/* 👁️ PREVIEW MODAL FOR INDIVIDUAL FACULTY SUBMISSION */}
       {previewingSub && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-6 max-w-2xl w-full space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-3">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
+          <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6 max-w-4xl w-full space-y-4 shadow-2xl max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-start sm:items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-3 shrink-0">
               <div>
-                <h3 className="font-bold text-base text-gray-900 dark:text-white">
-                  Submission Preview: {previewingSub.faculty_name}
-                </h3>
-                <p className="text-xs text-gray-500">
-                  {previewingSub.designation} • {previewingSub.email} • {previewingSub.submitted_at}
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-base text-gray-900 dark:text-white">
+                    Faculty Submission: {previewingSub.faculty_name}
+                  </h3>
+                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${
+                    previewingSub.status === 'APPROVED' 
+                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' 
+                      : previewingSub.status === 'CHANGES_REQUESTED'
+                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                      : 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300'
+                  }`}>
+                    {previewingSub.status || 'SUBMITTED'}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                  {previewingSub.designation || 'Faculty'} • {previewingSub.email} • Submitted: {previewingSub.submitted_at || 'Recently'}
                 </p>
               </div>
-              <button onClick={() => setPreviewingSub(null)} className="text-gray-400 hover:text-gray-600 p-1">
-                <X size={18} />
-              </button>
-            </div>
 
-            <div className="space-y-3 text-xs">
-              <div className="p-3 bg-gray-50 dark:bg-slate-800 rounded-xl space-y-1">
-                <span className="font-bold text-gray-700 dark:text-slate-200">1. Student Events Organized:</span>
-                {previewingSub.sections?.['1_student_events']?.length > 0 ? (
-                  <ul className="list-disc list-inside space-y-0.5 text-gray-600 dark:text-slate-300">
-                    {previewingSub.sections['1_student_events'].map((ev, i) => (
-                      <li key={i}>{ev.name} ({ev.duration || '1 day'}) - {ev.chief_guest || 'Resource Person'}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-gray-400 italic">No events submitted</p>
-                )}
-              </div>
-
-              <div className="p-3 bg-gray-50 dark:bg-slate-800 rounded-xl space-y-1">
-                <span className="font-bold text-gray-700 dark:text-slate-200">5. Student Achievements:</span>
-                {previewingSub.sections?.['5_student_achievements']?.a_curricular?.length > 0 ? (
-                  <ul className="list-disc list-inside space-y-0.5 text-gray-600 dark:text-slate-300">
-                    {previewingSub.sections['5_student_achievements'].a_curricular.map((ach, i) => (
-                      <li key={i}>{ach.name || ach.student_name}: {ach.event || ach.event_name} ({ach.prizes || '-'})</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-gray-400 italic">No student achievements submitted</p>
-                )}
-              </div>
-
-              <div className="p-3 bg-gray-50 dark:bg-slate-800 rounded-xl space-y-1">
-                <span className="font-bold text-gray-700 dark:text-slate-200">6. Faculty Achievements & FDPs:</span>
-                {previewingSub.sections?.['6_faculty_achievements']?.g_workshops_attended?.length > 0 || previewingSub.sections?.['6_faculty_achievements']?.a_journal_publications?.length > 0 ? (
-                  <ul className="list-disc list-inside space-y-0.5 text-gray-600 dark:text-slate-300">
-                    {(previewingSub.sections?.['6_faculty_achievements']?.g_workshops_attended || []).map((w, i) => (
-                      <li key={i}>FDP: {w.program_name} ({w.organized_by})</li>
-                    ))}
-                    {(previewingSub.sections?.['6_faculty_achievements']?.a_journal_publications || []).map((p, i) => (
-                      <li key={i}>Journal: {p.title} - {p.journal}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-gray-400 italic">No publications/FDPs submitted</p>
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100 dark:border-slate-800">
-              <button
-                onClick={() => setPreviewingSub(null)}
-                className="px-3.5 py-1.5 rounded-xl border border-gray-300 text-xs font-bold text-gray-700 dark:text-slate-300"
-              >
-                Close
-              </button>
-              {previewingSub.status !== 'APPROVED' && (
+              <div className="flex items-center gap-2">
                 <button
                   onClick={() => {
-                    handleAcceptSubmission(previewingSub.id);
+                    if (previewingSub.sections && Object.keys(previewingSub.sections).length > 0) {
+                      setReportData(prev => ({
+                        ...prev,
+                        sections: {
+                          ...(prev?.sections || {}),
+                          ...previewingSub.sections
+                        }
+                      }));
+                    }
+                    setActiveTab('editor');
                     setPreviewingSub(null);
                   }}
-                  className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs"
+                  className="px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/60 flex items-center gap-1.5 transition cursor-pointer"
+                  title="Open this faculty's full report in the document editor"
                 >
-                  ✓ Accept Submission
+                  <FileText size={14} />
+                  <span>Open Full Document View</span>
                 </button>
+                <button 
+                  onClick={() => setPreviewingSub(null)} 
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-white p-1 rounded-lg"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body: Render Real Submitted Tables */}
+            <div className="flex-1 overflow-y-auto space-y-4 pr-1 text-xs">
+              {/* 1. Student Events Organized */}
+              <div className="border border-gray-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+                <div className="bg-gray-100 dark:bg-slate-800 px-3.5 py-2 font-bold text-gray-800 dark:text-slate-200 flex items-center justify-between">
+                  <span>1. Programmes / Events Organized for Students</span>
+                  <span className="text-[10px] font-semibold text-gray-500">
+                    {(previewingSub.sections?.['1_student_events']?.length || 0)} entries
+                  </span>
+                </div>
+                {previewingSub.sections?.['1_student_events']?.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="bg-gray-50 dark:bg-slate-800/50 text-[10px] uppercase text-gray-500 font-bold border-b border-gray-200 dark:border-slate-700">
+                        <tr>
+                          <th className="p-2 w-10 text-center">#</th>
+                          <th className="p-2">Event / Programme Name</th>
+                          <th className="p-2">Duration</th>
+                          <th className="p-2">Chief Guest / Resource Person</th>
+                          <th className="p-2">Target Students</th>
+                          <th className="p-2 text-center">Proof / Doc</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
+                        {previewingSub.sections['1_student_events'].map((ev, i) => (
+                          <tr key={i} className="hover:bg-gray-50/50 dark:hover:bg-slate-800/40">
+                            <td className="p-2 text-center font-medium text-gray-400">{i + 1}</td>
+                            <td className="p-2 font-semibold text-gray-900 dark:text-white">{ev.name || '-'}</td>
+                            <td className="p-2 text-gray-600 dark:text-slate-300">{ev.duration || '1 day'}</td>
+                            <td className="p-2 text-gray-600 dark:text-slate-300">{ev.chief_guest || '-'}</td>
+                            <td className="p-2 text-gray-600 dark:text-slate-300">{ev.target || '-'}</td>
+                            <td className="p-2 text-center">
+                              {ev.proof_url ? (
+                                <a href={ev.proof_url} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline font-bold text-[10px] inline-flex items-center gap-0.5">
+                                  <span>Proof</span> <ExternalLink size={10} />
+                                </a>
+                              ) : <span className="text-gray-400 text-[10px]">-</span>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="p-3 text-xs text-gray-400 italic">No student events submitted for this period.</p>
+                )}
+              </div>
+
+              {/* 2. Faculty Publications (Journals & Conferences) */}
+              <div className="border border-gray-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+                <div className="bg-gray-100 dark:bg-slate-800 px-3.5 py-2 font-bold text-gray-800 dark:text-slate-200 flex items-center justify-between">
+                  <span>6.a & 6.b Publications (Journals & Conferences)</span>
+                  <span className="text-[10px] font-semibold text-gray-500">
+                    {(previewingSub.sections?.['6_faculty_achievements']?.a_journal_publications?.length || 0) + (previewingSub.sections?.['6_faculty_achievements']?.b_conference_publications?.length || 0)} entries
+                  </span>
+                </div>
+                {(previewingSub.sections?.['6_faculty_achievements']?.a_journal_publications?.length > 0 || previewingSub.sections?.['6_faculty_achievements']?.b_conference_publications?.length > 0) ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="bg-gray-50 dark:bg-slate-800/50 text-[10px] uppercase text-gray-500 font-bold border-b border-gray-200 dark:border-slate-700">
+                        <tr>
+                          <th className="p-2 w-10 text-center">#</th>
+                          <th className="p-2">Paper Title</th>
+                          <th className="p-2">Journal / Conference</th>
+                          <th className="p-2">ISSN / ISBN</th>
+                          <th className="p-2">Indexing</th>
+                          <th className="p-2 text-center">DOI / Link</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
+                        {(previewingSub.sections?.['6_faculty_achievements']?.a_journal_publications || []).map((pub, i) => (
+                          <tr key={`j_${i}`} className="hover:bg-gray-50/50 dark:hover:bg-slate-800/40">
+                            <td className="p-2 text-center font-medium text-gray-400">{i + 1}</td>
+                            <td className="p-2 font-semibold text-gray-900 dark:text-white">{pub.title || '-'}</td>
+                            <td className="p-2 text-gray-600 dark:text-slate-300">{pub.journal || 'Journal'}</td>
+                            <td className="p-2 text-gray-600 dark:text-slate-300">{pub.issn || '-'}</td>
+                            <td className="p-2">
+                              <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-bold text-[9px]">
+                                {pub.indexing || 'Peer Reviewed'}
+                              </span>
+                            </td>
+                            <td className="p-2 text-center">
+                              {pub.doi ? (
+                                <a href={`https://doi.org/${pub.doi.replace(/^https?:\/\/doi.org\//, '')}`} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline font-bold text-[10px] inline-flex items-center gap-0.5">
+                                  <span>View DOI</span> <ExternalLink size={10} />
+                                </a>
+                              ) : <span className="text-gray-400 text-[10px]">-</span>}
+                            </td>
+                          </tr>
+                        ))}
+                        {(previewingSub.sections?.['6_faculty_achievements']?.b_conference_publications || []).map((conf, i) => (
+                          <tr key={`c_${i}`} className="hover:bg-gray-50/50 dark:hover:bg-slate-800/40">
+                            <td className="p-2 text-center font-medium text-gray-400">{i + 1}</td>
+                            <td className="p-2 font-semibold text-gray-900 dark:text-white">{conf.title || '-'}</td>
+                            <td className="p-2 text-gray-600 dark:text-slate-300">{conf.conference_name || 'Conference'}</td>
+                            <td className="p-2 text-gray-600 dark:text-slate-300">{conf.isbn || '-'}</td>
+                            <td className="p-2">
+                              <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 font-bold text-[9px]">
+                                Conference
+                              </span>
+                            </td>
+                            <td className="p-2 text-center">
+                              {conf.proof_url ? (
+                                <a href={conf.proof_url} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline font-bold text-[10px] inline-flex items-center gap-0.5">
+                                  <span>Proof</span> <ExternalLink size={10} />
+                                </a>
+                              ) : <span className="text-gray-400 text-[10px]">-</span>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="p-3 text-xs text-gray-400 italic">No publications submitted for this period.</p>
+                )}
+              </div>
+
+              {/* 3. Workshops & FDPs Attended / Organized */}
+              <div className="border border-gray-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+                <div className="bg-gray-100 dark:bg-slate-800 px-3.5 py-2 font-bold text-gray-800 dark:text-slate-200 flex items-center justify-between">
+                  <span>6.g Workshops & FDPs Attended</span>
+                  <span className="text-[10px] font-semibold text-gray-500">
+                    {(previewingSub.sections?.['6_faculty_achievements']?.g_workshops_attended?.length || 0)} entries
+                  </span>
+                </div>
+                {previewingSub.sections?.['6_faculty_achievements']?.g_workshops_attended?.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="bg-gray-50 dark:bg-slate-800/50 text-[10px] uppercase text-gray-500 font-bold border-b border-gray-200 dark:border-slate-700">
+                        <tr>
+                          <th className="p-2 w-10 text-center">#</th>
+                          <th className="p-2">Program / FDP Title</th>
+                          <th className="p-2">Organized By</th>
+                          <th className="p-2">Dates / Duration</th>
+                          <th className="p-2 text-center">Certificate</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
+                        {previewingSub.sections['6_faculty_achievements'].g_workshops_attended.map((fdp, i) => (
+                          <tr key={i} className="hover:bg-gray-50/50 dark:hover:bg-slate-800/40">
+                            <td className="p-2 text-center font-medium text-gray-400">{i + 1}</td>
+                            <td className="p-2 font-semibold text-gray-900 dark:text-white">{fdp.program_name || '-'}</td>
+                            <td className="p-2 text-gray-600 dark:text-slate-300">{fdp.organized_by || '-'}</td>
+                            <td className="p-2 text-gray-600 dark:text-slate-300">{fdp.duration || '-'}</td>
+                            <td className="p-2 text-center">
+                              {fdp.certificate_url ? (
+                                <a href={fdp.certificate_url} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline font-bold text-[10px] inline-flex items-center gap-0.5">
+                                  <span>Certificate</span> <ExternalLink size={10} />
+                                </a>
+                              ) : <span className="text-gray-400 text-[10px]">-</span>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="p-3 text-xs text-gray-400 italic">No FDPs or workshops attended submitted for this period.</p>
+                )}
+              </div>
+
+              {/* 4. Student Achievements */}
+              <div className="border border-gray-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+                <div className="bg-gray-100 dark:bg-slate-800 px-3.5 py-2 font-bold text-gray-800 dark:text-slate-200 flex items-center justify-between">
+                  <span>5. Student Achievements (Curricular & Extracurricular)</span>
+                  <span className="text-[10px] font-semibold text-gray-500">
+                    {(previewingSub.sections?.['5_student_achievements']?.a_curricular?.length || 0) + (previewingSub.sections?.['5_student_achievements']?.b_extracurricular?.length || 0)} entries
+                  </span>
+                </div>
+                {(previewingSub.sections?.['5_student_achievements']?.a_curricular?.length > 0 || previewingSub.sections?.['5_student_achievements']?.b_extracurricular?.length > 0) ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="bg-gray-50 dark:bg-slate-800/50 text-[10px] uppercase text-gray-500 font-bold border-b border-gray-200 dark:border-slate-700">
+                        <tr>
+                          <th className="p-2 w-10 text-center">#</th>
+                          <th className="p-2">Student Name</th>
+                          <th className="p-2">Roll No</th>
+                          <th className="p-2">Event / Competition</th>
+                          <th className="p-2">Prize / Award</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
+                        {(previewingSub.sections?.['5_student_achievements']?.a_curricular || []).map((st, i) => (
+                          <tr key={`cur_${i}`} className="hover:bg-gray-50/50 dark:hover:bg-slate-800/40">
+                            <td className="p-2 text-center font-medium text-gray-400">{i + 1}</td>
+                            <td className="p-2 font-semibold text-gray-900 dark:text-white">{st.name || st.student_name || '-'}</td>
+                            <td className="p-2 text-gray-600 dark:text-slate-300">{st.roll_no || '-'}</td>
+                            <td className="p-2 text-gray-600 dark:text-slate-300">{st.event || st.event_name || '-'}</td>
+                            <td className="p-2 font-bold text-amber-600">{st.prizes || st.award || '-'}</td>
+                          </tr>
+                        ))}
+                        {(previewingSub.sections?.['5_student_achievements']?.b_extracurricular || []).map((st, i) => (
+                          <tr key={`ext_${i}`} className="hover:bg-gray-50/50 dark:hover:bg-slate-800/40">
+                            <td className="p-2 text-center font-medium text-gray-400">{i + 1}</td>
+                            <td className="p-2 font-semibold text-gray-900 dark:text-white">{st.name || st.student_name || '-'}</td>
+                            <td className="p-2 text-gray-600 dark:text-slate-300">{st.roll_no || '-'}</td>
+                            <td className="p-2 text-gray-600 dark:text-slate-300">{st.event || st.event_name || '-'}</td>
+                            <td className="p-2 font-bold text-emerald-600">{st.prizes || st.award || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="p-3 text-xs text-gray-400 italic">No student achievements submitted for this period.</p>
+                )}
+              </div>
+
+              {/* Notice when all tables are empty */}
+              {(!previewingSub.sections || Object.keys(previewingSub.sections).length === 0 || (
+                (previewingSub.sections['1_student_events']?.length || 0) === 0 &&
+                (previewingSub.sections['6_faculty_achievements']?.a_journal_publications?.length || 0) === 0 &&
+                (previewingSub.sections['6_faculty_achievements']?.g_workshops_attended?.length || 0) === 0 &&
+                (previewingSub.sections['5_student_achievements']?.a_curricular?.length || 0) === 0
+              )) && (
+                <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl text-center space-y-2">
+                  <p className="font-semibold text-amber-800 dark:text-amber-300">
+                    ℹ️ No activity entries have been populated in this faculty submission yet.
+                  </p>
+                  <p className="text-gray-600 dark:text-slate-400 text-[11px]">
+                    You can click <strong className="text-indigo-600">"Open Full Document View"</strong> to inspect the full report sheet, or click <strong className="text-amber-700">"Request Changes"</strong> to notify the faculty member to fill their activities.
+                  </p>
+                </div>
               )}
+            </div>
+
+            {/* Modal Footer Actions */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-gray-100 dark:border-slate-800 shrink-0">
+              <button
+                onClick={() => {
+                  if (previewingSub.sections && Object.keys(previewingSub.sections).length > 0) {
+                    setReportData(prev => ({
+                      ...prev,
+                      sections: {
+                        ...(prev?.sections || {}),
+                        ...previewingSub.sections
+                      }
+                    }));
+                  }
+                  setActiveTab('editor');
+                  setPreviewingSub(null);
+                }}
+                className="px-3 py-1.5 rounded-xl border border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 text-xs font-bold hover:bg-indigo-50 dark:hover:bg-indigo-950/40 flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <FileText size={13} />
+                <span>Open Full Document View</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPreviewingSub(null)}
+                  className="px-3.5 py-1.5 rounded-xl border border-gray-300 dark:border-slate-700 text-xs font-bold text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                >
+                  Close
+                </button>
+
+                <button
+                  onClick={() => {
+                    handleRequestChanges(previewingSub.id);
+                    setPreviewingSub(null);
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-xs transition cursor-pointer"
+                >
+                  Request Changes
+                </button>
+
+                {previewingSub.status !== 'APPROVED' && (
+                  <button
+                    onClick={() => {
+                      handleAcceptSubmission(previewingSub.id);
+                      setPreviewingSub(null);
+                    }}
+                    className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition cursor-pointer"
+                  >
+                    ✓ Accept & Approve
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

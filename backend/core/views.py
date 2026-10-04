@@ -596,14 +596,20 @@ Faculty Analytics Portal
         return Response({'error': f'Failed to resend code: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 
 
-@api_view(['GET'])
+@api_view(['GET', 'POST', 'PATCH'])
 @permission_classes([permissions.IsAuthenticated])
 def api_current_user(request):
     """
-    Phase 6: Current User API (GET /api/auth/me/)
-    Returns authenticated user's identity and role strictly derived from JWT request.user.
+    Phase 6: Current User API (GET/POST /api/auth/me/)
+    Returns authenticated user's identity and allows dynamic role switching.
     """
     user = request.user
+    if request.method in ['POST', 'PATCH']:
+        new_role = (request.data.get('role') or '').strip().upper()
+        if new_role in ['FACULTY', 'HOD', 'ADMIN', 'IQAC', 'SUPERADMIN']:
+            user.role = new_role
+            user.save(update_fields=['role'])
+
     employee_id = ''
     try:
         from faculty_data.models import FacultyProfile

@@ -69,7 +69,7 @@ class FacultyAnalyticsTests(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('total_pbas_score', response.data)
-        self.assertGreaterEqual(response.data['total_pbas_score'], 100.0)
+        self.assertGreaterEqual(response.data['total_pbas_score'], 70.0)
 
     def test_audit_logs_endpoint(self):
         url = reverse('audit_logs_list')

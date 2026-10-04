@@ -1,17 +1,30 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { 
   Users, CheckCircle2, Clock, AlertCircle, FileSpreadsheet, 
   Printer, Download, RefreshCw, Send, Plus, Trash2, Eye, 
   Layers, Award, BookOpen, Briefcase, FileText, ChevronRight, 
   Calendar, Building, Sparkles, Check, ArrowRight, ShieldCheck,
-  ExternalLink, Search, Filter, HelpCircle
+  ExternalLink, Search, Filter, HelpCircle, Share2, Copy
 } from 'lucide-react';
 import { fetchAPI, API_BASE_URL } from '../services/api';
 
-const MonthlyReportHub = () => {
+const MonthlyReportHub = ({ initialTab }) => {
+  const location = useLocation();
+
   // Current user info & roles
   const [currentUser, setCurrentUser] = useState({ role: 'FACULTY', username: '', department: '' });
-  const [activeTab, setActiveTab] = useState('hod_tracker'); // 'hod_tracker' | 'faculty_submission' | 'consolidated_view'
+  const [activeTab, setActiveTab] = useState(() => {
+    if (initialTab) return initialTab;
+    if (location.pathname === '/monthly-submission') return 'faculty_submission';
+    if (location.pathname === '/hod-consolidation') return 'consolidated_view';
+    return 'hod_tracker';
+  });
+
+  // Share Modal & Local Save State
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
 
   // Global filters
   const [department, setDepartment] = useState('Computer Science & Engineering');
@@ -54,6 +67,19 @@ const MonthlyReportHub = () => {
   const [selectedSubmissionIds, setSelectedSubmissionIds] = useState([]);
   const printRef = useRef();
 
+  // Synchronize activeTab with URL route and initialTab prop
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    } else if (location.pathname === '/monthly-submission') {
+      setActiveTab('faculty_submission');
+    } else if (location.pathname === '/hod-consolidation') {
+      setActiveTab('consolidated_view');
+    } else if (location.pathname === '/monthly-reports') {
+      setActiveTab('hod_tracker');
+    }
+  }, [initialTab, location.pathname]);
+
   // Load User Profile on mount
   useEffect(() => {
     const loadProfile = async () => {
@@ -66,10 +92,12 @@ const MonthlyReportHub = () => {
           parsed.role = effRole;
           setCurrentUser(parsed);
           if (parsed.department) setDepartment(parsed.department);
-          if (effRole === 'FACULTY') {
-            setActiveTab('faculty_submission');
-          } else {
-            setActiveTab('hod_tracker');
+          if (!initialTab && location.pathname !== '/hod-consolidation' && location.pathname !== '/monthly-submission') {
+            if (effRole === 'FACULTY') {
+              setActiveTab('faculty_submission');
+            } else {
+              setActiveTab('hod_tracker');
+            }
           }
         }
         const profile = await fetchAPI('/faculty/profile/');
@@ -77,10 +105,12 @@ const MonthlyReportHub = () => {
           if (storedRole) profile.role = storedRole.toUpperCase();
           setCurrentUser(profile);
           if (profile.department) setDepartment(profile.department);
-          if (profile.role === 'FACULTY') {
-            setActiveTab('faculty_submission');
-          } else {
-            setActiveTab('hod_tracker');
+          if (!initialTab && location.pathname !== '/hod-consolidation' && location.pathname !== '/monthly-submission') {
+            if (profile.role === 'FACULTY') {
+              setActiveTab('faculty_submission');
+            } else {
+              setActiveTab('hod_tracker');
+            }
           }
         }
       } catch (err) {
@@ -88,7 +118,7 @@ const MonthlyReportHub = () => {
       }
     };
     loadProfile();
-  }, []);
+  }, [initialTab, location.pathname]);
 
   // Fetch HOD Tracker Data
   const loadTrackerData = async () => {
@@ -385,6 +415,172 @@ const MonthlyReportHub = () => {
     }
   };
 
+  // Flatten all merged activities into a single clean list for the Master Activity Report
+  const getFlatConsolidatedActivities = () => {
+    if (!consolidatedData) return [];
+    const list = [];
+    let sno = 1;
+
+    // 1. FDPs / Workshops attended
+    const fdps = consolidatedData.sections?.['6_faculty_achievements']?.['g_workshops_attended'] || [];
+    fdps.forEach(item => {
+      list.push({
+        sno: sno++,
+        faculty_name: item.faculty_name || 'Faculty Member',
+        activity: 'FDP / Workshop',
+        description: item.program_title || item.title || 'FDP Attended',
+        date: item.dates_duration || item.date || '—',
+        quantity: 1,
+        remarks: item.organized_by || item.status_proof || 'Completed'
+      });
+    });
+
+    // 2. Journal Publications
+    const journals = consolidatedData.sections?.['6_faculty_achievements']?.['a_journal_publications'] || [];
+    journals.forEach(item => {
+      list.push({
+        sno: sno++,
+        faculty_name: item.authors || 'Faculty Author',
+        activity: 'Publication',
+        description: `${item.title || ''} (${item.journal || ''})`,
+        date: item.volume_issue || item.date || '—',
+        quantity: 1,
+        remarks: item.indexing || 'Published'
+      });
+    });
+
+    // 3. Conference Publications
+    const confs = consolidatedData.sections?.['6_faculty_achievements']?.['b_conference_publications'] || [];
+    confs.forEach(item => {
+      list.push({
+        sno: sno++,
+        faculty_name: item.authors || 'Faculty Author',
+        activity: 'Conference Pub',
+        description: `${item.title || ''} (${item.conf_name || ''})`,
+        date: item.date || '—',
+        quantity: 1,
+        remarks: item.isbn_issn || 'Presented'
+      });
+    });
+
+    // 4. Patents
+    const patents = consolidatedData.sections?.['6_faculty_achievements']?.['c_patents'] || [];
+    patents.forEach(item => {
+      list.push({
+        sno: sno++,
+        faculty_name: item.authors || 'Faculty Inventor',
+        activity: 'Patent',
+        description: item.title || 'Patent',
+        date: item.filing_no_year || item.date || '—',
+        quantity: 1,
+        remarks: item.status || 'Filed / Published'
+      });
+    });
+
+    // 5. Honors & Awards
+    const awards = consolidatedData.sections?.['6_faculty_achievements']?.['k_awards'] || [];
+    awards.forEach(item => {
+      list.push({
+        sno: sno++,
+        faculty_name: item.faculty_name || 'Faculty Member',
+        activity: 'Award / Honor',
+        description: item.award_name || item.title || 'Award',
+        date: item.date || '—',
+        quantity: 1,
+        remarks: item.awarding_agency || '—'
+      });
+    });
+
+    // 6. Guest Lectures
+    const lectures = consolidatedData.sections?.['6_faculty_achievements']?.['f_guest_lectures'] || [];
+    lectures.forEach(item => {
+      list.push({
+        sno: sno++,
+        faculty_name: item.faculty_name || 'Faculty Speaker',
+        activity: 'Guest Lecture',
+        description: item.topic || 'Expert Session',
+        date: item.date || '—',
+        quantity: 1,
+        remarks: item.host_org || '—'
+      });
+    });
+
+    // 7. Student Technical Events
+    const studentEvents = consolidatedData.sections?.['1_student_events'] || [];
+    studentEvents.forEach(item => {
+      list.push({
+        sno: sno++,
+        faculty_name: item.faculty_incharge || 'Faculty Coordinator',
+        activity: 'Student Event',
+        description: item.activity_name || 'Event Organized',
+        date: item.date || '—',
+        quantity: 1,
+        remarks: item.outcome || item.target_audience || 'Organized'
+      });
+    });
+
+    // 8. Faculty Events Organized
+    const facEvents = consolidatedData.sections?.['2_faculty_events'] || [];
+    facEvents.forEach(item => {
+      list.push({
+        sno: sno++,
+        faculty_name: item.faculty_incharge || 'Faculty Coordinator',
+        activity: 'FDP Organized',
+        description: item.activity_name || 'Faculty Program Organized',
+        date: item.date || '—',
+        quantity: 1,
+        remarks: item.outcome || 'Conducted'
+      });
+    });
+
+    // 9. Student Projects Guided
+    const studentProjects = consolidatedData.sections?.['student_projects_guided'] || [];
+    studentProjects.forEach(item => {
+      list.push({
+        sno: sno++,
+        faculty_name: item.guide_name || item.faculty_name || 'Project Guide',
+        activity: 'Project Guide',
+        description: item.project_title || 'UG/PG Project',
+        date: '—',
+        quantity: 1,
+        remarks: item.outcome || 'Mentored'
+      });
+    });
+
+    return list;
+  };
+
+  const handleSaveConsolidation = () => {
+    if (!consolidatedData) return;
+    try {
+      const archives = JSON.parse(localStorage.getItem('fad_saved_consolidations') || '[]');
+      const newEntry = {
+        id: `cons_${Date.now()}`,
+        department,
+        month,
+        year,
+        academicYear,
+        saved_at: new Date().toLocaleString(),
+        total_faculty: consolidatedData.submitting_faculties?.length || 0,
+        data: consolidatedData
+      };
+      archives.unshift(newEntry);
+      localStorage.setItem('fad_saved_consolidations', JSON.stringify(archives.slice(0, 30)));
+      setSaveSuccessMsg(`💾 Consolidated Activity Report for ${month} ${year} saved to institutional archives!`);
+      setTimeout(() => setSaveSuccessMsg(''), 5000);
+    } catch (e) {
+      console.error("Save consolidation error:", e);
+    }
+  };
+
+  const shareableUrl = `${window.location.origin}/hod-consolidation?dept=${encodeURIComponent(department)}&month=${month}&year=${year}`;
+
+  const handleCopyShareLink = () => {
+    navigator.clipboard.writeText(shareableUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 3000);
+  };
+
   useEffect(() => {
     if (activeTab === 'hod_tracker') {
       loadTrackerData();
@@ -518,7 +714,8 @@ const MonthlyReportHub = () => {
     return matchesSearch && fac.status === filterStatus;
   });
 
-  const isHodOrAdmin = (currentUser?.role || '').toUpperCase() === 'HOD' || (currentUser?.role || '').toUpperCase() === 'ADMIN' || (currentUser?.role || '').toUpperCase() === 'SUPERADMIN';
+  const storedRoleForCheck = (localStorage.getItem('user_role') || '').toUpperCase();
+  const isHodOrAdmin = (currentUser?.role || storedRoleForCheck || '').toUpperCase() === 'HOD' || (currentUser?.role || storedRoleForCheck || '').toUpperCase() === 'ADMIN' || (currentUser?.role || storedRoleForCheck || '').toUpperCase() === 'SUPERADMIN' || storedRoleForCheck === 'HOD' || storedRoleForCheck === 'ADMIN' || storedRoleForCheck === 'SUPERADMIN';
 
   // Ensure faculty stays on faculty_submission
   useEffect(() => {
@@ -1616,6 +1813,26 @@ const MonthlyReportHub = () => {
               </button>
 
               <button
+                type="button"
+                onClick={handleSaveConsolidation}
+                className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 shadow-sm cursor-pointer"
+                title="Save consolidation snapshot to institutional archives"
+              >
+                <CheckCircle2 size={15} />
+                <span>💾 Save Report</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShareModalOpen(true)}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 shadow-sm cursor-pointer"
+                title="Share link to this consolidation sheet"
+              >
+                <Share2 size={15} />
+                <span>🔗 Share Report</span>
+              </button>
+
+              <button
                 onClick={() => window.open(`${API_BASE_URL}/faculty/monthly-submission/export-excel/?department=${encodeURIComponent(department)}&month=${month}&year=${year}`, '_blank')}
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 shadow-sm"
               >
@@ -1650,6 +1867,13 @@ const MonthlyReportHub = () => {
 
           </div>
 
+          {saveSuccessMsg && (
+            <div className="p-4 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 rounded-2xl text-emerald-800 dark:text-emerald-200 text-sm font-semibold flex items-center space-x-2 print:hidden animate-in fade-in">
+              <CheckCircle2 size={18} className="text-emerald-500" />
+              <span>{saveSuccessMsg}</span>
+            </div>
+          )}
+
           {consolidatedSuccessMsg && (
             <div className="p-4 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 rounded-2xl text-emerald-800 dark:text-emerald-200 text-sm font-semibold flex items-center space-x-2 print:hidden">
               <CheckCircle2 size={18} className="text-emerald-500" />
@@ -1683,6 +1907,63 @@ const MonthlyReportHub = () => {
               </div>
               <div className="text-gray-500 font-semibold text-right">
                 Academic Year: {academicYear}
+              </div>
+            </div>
+
+            {/* ★ 1. FACULTY MONTHLY CONSOLIDATED ACTIVITY REPORT (Flat Merged Table) */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between bg-gradient-to-r from-indigo-900 via-indigo-800 to-purple-900 text-white p-3 rounded-t-xl font-sans">
+                <div>
+                  <h2 className="text-xs sm:text-sm font-extrabold uppercase tracking-wider flex items-center space-x-2">
+                    <span>★ Faculty Monthly Consolidated Activity Report</span>
+                  </h2>
+                  <p className="text-[11px] text-indigo-200">
+                    Department: <span className="font-bold text-white">{department}</span> | Month: <span className="font-bold text-white">{month} {year}</span> | Academic Year: <span className="font-bold text-white">{academicYear}</span>
+                  </p>
+                </div>
+                <span className="text-[10px] font-mono bg-white/20 px-2 py-0.5 rounded text-white font-bold">
+                  Auto-Merged
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs border-collapse border border-gray-300 font-sans">
+                  <thead>
+                    <tr className="bg-gray-100 text-gray-800 font-bold">
+                      <th className="border border-gray-300 p-2 w-12 text-center">S.No</th>
+                      <th className="border border-gray-300 p-2 text-left w-44">Faculty Name</th>
+                      <th className="border border-gray-300 p-2 text-left w-36">Activity</th>
+                      <th className="border border-gray-300 p-2 text-left">Description</th>
+                      <th className="border border-gray-300 p-2 text-center w-28">Date</th>
+                      <th className="border border-gray-300 p-2 text-center w-16">Quantity</th>
+                      <th className="border border-gray-300 p-2 text-left w-32">Remarks</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {getFlatConsolidatedActivities().length === 0 ? (
+                      <tr>
+                        <td colSpan="7" className="border border-gray-300 p-6 text-center text-gray-400 italic">
+                          No faculty activity records merged yet. Approve submissions in HOD Review and click "Auto-Merge ONLY Approved".
+                        </td>
+                      </tr>
+                    ) : (
+                      getFlatConsolidatedActivities().map((row, idx) => (
+                        <tr key={idx} className="hover:bg-gray-50/80 transition-colors">
+                          <td className="border border-gray-300 p-2 text-center font-bold text-gray-500">{row.sno}</td>
+                          <td className="border border-gray-300 p-2 font-bold text-indigo-900">{row.faculty_name}</td>
+                          <td className="border border-gray-300 p-2 font-semibold text-gray-800">
+                            <span className="px-1.5 py-0.5 rounded bg-gray-100 text-[11px] font-medium border border-gray-200">
+                              {row.activity}
+                            </span>
+                          </td>
+                          <td className="border border-gray-300 p-2 text-gray-700 leading-snug">{row.description}</td>
+                          <td className="border border-gray-300 p-2 text-center text-gray-600 font-mono text-[11px]">{row.date}</td>
+                          <td className="border border-gray-300 p-2 text-center font-bold text-gray-800">{row.quantity}</td>
+                          <td className="border border-gray-300 p-2 text-gray-600 text-[11px]">{row.remarks}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
 
@@ -2629,6 +2910,71 @@ const MonthlyReportHub = () => {
                 className="w-full sm:w-auto px-5 py-2 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-xl text-xs font-bold transition-all cursor-pointer"
               >
                 Close Inspector
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🔗 Share Report Modal */}
+      {shareModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-100 dark:border-slate-800 p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600 flex items-center justify-center">
+                  <Share2 size={16} />
+                </div>
+                <h3 className="font-bold text-gray-900 dark:text-white text-base">Share Consolidation Sheet</h3>
+              </div>
+              <button
+                onClick={() => setShareModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+              Copy this direct link to share this compiled consolidation sheet with authorized institutional reviewers, IQAC coordinators, or administrators.
+            </p>
+
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                Direct Report URL
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={shareableUrl}
+                  className="flex-1 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-gray-800 dark:text-gray-200 outline-none"
+                />
+                <button
+                  onClick={handleCopyShareLink}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                    copiedLink
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm'
+                  }`}
+                >
+                  {copiedLink ? <Check size={14} /> : <Copy size={14} />}
+                  <span>{copiedLink ? 'Copied!' : 'Copy'}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-900/60 text-[11px] text-amber-800 dark:text-amber-300 space-y-1">
+              <span className="font-bold block">🔒 Institutional Access Guard</span>
+              <span>Only authenticated HODs, IQAC officers, and authorized reviewers can view full submission data and edit records.</span>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setShareModalOpen(false)}
+                className="px-4 py-2 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-xl text-xs font-bold"
+              >
+                Done
               </button>
             </div>
           </div>

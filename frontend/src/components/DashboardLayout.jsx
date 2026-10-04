@@ -5,7 +5,7 @@ import {
   UserCircle, Menu, X, PlusSquare, CheckCircle, Sparkles,
   TrendingUp, ShieldAlert, Moon, Sun, Database, BarChart2,
   Award, Briefcase, UploadCloud, ClipboardCheck, Layers, Share2,
-  Command, Send, BookOpen
+  Command, Send, BookOpen, FileSpreadsheet
 } from 'lucide-react';
 import CommandPalette from './CommandPalette';
 import NotificationCenter from './NotificationCenter';
@@ -113,6 +113,7 @@ const DashboardLayout = () => {
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('current_user_email');
     localStorage.removeItem('current_user_info');
+    localStorage.removeItem('user_role');
     navigate('/login');
   };
 
@@ -145,7 +146,9 @@ const DashboardLayout = () => {
             <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center font-bold text-sm shadow-md">
               FA
             </div>
-            <span className="text-lg font-bold text-indigo-600 dark:text-indigo-400 tracking-tight">FacultyAnalytics</span>
+            <span className="text-lg font-bold text-gray-900 dark:text-white tracking-tight">
+              Faculty<span className="text-indigo-600 dark:text-indigo-400">Analytics</span>
+            </span>
           </div>
           <button className="md:hidden text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-white" onClick={toggleMobileMenu}>
             <X size={24} />
@@ -153,79 +156,162 @@ const DashboardLayout = () => {
         </div>
 
         <nav className="flex-1 px-4 py-4 space-y-1.5 overflow-y-auto">
-          {/* 1. FACULTY */}
-          <div className="mb-3">
-            <span className="px-3 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-wider block mb-1.5">
-              FACULTY
-            </span>
-            <div className="space-y-0.5">
-              <NavItem to="/dashboard" icon={<LayoutDashboard size={17} />} label="Dashboard" onClick={toggleMobileMenu} />
-              <NavItem to="/profile" icon={<UserCircle size={17} />} label="My Profile" onClick={toggleMobileMenu} />
-              <NavItem to="/monthly-submission" icon={<Send size={17} />} label="My Monthly Submission" onClick={toggleMobileMenu} />
-              <NavItem to="/data-entry" icon={<PlusSquare size={17} />} label="Data Entry" onClick={toggleMobileMenu} />
-              <NavItem to="/certificates" icon={<UploadCloud size={17} />} label="Certificates & Documents" onClick={toggleMobileMenu} />
-              <NavItem to="/roles" icon={<Briefcase size={17} />} label="Roles & Duties" onClick={toggleMobileMenu} />
-            </div>
-          </div>
+          {!isHodOrAdmin ? (
+            /* ======================================================== */
+            /* 🎓 FACULTY PORTAL (Untouched - matches user screenshot)  */
+            /* ======================================================== */
+            <>
+              {/* Primary Workspace Items (No Header) */}
+              <div className="mb-3 space-y-0.5">
+                <NavItem to="/dashboard" icon={<LayoutDashboard size={17} />} label="Dashboard" onClick={toggleMobileMenu} />
+                <NavItem to="/profile" icon={<UserCircle size={17} />} label="My Profile" onClick={toggleMobileMenu} />
+                <NavItem to="/monthly-submission" icon={<Send size={17} />} label="My Monthly Submission" onClick={toggleMobileMenu} />
+                <NavItem to="/data-entry" icon={<PlusSquare size={17} />} label="Data Entry" onClick={toggleMobileMenu} />
+                <NavItem to="/certificates" icon={<UploadCloud size={17} />} label="Certificates & Documents" onClick={toggleMobileMenu} />
+                <NavItem to="/roles" icon={<Briefcase size={17} />} label="Roles & Duties" onClick={toggleMobileMenu} />
+              </div>
 
-          {/* 2. RESEARCH & ACADEMICS */}
-          <div className="pt-2.5 mb-3 border-t border-gray-100 dark:border-slate-800">
-            <span className="px-3 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-wider block mb-1.5">
-              RESEARCH & ACADEMICS
-            </span>
-            <div className="space-y-0.5">
-              <NavItem to="/publications" icon={<BookOpen size={17} />} label="Publications & Research" onClick={toggleMobileMenu} />
-              <NavItem to="/grants" icon={<Search size={17} />} label="Grants & Consultancy" onClick={toggleMobileMenu} />
-              <NavItem to="/pbas-appraisal" icon={<ClipboardCheck size={17} />} label="PBAS / CAS Appraisal" onClick={toggleMobileMenu} />
-              <NavItem to="/cv-generator" icon={<FileText size={17} />} label="CV Generator" onClick={toggleMobileMenu} />
-            </div>
-          </div>
+              {/* 1. RESEARCH & ACADEMICS */}
+              <div className="pt-2.5 mb-3 border-t border-gray-100 dark:border-slate-800">
+                <span className="px-3 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-wider block mb-1.5">
+                  RESEARCH & ACADEMICS
+                </span>
+                <div className="space-y-0.5">
+                  <NavItem to="/publications" icon={<BookOpen size={17} />} label="Publications & Research" onClick={toggleMobileMenu} />
+                  <NavItem to="/grants" icon={<Search size={17} />} label="Grants & Consultancy" onClick={toggleMobileMenu} />
+                  <NavItem to="/pbas-appraisal" icon={<ClipboardCheck size={17} />} label="PBAS / CAS Appraisal" onClick={toggleMobileMenu} />
+                  <NavItem to="/cv-generator" icon={<FileText size={17} />} label="CV Generator" onClick={toggleMobileMenu} />
+                </div>
+              </div>
 
-          {/* 3. AI & INSIGHTS */}
-          <div className="pt-2.5 mb-3 border-t border-gray-100 dark:border-slate-800">
-            <span className="px-3 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-wider block mb-1.5">
-              AI & INSIGHTS
-            </span>
-            <div className="space-y-0.5">
-              <NavItem to="/ai-copilot" icon={<Sparkles size={17} />} label="AI Co-Pilot" onClick={toggleMobileMenu} badge="AI" />
-              <NavItem to="/analytics" icon={<TrendingUp size={17} />} label="Analytics & Ranking" onClick={toggleMobileMenu} />
-              <NavItem to="/collaboration-network" icon={<Share2 size={17} />} label="Research Network" onClick={toggleMobileMenu} />
-              <NavItem to="/accreditation" icon={<BarChart2 size={17} />} label="NAAC / NBA Predictor" onClick={toggleMobileMenu} />
-            </div>
-          </div>
+              {/* 2. AI & INSIGHTS */}
+              <div className="pt-2.5 mb-3 border-t border-gray-100 dark:border-slate-800">
+                <span className="px-3 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-wider block mb-1.5">
+                  AI & INSIGHTS
+                </span>
+                <div className="space-y-0.5">
+                  <NavItem to="/ai-copilot" icon={<Sparkles size={17} />} label="AI Co-Pilot" onClick={toggleMobileMenu} badge="AI" />
+                  <NavItem to="/analytics" icon={<TrendingUp size={17} />} label="Analytics & Ranking" onClick={toggleMobileMenu} />
+                  <NavItem to="/collaboration-network" icon={<Share2 size={17} />} label="Research Network" onClick={toggleMobileMenu} />
+                  <NavItem to="/accreditation" icon={<BarChart2 size={17} />} label="NAAC / NBA Predictor" onClick={toggleMobileMenu} />
+                </div>
+              </div>
 
-          {/* 4. REPORTS & VERIFICATION */}
-          <div className="pt-2.5 mb-3 border-t border-gray-100 dark:border-slate-800">
-            <span className="px-3 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-wider block mb-1.5">
-              REPORTS & VERIFICATION
-            </span>
-            <div className="space-y-0.5">
-              <NavItem to="/reports" icon={<Layers size={17} />} label="Reports Hub" onClick={toggleMobileMenu} />
-              <NavItem to="/verification" icon={<CheckCircle size={17} />} label="Verification Status" onClick={toggleMobileMenu} />
-              <NavItem to="/audit-logs" icon={<ShieldAlert size={17} />} label="Audit Trail" onClick={toggleMobileMenu} />
-            </div>
-          </div>
+              {/* 3. REPORTS & VERIFICATION */}
+              <div className="pt-2.5 mb-3 border-t border-gray-100 dark:border-slate-800">
+                <span className="px-3 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-wider block mb-1.5">
+                  REPORTS & VERIFICATION
+                </span>
+                <div className="space-y-0.5">
+                  <NavItem to="/reports" icon={<Layers size={17} />} label="Reports Hub" onClick={toggleMobileMenu} />
+                  <NavItem to="/verification" icon={<CheckCircle size={17} />} label="Verification Status" onClick={toggleMobileMenu} />
+                  <NavItem to="/audit-logs" icon={<ShieldAlert size={17} />} label="Audit Trail" onClick={toggleMobileMenu} />
+                </div>
+              </div>
 
-          {/* 5. COLLABORATION */}
-          <div className="pt-2.5 mb-3 border-t border-gray-100 dark:border-slate-800">
-            <span className="px-3 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-wider block mb-1.5">
-              COLLABORATION
-            </span>
-            <div className="space-y-0.5">
-              <NavItem to="/mentorship" icon={<Users size={17} />} label="Mentorship Bridge" onClick={toggleMobileMenu} />
-              <NavItem to="/leaderboard" icon={<Award size={17} />} label="Leaderboard" onClick={toggleMobileMenu} />
-            </div>
-          </div>
+              {/* 4. COLLABORATION */}
+              <div className="pt-2.5 mb-3 border-t border-gray-100 dark:border-slate-800">
+                <span className="px-3 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-wider block mb-1.5">
+                  COLLABORATION
+                </span>
+                <div className="space-y-0.5">
+                  <NavItem to="/mentorship" icon={<Users size={17} />} label="Mentorship Bridge" onClick={toggleMobileMenu} />
+                  <NavItem to="/leaderboard" icon={<Award size={17} />} label="Leaderboard" onClick={toggleMobileMenu} />
+                </div>
+              </div>
 
-          {/* 6. ADMIN / DATA */}
-          <div className="pt-2.5 mb-3 border-t border-gray-100 dark:border-slate-800">
-            <span className="px-3 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-wider block mb-1.5">
-              ADMIN / DATA
-            </span>
-            <div className="space-y-0.5">
-              <NavItem to="/bulk-data" icon={<Database size={17} />} label="Batch CSV / Excel" onClick={toggleMobileMenu} />
-            </div>
-          </div>
+              {/* 5. ADMIN / DATA */}
+              <div className="pt-2.5 mb-3 border-t border-gray-100 dark:border-slate-800">
+                <span className="px-3 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-wider block mb-1.5">
+                  ADMIN / DATA
+                </span>
+                <div className="space-y-0.5">
+                  <NavItem to="/bulk-data" icon={<Database size={17} />} label="Batch CSV / Excel" onClick={toggleMobileMenu} />
+                </div>
+              </div>
+            </>
+          ) : (
+            /* ======================================================== */
+            /* 🏛️ HOD PORTAL (Exact layout from user specification)     */
+            /* ======================================================== */
+            <>
+              {/* CORE PORTAL */}
+              <div className="mb-3">
+                <span className="px-3 text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider block mb-1.5 flex items-center justify-between">
+                  <span>CORE PORTAL</span>
+                  <span className="px-1.5 py-0.2 text-[9px] bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded font-bold">HOD</span>
+                </span>
+                <div className="space-y-0.5">
+                  <NavItem to="/dashboard" icon={<LayoutDashboard size={17} />} label="Dashboard" onClick={toggleMobileMenu} />
+                  <NavItem to="/profile" icon={<UserCircle size={17} />} label="My Profile" onClick={toggleMobileMenu} />
+                  <NavItem to="/data-entry" icon={<PlusSquare size={17} />} label="Data Entry" onClick={toggleMobileMenu} />
+                  <NavItem to="/monthly-reports" icon={<Send size={17} />} label="Faculty Submissions" onClick={toggleMobileMenu} badge="Review" />
+                  <NavItem to="/verification" icon={<CheckCircle size={17} />} label="Review & Verification" onClick={toggleMobileMenu} />
+                </div>
+              </div>
+
+              {/* FACULTY MANAGEMENT */}
+              <div className="pt-2.5 mb-3 border-t border-gray-100 dark:border-slate-800">
+                <span className="px-3 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-wider block mb-1.5">
+                  FACULTY MANAGEMENT
+                </span>
+                <div className="space-y-0.5">
+                  <NavItem to="/faculty" icon={<Users size={17} />} label="All Faculty" onClick={toggleMobileMenu} />
+                  <NavItem to="/department-comparison" icon={<TrendingUp size={17} />} label="Faculty Performance" onClick={toggleMobileMenu} />
+                  <NavItem to="/certificates" icon={<UploadCloud size={17} />} label="Faculty Documents" onClick={toggleMobileMenu} />
+                  <NavItem to="/monthly-report-hub" icon={<ClipboardCheck size={17} />} label="Monthly Submission Tracker" onClick={toggleMobileMenu} badge="Tracker" />
+                </div>
+              </div>
+
+              {/* RESEARCH & ACADEMICS */}
+              <div className="pt-2.5 mb-3 border-t border-gray-100 dark:border-slate-800">
+                <span className="px-3 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-wider block mb-1.5">
+                  RESEARCH & ACADEMICS
+                </span>
+                <div className="space-y-0.5">
+                  <NavItem to="/publications" icon={<BookOpen size={17} />} label="Publications & Research" onClick={toggleMobileMenu} />
+                  <NavItem to="/grants" icon={<Search size={17} />} label="Grants & Consultancy" onClick={toggleMobileMenu} />
+                  <NavItem to="/analytics" icon={<BarChart2 size={17} />} label="Analytics & Ranking" onClick={toggleMobileMenu} />
+                  <NavItem to="/collaboration-network" icon={<Share2 size={17} />} label="Research Network" onClick={toggleMobileMenu} />
+                </div>
+              </div>
+
+              {/* REPORTS & CONSOLIDATION */}
+              <div className="pt-2.5 mb-3 border-t border-gray-100 dark:border-slate-800">
+                <span className="px-3 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-wider block mb-1.5">
+                  REPORTS & CONSOLIDATION
+                </span>
+                <div className="space-y-0.5">
+                  <NavItem to="/hod-consolidation" icon={<FileSpreadsheet size={17} />} label="Monthly Consolidation" onClick={toggleMobileMenu} badge="Auto" />
+                  <NavItem to="/iqac-report" icon={<FileText size={17} />} label="IQAC Monthly Reports" onClick={toggleMobileMenu} />
+                  <NavItem to="/reports" icon={<Layers size={17} />} label="Reports Hub" onClick={toggleMobileMenu} />
+                  <NavItem to="/verification" icon={<CheckCircle size={17} />} label="Verification Status" onClick={toggleMobileMenu} />
+                  <NavItem to="/audit-logs" icon={<ShieldAlert size={17} />} label="Audit Trail" onClick={toggleMobileMenu} />
+                </div>
+              </div>
+
+              {/* COLLABORATION */}
+              <div className="pt-2.5 mb-3 border-t border-gray-100 dark:border-slate-800">
+                <span className="px-3 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-wider block mb-1.5">
+                  COLLABORATION
+                </span>
+                <div className="space-y-0.5">
+                  <NavItem to="/mentorship" icon={<Users size={17} />} label="Mentorship Bridge" onClick={toggleMobileMenu} />
+                  <NavItem to="/leaderboard" icon={<Award size={17} />} label="Leaderboard" onClick={toggleMobileMenu} />
+                </div>
+              </div>
+
+              {/* SETTINGS */}
+              <div className="pt-2.5 mb-3 border-t border-gray-100 dark:border-slate-800">
+                <span className="px-3 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-wider block mb-1.5">
+                  SETTINGS
+                </span>
+                <div className="space-y-0.5">
+                  <NavItem to="/settings" icon={<Settings size={17} />} label="Settings" onClick={toggleMobileMenu} />
+                </div>
+              </div>
+            </>
+          )}
         </nav>
 
         <div className="p-3 border-t border-gray-200 dark:border-slate-800">
@@ -308,7 +394,9 @@ const DashboardLayout = () => {
                       ? username.split('@')[0].replace(/\d+$/, '').replace(/[._-]/g, ' ').split(' ').filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') || username
                       : username}
                   </span>
-                  <span className="text-[10px] text-gray-400 dark:text-slate-400 block leading-none mt-0.5">Faculty / Lead</span>
+                  <span className="text-[10px] text-gray-400 dark:text-slate-400 block leading-none mt-0.5 font-medium">
+                    {isHodOrAdmin ? 'Head of Department' : 'Faculty / Lead'}
+                  </span>
                 </div>
               </div>
 
@@ -317,6 +405,9 @@ const DashboardLayout = () => {
                   <div className="px-4 py-2.5 border-b border-gray-100 dark:border-slate-800">
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Signed in as</p>
                     <p className="text-sm font-bold text-gray-900 dark:text-white truncate mt-0.5">{username}</p>
+                    <p className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold mt-0.5">
+                      {isHodOrAdmin ? 'Head of Department (HOD)' : 'Faculty Member'}
+                    </p>
                   </div>
                   <div className="py-1 text-xs">
                     <NavLink to="/profile" onClick={() => setIsProfileOpen(false)} className="flex items-center px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">

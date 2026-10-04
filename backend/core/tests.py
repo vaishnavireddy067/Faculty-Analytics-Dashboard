@@ -17,6 +17,7 @@ class AuthAndMultiAccountTests(TestCase):
             last_name='A'
         )
         self.faculty_a.role = 'FACULTY'
+        self.faculty_a.is_email_verified = True
         self.faculty_a.save()
 
         self.faculty_b = User.objects.create_user(
@@ -27,6 +28,7 @@ class AuthAndMultiAccountTests(TestCase):
             last_name='B'
         )
         self.faculty_b.role = 'FACULTY'
+        self.faculty_b.is_email_verified = True
         self.faculty_b.save()
 
         # Create private publications for Faculty A and Faculty B

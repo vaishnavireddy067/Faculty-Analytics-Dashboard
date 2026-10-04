@@ -60,13 +60,14 @@ function App() {
             <Route path="/reports" element={<Reports />} />
             <Route path="/monthly-reports" element={<IQACMonthlyReport />} />
             <Route path="/monthly-submission" element={<IQACMonthlyReport />} />
-            <Route path="/hod-consolidation" element={<IQACMonthlyReport />} />
+            <Route path="/hod-consolidation" element={<MonthlyReportHub />} />
             <Route path="/iqac-report" element={<IQACMonthlyReport />} />
             <Route path="/iqac-monthly-report" element={<IQACMonthlyReport />} />
             <Route path="/monthly-report-hub" element={<MonthlyReportHub />} />
             <Route path="/settings" element={<Settings />} />
 
             <Route path="/admin-dashboard" element={<AdminDashboard />} />
+            <Route path="/faculty" element={<AdminDashboard />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/ai-copilot" element={<AICopilot />} />
             <Route path="/repository" element={<Repository />} />

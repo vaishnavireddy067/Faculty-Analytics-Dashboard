@@ -24,6 +24,7 @@ const AdminDashboard = () => {
   };
 
   const [accreditationData, setAccreditationData] = useState(null);
+  const [auditLogs, setAuditLogs] = useState([]);
 
   useEffect(() => {
     const fetchAdminData = async () => {
@@ -59,8 +60,19 @@ const AdminDashboard = () => {
       }
     };
 
+    const fetchAuditLogs = async () => {
+      try {
+        const res = await api.get('/faculty/audit-logs/');
+        const logs = res.data?.results || res.data || [];
+        setAuditLogs(Array.isArray(logs) ? logs : []);
+      } catch (e) {
+        setAuditLogs([]);
+      }
+    };
+
     fetchAdminData();
     fetchAccreditationData();
+    fetchAuditLogs();
     
     // Auto-refresh for real-time KPI updates (every 30 seconds)
     const interval = setInterval(() => {
@@ -278,18 +290,18 @@ const AdminDashboard = () => {
             <ShieldAlert className="mr-2 text-indigo-600" size={20} /> System Audit Trail
           </h3>
           <div className="space-y-3">
-            <div className="p-3 bg-gray-50 rounded-lg text-sm">
-              <span className="font-semibold text-gray-700">Dr. Smith</span> added <span className="italic">Publication - AI paper</span>
-              <div className="text-xs text-gray-400 mt-1">2 hours ago</div>
-            </div>
-            <div className="p-3 bg-gray-50 rounded-lg text-sm">
-              <span className="font-semibold text-gray-700">IQAC Admin</span> approved <span className="italic">Grant application</span> for Dr. John
-              <div className="text-xs text-gray-400 mt-1">5 hours ago</div>
-            </div>
-            <div className="p-3 bg-gray-50 rounded-lg text-sm">
-              <span className="font-semibold text-gray-700">System</span> ran automated plagiarism check on <span className="italic">Edge computing</span>
-              <div className="text-xs text-gray-400 mt-1">Yesterday, 14:30</div>
-            </div>
+            {auditLogs && auditLogs.length > 0 ? (
+              auditLogs.slice(0, 5).map((log, idx) => (
+                <div key={log.id || idx} className="p-3 bg-gray-50 rounded-lg text-sm">
+                  <span className="font-semibold text-gray-700">{log.performed_by || log.faculty_username || 'User'}</span> {log.action || 'updated'} <span className="italic">{log.target_activity || log.details || 'record'}</span>
+                  <div className="text-xs text-gray-400 mt-1">{log.timestamp ? new Date(log.timestamp).toLocaleString() : 'Recently'}</div>
+                </div>
+              ))
+            ) : (
+              <div className="p-4 bg-gray-50 rounded-lg text-xs text-gray-400 text-center">
+                No system audit events recorded yet.
+              </div>
+            )}
           </div>
         </div>
       </div>
