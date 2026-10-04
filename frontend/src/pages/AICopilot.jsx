@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, Send, TrendingUp, Lightbulb, Target, FileText, CheckCircle, Save } from 'lucide-react';
+import { Sparkles, Send, TrendingUp, Lightbulb, Target, FileText, CheckCircle, Save, Calculator, AlertCircle, ArrowUpRight } from 'lucide-react';
 import api from '../services/api';
 
 const AICopilot = () => {
@@ -10,8 +10,18 @@ const AICopilot = () => {
   const [loadingPrediction, setLoadingPrediction] = useState(true);
   const [loadingCopilot, setLoadingCopilot] = useState(false);
 
-  const [activeTab, setActiveTab] = useState('assistant'); // 'assistant', 'grant', 'minutes'
+  const [activeTab, setActiveTab] = useState('assistant'); // 'assistant', 'grant', 'minutes', 'predictor'
   
+  // Planned Activities for API & Gap Prediction
+  const [planForm, setPlanForm] = useState({
+    sci_pubs: 1,
+    scopus_pubs: 2,
+    patents: 1,
+    grant_lakhs: 4,
+    consultancy_lakhs: 2,
+    fdp_days: 5
+  });
+
   // Grant Generator State
   const [grantForm, setGrantForm] = useState({ title: '', abstract: '', agency: 'AICTE' });
   const [generatingGrant, setGeneratingGrant] = useState(false);
@@ -135,6 +145,12 @@ The research will employ a mixed-methods approach. Initial phases will involve e
               className={`pb-3 px-4 font-semibold text-sm flex items-center transition-colors ${activeTab === 'minutes' ? 'border-b-2 border-indigo-600 text-indigo-700 dark:text-indigo-400' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
             >
               <CheckCircle className="mr-2" size={18} /> Meeting Minutes
+            </button>
+            <button 
+              onClick={() => setActiveTab('predictor')}
+              className={`pb-3 px-4 font-semibold text-sm flex items-center transition-colors ${activeTab === 'predictor' ? 'border-b-2 border-indigo-600 text-indigo-700 dark:text-indigo-400' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
+            >
+              <Target className="mr-2" size={18} /> API & Gap Predictor ✨
             </button>
           </div>
           
@@ -334,6 +350,149 @@ The research will employ a mixed-methods approach. Initial phases will involve e
                   )}
                </form>
              </div>
+          ) : activeTab === 'predictor' ? (
+            <div className="flex-1 flex flex-col overflow-y-auto space-y-6 pr-2">
+              <div className="bg-indigo-50/60 dark:bg-indigo-950/30 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
+                <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2 text-base">
+                  <Calculator size={18} className="text-indigo-600" /> Planned Activity Simulator & API Score Prediction
+                </h3>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                  Simulate your target academic achievements to forecast next year's API score, PBAS points, and uncover NAAC/NBA accreditation gaps.
+                </p>
+              </div>
+
+              {/* Input Form for Planned Activities */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">SCI Journals (30 pts each)</label>
+                  <input 
+                    type="number" 
+                    min="0"
+                    value={planForm.sci_pubs}
+                    onChange={(e) => setPlanForm({ ...planForm, sci_pubs: parseInt(e.target.value) || 0 })}
+                    className="w-full p-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm font-bold text-gray-800 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Scopus Journals (20 pts each)</label>
+                  <input 
+                    type="number" 
+                    min="0"
+                    value={planForm.scopus_pubs}
+                    onChange={(e) => setPlanForm({ ...planForm, scopus_pubs: parseInt(e.target.value) || 0 })}
+                    className="w-full p-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm font-bold text-gray-800 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Patents Filed/Granted (25 pts)</label>
+                  <input 
+                    type="number" 
+                    min="0"
+                    value={planForm.patents}
+                    onChange={(e) => setPlanForm({ ...planForm, patents: parseInt(e.target.value) || 0 })}
+                    className="w-full p-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm font-bold text-gray-800 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Research Grants (₹ Lakhs, 5 pts/Lakh)</label>
+                  <input 
+                    type="number" 
+                    min="0"
+                    value={planForm.grant_lakhs}
+                    onChange={(e) => setPlanForm({ ...planForm, grant_lakhs: parseInt(e.target.value) || 0 })}
+                    className="w-full p-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm font-bold text-gray-800 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Consultancy (₹ Lakhs, 5 pts/Lakh)</label>
+                  <input 
+                    type="number" 
+                    min="0"
+                    value={planForm.consultancy_lakhs}
+                    onChange={(e) => setPlanForm({ ...planForm, consultancy_lakhs: parseInt(e.target.value) || 0 })}
+                    className="w-full p-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm font-bold text-gray-800 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">FDP / STTP Days</label>
+                  <input 
+                    type="number" 
+                    min="0"
+                    value={planForm.fdp_days}
+                    onChange={(e) => setPlanForm({ ...planForm, fdp_days: parseInt(e.target.value) || 0 })}
+                    className="w-full p-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm font-bold text-gray-800 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              {/* Prediction Result Summary */}
+              <div className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl p-5 flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div>
+                  <span className="text-xs uppercase font-bold text-emerald-100">Forecasted Academic API Score</span>
+                  <div className="text-3xl font-extrabold mt-1">
+                    {(planForm.sci_pubs * 30) + (planForm.scopus_pubs * 20) + (planForm.patents * 25) + (planForm.grant_lakhs * 5) + (planForm.consultancy_lakhs * 5) + (planForm.fdp_days >= 5 ? 10 : 5)} Points
+                  </div>
+                  <p className="text-xs text-emerald-100 mt-1">
+                    Qualifies for UGC Career Advancement Scheme (CAS) Level 12 → Level 13A
+                  </p>
+                </div>
+                <div className="bg-white/20 backdrop-blur-sm px-4 py-2 rounded-xl text-right">
+                  <span className="text-xs block text-emerald-100 font-semibold">Annual Forecast</span>
+                  <strong className="text-lg font-bold">+{(planForm.sci_pubs * 30) + (planForm.scopus_pubs * 20) + (planForm.patents * 25) + (planForm.grant_lakhs * 5)} Boost</strong>
+                </div>
+              </div>
+
+              {/* NAAC & NBA Accreditation Gap Identification */}
+              <div>
+                <h4 className="font-bold text-gray-800 dark:text-white text-sm mb-3 flex items-center gap-1.5">
+                  <AlertCircle size={16} className="text-indigo-600" />
+                  Accreditation Gap Identification & Actionable Recommendations
+                </h4>
+                <div className="space-y-3">
+                  <div className={`p-4 rounded-xl border ${planForm.sci_pubs + planForm.scopus_pubs >= 2 ? 'bg-emerald-50/60 border-emerald-200 text-emerald-900' : 'bg-amber-50/60 border-amber-200 text-amber-900'}`}>
+                    <div className="flex justify-between items-center font-bold text-xs mb-1">
+                      <span>NAAC Criterion 3.4.2 — Research Papers in UGC-CARE / Scopus / WoS</span>
+                      <span className={`px-2 py-0.5 rounded text-[11px] ${planForm.sci_pubs + planForm.scopus_pubs >= 2 ? 'bg-emerald-200 text-emerald-800' : 'bg-amber-200 text-amber-800'}`}>
+                        {planForm.sci_pubs + planForm.scopus_pubs >= 2 ? 'Target Met ✅' : 'Gap Identified ⚠️'}
+                      </span>
+                    </div>
+                    <p className="text-xs opacity-90">
+                      {planForm.sci_pubs + planForm.scopus_pubs >= 2 
+                        ? 'Planned publications satisfy the benchmark of ≥ 2 indexed papers per faculty per year.'
+                        : 'Current plan is below target. Action: Co-author 1 additional Scopus or SCI paper before March to prevent Criterion 3 score deduction.'}
+                    </p>
+                  </div>
+
+                  <div className={`p-4 rounded-xl border ${planForm.grant_lakhs >= 3 ? 'bg-emerald-50/60 border-emerald-200 text-emerald-900' : 'bg-amber-50/60 border-amber-200 text-amber-900'}`}>
+                    <div className="flex justify-between items-center font-bold text-xs mb-1">
+                      <span>NAAC Criterion 3.1.1 & NBA Criterion 5.4 — Extramural Research Grants</span>
+                      <span className={`px-2 py-0.5 rounded text-[11px] ${planForm.grant_lakhs >= 3 ? 'bg-emerald-200 text-emerald-800' : 'bg-amber-200 text-amber-800'}`}>
+                        {planForm.grant_lakhs >= 3 ? 'Target Met ✅' : 'Gap Identified ⚠️'}
+                      </span>
+                    </div>
+                    <p className="text-xs opacity-90">
+                      {planForm.grant_lakhs >= 3 
+                        ? 'Projected funding of ₹' + planForm.grant_lakhs + ' Lakhs exceeds NBA Tier-1 research funding criteria.'
+                        : 'Department research budget requires minimum ₹3 Lakhs/faculty. Action: Submit proposals to AICTE Research Promotion Scheme (RPS) or DST-SERB.'}
+                    </p>
+                  </div>
+
+                  <div className={`p-4 rounded-xl border ${planForm.patents >= 1 ? 'bg-emerald-50/60 border-emerald-200 text-emerald-900' : 'bg-amber-50/60 border-amber-200 text-amber-900'}`}>
+                    <div className="flex justify-between items-center font-bold text-xs mb-1">
+                      <span>NBA Criterion 5.4 — Intellectual Property Rights & Patents</span>
+                      <span className={`px-2 py-0.5 rounded text-[11px] ${planForm.patents >= 1 ? 'bg-emerald-200 text-emerald-800' : 'bg-amber-200 text-amber-800'}`}>
+                        {planForm.patents >= 1 ? 'Target Met ✅' : 'Gap Identified ⚠️'}
+                      </span>
+                    </div>
+                    <p className="text-xs opacity-90">
+                      {planForm.patents >= 1 
+                        ? 'Patent filing planned. Ensure publication in the Indian Patent Office (IPO) Journal.'
+                        : 'Zero patents planned. Action: Convert final-year student project or lab prototype into a published utility patent.'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
           ) : null}
         </div>
 

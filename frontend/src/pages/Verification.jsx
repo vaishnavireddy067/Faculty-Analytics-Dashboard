@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { facultyService, BASE_URL } from '../services/api';
-import { CheckCircle, XCircle, FileText, ExternalLink, Clock, ScanSearch, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { CheckCircle, XCircle, FileText, ExternalLink, Clock, ScanSearch, ShieldCheck, AlertTriangle, RotateCcw } from 'lucide-react';
 
 const Verification = () => {
   const [activeTab, setActiveTab] = useState('publications');
@@ -19,7 +19,11 @@ const Verification = () => {
     { id: 'certificates', label: 'Certificates' },
     { id: 'consultancy', label: 'Consultancy' },
     { id: 'grants', label: 'Grants' },
-    { id: 'certifications', label: 'Certifications' }
+    { id: 'certifications', label: 'Certifications' },
+    { id: 'student-guidance', label: 'Student Guidance' },
+    { id: 'guest-lectures', label: 'Guest Lectures' },
+    { id: 'industrial-visits', label: 'Industrial Visits' },
+    { id: 'awards', label: 'Awards' },
   ];
 
 
@@ -180,14 +184,21 @@ const Verification = () => {
                         <button 
                           onClick={() => handleVerify(record.id, 'APPROVED')}
                           className="p-2 bg-green-50 text-green-600 hover:bg-green-100 rounded-lg transition-colors"
-                          title="Approve"
+                          title="Approve Record"
                         >
                           <CheckCircle size={18} />
                         </button>
                         <button 
+                          onClick={() => handleVerify(record.id, 'CHANGES_REQUESTED')}
+                          className="p-2 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded-lg transition-colors"
+                          title="Request Changes"
+                        >
+                          <RotateCcw size={18} />
+                        </button>
+                        <button 
                           onClick={() => handleVerify(record.id, 'REJECTED')}
                           className="p-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
-                          title="Reject"
+                          title="Reject Record"
                         >
                           <XCircle size={18} />
                         </button>

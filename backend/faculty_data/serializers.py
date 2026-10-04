@@ -124,7 +124,7 @@ class DiscussionPostSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ('author', 'created_at')
 
-from .models import ResearchAsset, FacultyRole, Certificate
+from .models import ResearchAsset, FacultyRole, Certificate, StudentFeedback
 
 class ResearchAssetSerializer(serializers.ModelSerializer):
     uploaded_by_name = serializers.CharField(source='uploaded_by.username', read_only=True)
@@ -146,4 +146,17 @@ class CertificateSerializer(BaseActivitySerializer):
         model = Certificate
         fields = '__all__'
         read_only_fields = ('faculty', 'status', 'created_at', 'updated_at')
+
+
+class StudentFeedbackSerializer(serializers.ModelSerializer):
+    faculty_name = serializers.SerializerMethodField()
+    faculty_department = serializers.CharField(source='faculty.department', read_only=True)
+
+    class Meta:
+        model = StudentFeedback
+        fields = '__all__'
+        read_only_fields = ('faculty', 'created_at')
+
+    def get_faculty_name(self, obj):
+        return obj.faculty.get_full_name() or obj.faculty.username
 

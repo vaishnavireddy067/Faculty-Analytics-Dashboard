@@ -81,6 +81,18 @@ const IQACMonthlyReport = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState('editor'); // 'editor' | 'vault'
   const [vaultSearch, setVaultSearch] = useState('');
+
+  // Editable Document Header & Custom Title State
+  const [instituteName, setInstituteName] = useState('AVN INSTITUTE OF ENGINEERING & TECHNOLOGY');
+  const [instituteSubtitle, setInstituteSubtitle] = useState('Accredited by NAAC & NBA | An Autonomous Institute Affiliated to JNTU Hyderabad');
+  const [instituteAddress, setInstituteAddress] = useState('Mangalpally (V), Ibrahimpatnam (M), R.R. District, Hyderabad, Telangana - 501510');
+  const [customReportTitle, setCustomReportTitle] = useState('');
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [isEditingAddress, setIsEditingAddress] = useState(false);
+  const [isEditingHeaderModal, setIsEditingHeaderModal] = useState(false);
+
+  const defaultReportTitle = `IQAC REPORT OF DEPARTMENT OF ${department.toUpperCase()} FOR ${month.toUpperCase()}, ${year}`;
+  const effectiveReportTitle = customReportTitle || defaultReportTitle;
   
   // Stored archives in DB
   const [savedReportsList, setSavedReportsList] = useState([]);
@@ -525,6 +537,11 @@ const IQACMonthlyReport = () => {
         if (data.month) setMonth(data.month);
         if (data.year) setYear(data.year);
         if (data.academic_year) setAcademicYear(data.academic_year);
+        if (data.institution_name) setInstituteName(data.institution_name);
+        if (data.accreditation_details) setInstituteSubtitle(data.accreditation_details);
+        if (data.sections?.institution_address) setInstituteAddress(data.sections.institution_address);
+        if (data.sections?.custom_report_title) setCustomReportTitle(data.sections.custom_report_title);
+        else if (data.report_title) setCustomReportTitle(data.report_title);
       }
     } catch (err) {
       console.warn("Failed to load report by ID", err);
@@ -540,7 +557,14 @@ const IQACMonthlyReport = () => {
     try {
       const query = `department=${encodeURIComponent(department)}&month=${month}&year=${year}&academic_year=${academicYear}`;
       const data = await fetchAPI(`/faculty/reports/iqac-monthly/?${query}`);
-      setReportData(data);
+      if (data) {
+        setReportData(data);
+        if (data.institution_name) setInstituteName(data.institution_name);
+        if (data.accreditation_details) setInstituteSubtitle(data.accreditation_details);
+        if (data.sections?.institution_address) setInstituteAddress(data.sections.institution_address);
+        if (data.sections?.custom_report_title) setCustomReportTitle(data.sections.custom_report_title);
+        else if (data.report_title && data.is_saved_in_db) setCustomReportTitle(data.report_title);
+      }
     } catch (err) {
       console.warn("Using template fallback data for IQAC report", err);
     } finally {
@@ -573,9 +597,13 @@ const IQACMonthlyReport = () => {
           month,
           year,
           academic_year: academicYear,
-          institution_name: reportData.institution_name,
-          accreditation_details: reportData.accreditation_details,
-          sections: reportData.sections
+          institution_name: instituteName,
+          accreditation_details: instituteSubtitle,
+          sections: {
+            ...reportData.sections,
+            custom_report_title: customReportTitle,
+            institution_address: instituteAddress
+          }
         })
       });
       if (result) {
@@ -962,6 +990,15 @@ const IQACMonthlyReport = () => {
               <Edit3 size={15} className="mr-1.5" />
               {isEditing ? 'Exit Edit Mode' : 'Live Table Editor'}
             </button>
+
+            <button
+              onClick={() => setIsEditingHeaderModal(true)}
+              className="inline-flex items-center px-3.5 py-2.5 rounded-xl text-xs font-bold border border-indigo-200 dark:border-indigo-800 bg-indigo-50/80 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 transition cursor-pointer shadow-xs"
+              title="Edit Report Title, Institute Name & Address"
+            >
+              <Edit3 size={15} className="mr-1.5 text-indigo-600" />
+              Edit Title & Header
+            </button>
           </div>
 
 
@@ -1246,6 +1283,95 @@ const IQACMonthlyReport = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ✏️ MODAL: EDIT DOCUMENT HEADER & REPORT TITLE */}
+      {isEditingHeaderModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-6 max-w-lg w-full space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-3">
+              <h3 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
+                <Edit3 size={16} className="text-indigo-600" />
+                <span>Edit Document Header & Title</span>
+              </h3>
+              <button onClick={() => setIsEditingHeaderModal(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-gray-700 dark:text-slate-300 font-bold">
+                    Main Document Title
+                  </label>
+                  {customReportTitle !== '' && (
+                    <button
+                      type="button"
+                      onClick={() => setCustomReportTitle('')}
+                      className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline font-bold cursor-pointer"
+                    >
+                      ↺ Reset to Default
+                    </button>
+                  )}
+                </div>
+                <textarea
+                  rows={2}
+                  value={customReportTitle !== '' ? customReportTitle : defaultReportTitle}
+                  onChange={(e) => setCustomReportTitle(e.target.value)}
+                  placeholder="e.g. IQAC REPORT OF DEPARTMENT OF..."
+                  className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-gray-900 dark:text-white uppercase outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 dark:text-slate-300 font-bold mb-1">
+                  Institute / College Name
+                </label>
+                <input
+                  type="text"
+                  value={instituteName}
+                  onChange={(e) => setInstituteName(e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 uppercase"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 dark:text-slate-300 font-bold mb-1">
+                  Accreditation / Affiliation Tagline
+                </label>
+                <input
+                  type="text"
+                  value={instituteSubtitle}
+                  onChange={(e) => setInstituteSubtitle(e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 dark:text-slate-300 font-bold mb-1">
+                  Institute Address & Location
+                </label>
+                <input
+                  type="text"
+                  value={instituteAddress}
+                  onChange={(e) => setInstituteAddress(e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsEditingHeaderModal(false)}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs cursor-pointer shadow-sm"
+              >
+                ✓ Apply & Close
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1539,15 +1665,90 @@ const IQACMonthlyReport = () => {
 
             {/* Center: Institute Name and Subtitles */}
             <div className="text-center flex-1">
-              <h2 className="text-xl sm:text-2xl font-black tracking-tight text-[#0f2347] uppercase leading-tight">
-                AVN INSTITUTE OF ENGINEERING & TECHNOLOGY
-              </h2>
-              <p className="text-xs font-bold text-gray-700 mt-0.5">
-                Accredited by NAAC & NBA | An Autonomous Institute Affiliated to JNTU Hyderabad
-              </p>
-              <p className="text-[10px] text-gray-500">
-                Mangalpally (V), Ibrahimpatnam (M), R.R. District, Hyderabad, Telangana - 501510
-              </p>
+              <div
+                className="cursor-pointer group inline-flex items-center justify-center gap-1.5"
+                onClick={() => setIsEditingHeaderModal(true)}
+                title="Click to edit institute name"
+              >
+                <h2 className="text-xl sm:text-2xl font-black tracking-tight text-[#0f2347] uppercase leading-tight group-hover:text-indigo-800 transition">
+                  {instituteName}
+                </h2>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsEditingHeaderModal(true);
+                  }}
+                  className="print:hidden opacity-0 group-hover:opacity-100 p-0.5 text-gray-400 hover:text-indigo-600 transition"
+                  title="Edit institute name"
+                >
+                  <Edit3 size={14} />
+                </button>
+              </div>
+
+              <div
+                className="cursor-pointer group flex items-center justify-center gap-1 mt-0.5"
+                onClick={() => setIsEditingHeaderModal(true)}
+                title="Click to edit tagline / accreditation"
+              >
+                <p className="text-xs font-bold text-gray-700 group-hover:text-indigo-700 transition">
+                  {instituteSubtitle}
+                </p>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsEditingHeaderModal(true);
+                  }}
+                  className="print:hidden opacity-0 group-hover:opacity-100 p-0.5 text-gray-400 hover:text-indigo-600 transition"
+                  title="Edit tagline"
+                >
+                  <Edit3 size={11} />
+                </button>
+              </div>
+
+              {/* Address / Location with inline edit */}
+              {isEditing || isEditingAddress ? (
+                <div className="flex items-center justify-center gap-1.5 mt-1 max-w-xl mx-auto">
+                  <input
+                    type="text"
+                    value={instituteAddress}
+                    onChange={(e) => setInstituteAddress(e.target.value)}
+                    placeholder="Enter institute address / location..."
+                    className="w-full text-center text-[10px] text-gray-800 font-medium bg-amber-50 border border-amber-300 focus:border-indigo-500 focus:bg-white rounded-md px-2 py-0.5 outline-none shadow-xs"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingAddress(false)}
+                    className="print:hidden px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold shrink-0 cursor-pointer"
+                    title="Done editing address"
+                  >
+                    ✓ Done
+                  </button>
+                </div>
+              ) : (
+                <div 
+                  className="flex items-center justify-center gap-1 cursor-pointer group mt-0.5" 
+                  onClick={() => setIsEditingAddress(true)} 
+                  title="Click to edit institute address"
+                >
+                  <p className="text-[10px] text-gray-500 group-hover:text-indigo-700 transition">
+                    {instituteAddress}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsEditingAddress(true);
+                    }}
+                    className="print:hidden opacity-0 group-hover:opacity-100 p-0.5 text-gray-400 hover:text-indigo-600 transition"
+                    title="Edit address"
+                  >
+                    <Edit3 size={11} />
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Right: Accreditations (NBA, NAAC, UGC) */}
@@ -1565,11 +1766,64 @@ const IQACMonthlyReport = () => {
             </div>
           </div>
 
-          {/* Main Document Title */}
-          <div className="mt-4 pt-3 border-t border-gray-300 text-center">
-            <h3 className="text-base sm:text-lg font-black text-black tracking-wide uppercase">
-              IQAC REPORT OF DEPARTMENT OF {department.toUpperCase()} FOR {month.toUpperCase()}, {year}
-            </h3>
+          {/* Main Document Title - Inline Editable */}
+          <div className="mt-4 pt-3 border-t border-gray-300 text-center relative group">
+            {isEditing || isEditingTitle ? (
+              <div className="space-y-1.5 max-w-4xl mx-auto">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={customReportTitle !== '' ? customReportTitle : defaultReportTitle}
+                    onChange={(e) => setCustomReportTitle(e.target.value)}
+                    placeholder="Enter Custom Report Title..."
+                    className="w-full text-center text-sm sm:text-base font-black text-black tracking-wide uppercase bg-amber-50/80 border-2 border-amber-400 focus:border-indigo-600 focus:bg-white rounded-xl px-3 py-1.5 outline-none shadow-sm transition"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingTitle(false)}
+                    className="print:hidden px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shrink-0 cursor-pointer shadow-sm"
+                    title="Done editing title"
+                  >
+                    ✓ Done
+                  </button>
+                  {customReportTitle !== '' && (
+                    <button
+                      type="button"
+                      onClick={() => setCustomReportTitle('')}
+                      className="print:hidden px-2.5 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl text-xs font-semibold shrink-0 cursor-pointer"
+                      title="Reset to default title"
+                    >
+                      ↺ Reset
+                    </button>
+                  )}
+                </div>
+                <p className="print:hidden text-[10px] text-gray-500 font-medium">
+                  ✏️ Custom Title Mode active. You can type any title here. Click "Done" or "Save Data to DB" to store persistently.
+                </p>
+              </div>
+            ) : (
+              <div 
+                className="flex items-center justify-center gap-2 cursor-pointer group" 
+                onClick={() => setIsEditingTitle(true)} 
+                title="Click here to edit report title"
+              >
+                <h3 className="text-base sm:text-lg font-black text-black tracking-wide uppercase group-hover:text-indigo-800 transition">
+                  {effectiveReportTitle}
+                </h3>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsEditingTitle(true);
+                  }}
+                  className="print:hidden p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                  title="Click to edit report title"
+                >
+                  <Edit3 size={15} />
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

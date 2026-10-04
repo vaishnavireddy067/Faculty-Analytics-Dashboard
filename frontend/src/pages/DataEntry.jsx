@@ -133,6 +133,19 @@ const formSchemas = {
       { name: 'issuing_organization', label: 'Issuing Organization', type: 'text' },
       { name: 'academic_year', label: 'Academic Year', type: 'text', required: true },
     ]
+  },
+  'student-feedback': {
+    endpoint: 'feedback',
+    fields: [
+      { name: 'course_name', label: 'Course / Subject Name', type: 'text', required: true, width: 'full' },
+      { name: 'academic_year', label: 'Academic Year (e.g. 2025-2026)', type: 'text', required: true },
+      { name: 'semester', label: 'Semester (e.g. Sem V / Odd)', type: 'text', required: true },
+      { name: 'teaching_rating', label: 'Teaching Quality (1-5)', type: 'number', required: true },
+      { name: 'communication_rating', label: 'Communication & Delivery (1-5)', type: 'number', required: true },
+      { name: 'clarity_rating', label: 'Subject Clarity (1-5)', type: 'number', required: true },
+      { name: 'engagement_rating', label: 'Student Engagement (1-5)', type: 'number', required: true },
+      { name: 'comments', label: 'Student Comments / Detailed Feedback Remarks', type: 'text', width: 'full' },
+    ]
   }
 };
 

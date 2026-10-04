@@ -6,6 +6,7 @@ class BaseActivityModel(models.Model):
         ('PENDING', 'Pending'),
         ('APPROVED', 'Approved'),
         ('REJECTED', 'Rejected'),
+        ('CHANGES_REQUESTED', 'Changes Requested'),
     )
     faculty = models.ForeignKey(User, on_delete=models.CASCADE)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
@@ -232,14 +233,21 @@ class Badge(models.Model):
 
 class StudentFeedback(models.Model):
     faculty = models.ForeignKey(User, on_delete=models.CASCADE, related_name='feedbacks')
-    rating = models.FloatField()
+    course_name = models.CharField(max_length=255, blank=True, default='')
+    academic_year = models.CharField(max_length=50, blank=True, default='')
+    semester = models.CharField(max_length=50, blank=True, default='')
+    rating = models.FloatField(default=5.0)
+    teaching_rating = models.FloatField(default=5.0)
+    communication_rating = models.FloatField(default=5.0)
+    clarity_rating = models.FloatField(default=5.0)
+    engagement_rating = models.FloatField(default=5.0)
     comments = models.TextField(blank=True, null=True)
     is_anonymous = models.BooleanField(default=True)
     sentiment_summary = models.CharField(max_length=255, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Feedback for {self.faculty.username}: {self.rating} Stars"
+        return f"Feedback for {self.faculty.username}: {self.rating} Stars ({self.course_name})"
 
 
 class AccreditationDeadline(models.Model):

@@ -17,7 +17,7 @@ from .models import (
 from .serializers import (
     PublicationSerializer, PatentSerializer, BookSerializer, FdpTrainingSerializer,
     ConsultancySerializer, GrantSerializer, CertificationSerializer, StudentGuidanceSerializer, ActivitySerializer,
-    FacultyRoleSerializer, CertificateSerializer
+    FacultyRoleSerializer, CertificateSerializer, StudentFeedbackSerializer
 )
 
 
@@ -59,7 +59,7 @@ class BaseActivityViewSet(viewsets.ModelViewSet):
             
         instance = self.get_object()
         new_status = request.data.get('status')
-        if new_status not in ['APPROVED', 'REJECTED']:
+        if new_status not in ['APPROVED', 'REJECTED', 'CHANGES_REQUESTED']:
             return Response({"detail": "Invalid status."}, status=drf_status.HTTP_400_BAD_REQUEST)
             
         instance.status = new_status
@@ -127,6 +127,136 @@ class StudentGuidanceViewSet(BaseActivityViewSet):
 class ActivityViewSet(BaseActivityViewSet):
     queryset = Activity.objects.all()
     serializer_class = ActivitySerializer
+
+
+class GuestLectureViewSet(BaseActivityViewSet):
+    queryset = Activity.objects.filter(category='GUEST_LECTURE')
+    serializer_class = ActivitySerializer
+
+    def get_queryset(self):
+        return super().get_queryset().filter(category='GUEST_LECTURE')
+
+    def create(self, request, *args, **kwargs):
+        data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+        if 'title' not in data:
+            data['title'] = data.get('topic') or 'Guest Lecture'
+        if 'organization' not in data:
+            data['organization'] = data.get('institution') or ''
+        if 'date' not in data:
+            data['date'] = str(timezone.now().date())
+        data['category'] = 'GUEST_LECTURE'
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response(serializer.data, status=drf_status.HTTP_201_CREATED)
+
+    def perform_create(self, serializer):
+        serializer.save(
+            faculty=self.request.user,
+            category='GUEST_LECTURE'
+        )
+
+
+class IndustrialVisitViewSet(BaseActivityViewSet):
+    queryset = Activity.objects.filter(category='INDUSTRIAL_VISIT')
+    serializer_class = ActivitySerializer
+
+    def get_queryset(self):
+        return super().get_queryset().filter(category='INDUSTRIAL_VISIT')
+
+    def create(self, request, *args, **kwargs):
+        data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+        if 'title' not in data:
+            data['title'] = 'Industrial Visit'
+        if 'date' not in data:
+            data['date'] = str(timezone.now().date())
+        data['category'] = 'INDUSTRIAL_VISIT'
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response(serializer.data, status=drf_status.HTTP_201_CREATED)
+
+    def perform_create(self, serializer):
+        serializer.save(
+            faculty=self.request.user,
+            category='INDUSTRIAL_VISIT'
+        )
+
+
+class AwardViewSet(BaseActivityViewSet):
+    queryset = Activity.objects.filter(category='AWARD')
+    serializer_class = ActivitySerializer
+
+    def get_queryset(self):
+        return super().get_queryset().filter(category='AWARD')
+
+    def create(self, request, *args, **kwargs):
+        data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+        if 'title' not in data:
+            data['title'] = data.get('award_name') or 'Award & Recognition'
+        if 'organization' not in data:
+            data['organization'] = data.get('issuing_body') or ''
+        if 'date' not in data:
+            yr = data.get('year')
+            data['date'] = f"{yr}-01-01" if yr else str(timezone.now().date())
+        data['category'] = 'AWARD'
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response(serializer.data, status=drf_status.HTTP_201_CREATED)
+
+    def perform_create(self, serializer):
+        serializer.save(
+            faculty=self.request.user,
+            category='AWARD'
+        )
+
+
+class StudentFeedbackViewSet(viewsets.ModelViewSet):
+    serializer_class = StudentFeedbackSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        role = getattr(user, 'role', 'FACULTY')
+        if role in ['HOD', 'ADMIN', 'IQAC', 'SUPERADMIN']:
+            if role == 'HOD' and user.department:
+                return StudentFeedback.objects.filter(faculty__department__iexact=user.department).order_by('-created_at')
+            return StudentFeedback.objects.all().order_by('-created_at')
+        return StudentFeedback.objects.filter(faculty=user).order_by('-created_at')
+
+    def perform_create(self, serializer):
+        target_faculty = self.request.user
+        fid = self.request.data.get('faculty_id') or self.request.data.get('faculty')
+        if fid and self.request.user.role in ['HOD', 'ADMIN', 'SUPERADMIN']:
+            try:
+                from core.models import User
+                target_faculty = User.objects.get(id=fid)
+            except Exception:
+                pass
+        
+        t_r = float(self.request.data.get('teaching_rating') or 5.0)
+        c_r = float(self.request.data.get('communication_rating') or 5.0)
+        cl_r = float(self.request.data.get('clarity_rating') or 5.0)
+        e_r = float(self.request.data.get('engagement_rating') or 5.0)
+        
+        explicit_rating = self.request.data.get('rating')
+        if explicit_rating:
+            overall_rating = float(explicit_rating)
+        else:
+            overall_rating = round((t_r + c_r + cl_r + e_r) / 4.0, 2)
+            
+        sentiment = "Positive" if overall_rating >= 4.0 else ("Moderate" if overall_rating >= 3.0 else "Needs Improvement")
+        
+        serializer.save(
+            faculty=target_faculty,
+            rating=overall_rating,
+            teaching_rating=t_r,
+            communication_rating=c_r,
+            clarity_rating=cl_r,
+            engagement_rating=e_r,
+            sentiment_summary=sentiment
+        )
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
@@ -844,12 +974,31 @@ def team_builder(request):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def publication_impact(request):
+    user = request.user
+    pubs = Publication.objects.filter(faculty=user)
+    total_pubs = pubs.count()
+    sci_count = pubs.filter(indexing='SCI').count()
+    scopus_count = pubs.filter(indexing='SCOPUS').count()
+    wos_count = pubs.filter(indexing='WOS').count()
+    ugc_count = pubs.filter(indexing__in=['UGC_CARE', 'OTHER']).count()
+
     return Response({
-        "total_reads": 4500,
-        "total_citations": 1204,
-        "h_index": 24,
-        "i10_index": 35,
-        "quartiles": {"Q1": 10, "Q2": 15, "Q3": 5, "Q4": 0}
+        "total_publications": total_pubs,
+        "total_citations": None,
+        "h_index": None,
+        "i10_index": None,
+        "citation_status": "Citation data unavailable (Connect CrossRef / ORCID)",
+        "external_integration": {
+            "crossref_ready": True,
+            "orcid_ready": True,
+            "status": "Available via DOI / Profile Sync"
+        },
+        "quartiles": {
+            "Q1": sci_count,
+            "Q2": scopus_count,
+            "Q3": wos_count,
+            "Q4": ugc_count
+        }
     })
 
 @api_view(['GET'])
@@ -1309,13 +1458,25 @@ def mentorship_projects(request):
 def student_feedback_analysis(request):
     """Returns analytics for student feedback based on real database records"""
     from .models import StudentFeedback
-    feedbacks = StudentFeedback.objects.filter(faculty=request.user)
+    user = request.user
+    role = getattr(user, 'role', 'FACULTY')
+    if role in ['HOD', 'ADMIN', 'IQAC', 'SUPERADMIN'] and request.GET.get('scope') == 'department':
+        feedbacks = StudentFeedback.objects.filter(faculty__department__iexact=user.department) if user.department else StudentFeedback.objects.all()
+    else:
+        feedbacks = StudentFeedback.objects.filter(faculty=user)
+        
     total = feedbacks.count()
     if total == 0:
         return Response({
             "average_rating": 0.0,
             "total_reviews": 0,
             "sentiment_summary": "No official student feedback records logged yet.",
+            "metrics": {
+                "teaching": 0.0,
+                "communication": 0.0,
+                "clarity": 0.0,
+                "engagement": 0.0
+            },
             "rating_distribution": [
                 {"stars": 5, "count": 0},
                 {"stars": 4, "count": 0},
@@ -1323,20 +1484,58 @@ def student_feedback_analysis(request):
                 {"stars": 2, "count": 0},
                 {"stars": 1, "count": 0}
             ],
-            "key_strengths": [],
-            "areas_for_improvement": []
+            "courses": [],
+            "recent_comments": []
         })
-    avg_rating = round(sum(f.rating for f in feedbacks) / total, 1)
+
+    avg_rating = round(sum(f.rating for f in feedbacks) / total, 2)
+    
+    # Calculate dimensional averages
+    teaching_avg = round(sum(f.teaching_rating or f.rating for f in feedbacks) / total, 2)
+    comm_avg = round(sum(f.communication_rating or f.rating for f in feedbacks) / total, 2)
+    clarity_avg = round(sum(f.clarity_rating or f.rating for f in feedbacks) / total, 2)
+    engage_avg = round(sum(f.engagement_rating or f.rating for f in feedbacks) / total, 2)
+
+    # Course-wise breakdown
+    courses = []
+    course_names = set(f.course_name for f in feedbacks if f.course_name)
+    for c in course_names:
+        c_fb = feedbacks.filter(course_name=c)
+        courses.append({
+            "course": c,
+            "count": c_fb.count(),
+            "average": round(sum(x.rating for x in c_fb) / c_fb.count(), 2)
+        })
+
+    recent_comments = [
+        {
+            "course": f.course_name or "General",
+            "rating": f.rating,
+            "comment": f.comments,
+            "sentiment": f.sentiment_summary or ("Positive" if f.rating >= 4.0 else "Constructive"),
+            "date": f.created_at.strftime("%b %d, %Y")
+        }
+        for f in feedbacks.exclude(comments__isnull=True).exclude(comments='')[:5]
+    ]
+
+    sentiment_label = "Highly Commended" if avg_rating >= 4.5 else ("Strongly Positive" if avg_rating >= 4.0 else ("Satisfactory" if avg_rating >= 3.0 else "Action Recommended"))
+
     return Response({
         "average_rating": avg_rating,
         "total_reviews": total,
-        "sentiment_summary": f"Based on {total} official student review(s).",
+        "sentiment_summary": f"Overall {sentiment_label} based on {total} official student response(s).",
+        "metrics": {
+            "teaching": teaching_avg,
+            "communication": comm_avg,
+            "clarity": clarity_avg,
+            "engagement": engage_avg
+        },
         "rating_distribution": [
             {"stars": s, "count": feedbacks.filter(rating=s).count()}
             for s in [5, 4, 3, 2, 1]
         ],
-        "key_strengths": ["Teaching Methodology"] if avg_rating >= 4.0 else [],
-        "areas_for_improvement": []
+        "courses": courses,
+        "recent_comments": recent_comments
     })
 
 
@@ -2085,11 +2284,13 @@ def iqac_monthly_report_data(request):
     else:
         existing = IQACReport.objects.filter(department=dept, month=month, year=year).first()
     if existing and existing.sections_data:
+        custom_title = existing.sections_data.get('custom_report_title') if isinstance(existing.sections_data, dict) else None
+        report_title = custom_title or f"IQAC REPORT OF DEPARTMENT OF {dept.upper()} FOR {month.upper()}, {year}"
         return Response({
             "id": existing.id,
             "institution_name": existing.institution_name,
             "accreditation_details": existing.accreditation_details,
-            "report_title": f"IQAC REPORT OF DEPARTMENT OF {dept.upper()} FOR {month.upper()}, {year}",
+            "report_title": report_title,
             "department": existing.department,
             "month": existing.month,
             "year": existing.year,
@@ -2203,9 +2404,16 @@ def export_iqac_excel(request):
     ws = wb.active
     ws.title = f"{month[:3]}_{year}"
 
-    ws.append(["AVN INSTITUTE OF ENGINEERING & TECHNOLOGY"])
-    ws.append(["Accredited by NAAC & NBA | An Autonomous Institute Affiliated to JNTU Hyderabad"])
-    ws.append([f"IQAC REPORT OF DEPARTMENT OF {dept.upper()} FOR {month.upper()}, {year}"])
+    inst_name = (existing.institution_name if existing else None) or "AVN INSTITUTE OF ENGINEERING & TECHNOLOGY"
+    inst_details = (existing.accreditation_details if existing else None) or "Accredited by NAAC & NBA | An Autonomous Institute Affiliated to JNTU Hyderabad"
+    inst_address = (sections.get('institution_address') if isinstance(sections, dict) else None) or "Mangalpally (V), Ibrahimpatnam (M), R.R. District, Hyderabad, Telangana - 501510"
+    custom_title = sections.get('custom_report_title') if isinstance(sections, dict) else None
+    report_title = custom_title or f"IQAC REPORT OF DEPARTMENT OF {dept.upper()} FOR {month.upper()}, {year}"
+
+    ws.append([inst_name])
+    ws.append([inst_details])
+    ws.append([inst_address])
+    ws.append([report_title])
     ws.append([])
 
     hidden_sections = sections.get("hidden_sections", [])

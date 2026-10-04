@@ -5,7 +5,8 @@ from .views import (
     ConsultancyViewSet, GrantViewSet, CertificationViewSet, StudentGuidanceViewSet, ActivityViewSet,
     StudentProjectViewSet, FacultyExpertiseViewSet, NotificationViewSet, BadgeViewSet,
     FacultyGoalViewSet, FacultyTimelineViewSet, DiscussionPostViewSet, ResearchAssetViewSet,
-    FacultyRoleViewSet, CertificateViewSet, consolidated_report, download_certificate_bundle,
+    FacultyRoleViewSet, CertificateViewSet, GuestLectureViewSet, IndustrialVisitViewSet,
+    AwardViewSet, StudentFeedbackViewSet, consolidated_report, download_certificate_bundle,
     faculty_profile, faculty_settings, export_cv, analyze_feedback, plagiarism_scan,
     ai_predict, ai_copilot, ai_trends, voice_parse, document_verify, test_gemini_key, ai_status,
     analytics_ranking, admin_dashboard,
@@ -37,6 +38,11 @@ router.register(r'grants', GrantViewSet)
 router.register(r'certifications', CertificationViewSet)
 router.register(r'student-guidance', StudentGuidanceViewSet)
 router.register(r'activities', ActivityViewSet)
+router.register(r'guest-lectures', GuestLectureViewSet, basename='guest-lectures')
+router.register(r'industrial-visits', IndustrialVisitViewSet, basename='industrial-visits')
+router.register(r'awards', AwardViewSet, basename='awards')
+router.register(r'feedback', StudentFeedbackViewSet, basename='feedback')
+router.register(r'student-feedback', StudentFeedbackViewSet, basename='student-feedback')
 router.register(r'student-projects', StudentProjectViewSet)
 router.register(r'expertise', FacultyExpertiseViewSet)
 router.register(r'notifications', NotificationViewSet)
