@@ -37,5 +37,7 @@ services:
         value: "Faculty Analytics Portal <anuguvaishnavireddy6@gmail.com>"
       - key: EMAIL_TIMEOUT
         value: "5"
+      - key: RESEND_API_KEY
+        sync: false
       - key: PYTHON_VERSION
         value: "3.12.0"

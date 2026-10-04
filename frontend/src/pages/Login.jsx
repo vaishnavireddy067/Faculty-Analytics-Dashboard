@@ -35,6 +35,15 @@ const Login = () => {
   const [resetEmail, setResetEmail] = useState('');
   const [resetNewPass, setResetNewPass] = useState('');
 
+  // Redirect already-authenticated users away from Login page
+  useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    const storedRole = (localStorage.getItem('user_role') || 'FACULTY').toUpperCase();
+    if (token) {
+      window.location.replace(storedRole === 'HOD' ? '/monthly-reports' : '/dashboard');
+    }
+  }, []);
+
   // Clear inputs selectively based on view to avoid wiping email/pass on OTP verify
   useEffect(() => {
     if (view === 'login') {
@@ -354,7 +363,7 @@ const Login = () => {
             localStorage.setItem('fad_user_accounts', JSON.stringify(users));
 
             // Role-based redirect: HOD goes to HOD Dashboard (Review & Tracker), Faculty to Faculty Dashboard
-            window.location.href = finalRole === 'HOD' ? '/monthly-reports' : '/dashboard';
+            window.location.replace(finalRole === 'HOD' ? '/monthly-reports' : '/dashboard');
             return;
           }
         } else {
@@ -439,7 +448,7 @@ const Login = () => {
       localStorage.setItem('user_role', finalRole);
       localStorage.setItem('current_user_info', JSON.stringify({ ...existingUser, role: finalRole }));
 
-      window.location.href = '/dashboard';
+      window.location.replace('/dashboard');
     } catch (e) {
       console.error(e);
       setError('An error occurred during login. Please try again.');
@@ -719,7 +728,7 @@ const Login = () => {
 
           setSuccessMsg('Account created & verified successfully! Logging you in...');
           setTimeout(() => {
-            window.location.href = '/dashboard';
+            window.location.replace('/dashboard');
           }, 500);
           return;
         }
