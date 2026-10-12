@@ -63,7 +63,7 @@ Frontend will start on `http://localhost:5174/` (or `http://localhost:5173/`).
 
 ---
 
-## 🧪 Running Automated Tests
+##  Running Automated Tests
 
 ```bash
 cd backend
